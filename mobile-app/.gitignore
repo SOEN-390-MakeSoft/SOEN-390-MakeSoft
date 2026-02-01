@@ -7,3 +7,6 @@ expo-env.d.ts
 # Local env files
 env.local
 .env.local
+
+# Jest
+coverage/
