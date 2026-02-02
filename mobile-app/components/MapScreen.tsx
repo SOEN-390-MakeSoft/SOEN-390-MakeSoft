@@ -266,6 +266,7 @@ export default function MapScreen() {
                 )}
             </Pressable>
 
+            
             <Modal
                 transparent
                 visible={!!selectedBuilding}
@@ -337,6 +338,8 @@ function toRgba(color: string, alpha: number): string {
     const green = parseInt(fullHex.slice(2, 4), 16);
     const blue = parseInt(fullHex.slice(4, 6), 16);
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
