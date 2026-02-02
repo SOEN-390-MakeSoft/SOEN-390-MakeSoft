@@ -3,7 +3,7 @@
 // Bbox: south=45.454, west=-73.647, north=45.464, east=-73.633
 
 export const LOYOLA_BUILDING_POLYGONS = {
-  "Hingston Hall (HB)": {
+  "35": {
     "name": "Hingston Hall (HB)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -118,7 +118,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Hingston Hall (HA)": {
+  "36": {
     "name": "Hingston Hall (HA)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -209,7 +209,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Student Centre (SC)": {
+  "37": {
     "name": "Student Centre (SC)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -276,7 +276,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Concordia Vanier Library (VL)": {
+  "38": {
     "name": "Concordia Vanier Library (VL)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -379,7 +379,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Jesuit Residence (JR)": {
+  "39": {
     "name": "Jesuit Residence (JR)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -454,7 +454,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Richard J Renaud Science Complex (SP)": {
+  "40": {
     "name": "Richard J Renaud Science Complex (SP)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -661,7 +661,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Saint Ignatius of Loyola Church (SI)": {
+  "41": {
     "name": "Saint Ignatius of Loyola Church (SI)",
     "street": "West Broadway",
     "housenumber": "4455",
@@ -804,7 +804,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "F.C. Smith Building (FC)": {
+  "42": {
     "name": "F.C. Smith Building (FC)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -935,7 +935,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Recreation and Athletics Complex (RA)": {
+  "43": {
     "name": "Recreation and Athletics Complex (RA)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7200",
@@ -1010,7 +1010,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Communication Studies and Journalism Building (CJ)": {
+  "44": {
     "name": "Communication Studies and Journalism Building (CJ)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1161,7 +1161,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Centre for Structural and Functional Genomics (GE)": {
+  "45": {
     "name": "Centre for Structural and Functional Genomics (GE)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1216,7 +1216,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "PERFORM Centre (PC)": {
+  "46": {
     "name": "PERFORM Centre (PC)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7200",
@@ -1247,7 +1247,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Loyola Jesuit Hall and Conference Center (RF)": {
+  "47": {
     "name": "Loyola Jesuit Hall and Conference Center (RF)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1334,7 +1334,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Central Building (CC)": {
+  "48": {
     "name": "Central Building (CC)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1441,7 +1441,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Administration Building (AD)": {
+  "49": {
     "name": "Administration Building (AD)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1668,7 +1668,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Applied Science Hub (HU)": {
+  "50": {
     "name": "Applied Science Hub (HU)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1731,7 +1731,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Physical Services (PS)": {
+  "51": {
     "name": "Physical Services (PS)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1790,7 +1790,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Solar House (SH)": {
+  "52": {
     "name": "Solar House (SH)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1817,7 +1817,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Concordia Terrebonne Building (TA)": {
+  "53": {
     "name": "Concordia Terrebonne Building (TA)",
     "street": "Rue de Terrebonne",
     "housenumber": "7079",
@@ -1844,7 +1844,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Hingston Hall (HC)": {
+  "54": {
     "name": "Hingston Hall (HC)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",
@@ -1895,7 +1895,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Concordia BB Annex (BB)": {
+  "55": {
     "name": "Concordia BB Annex (BB)",
     "street": "Avenue Belmore",
     "housenumber": "3602",
@@ -1922,7 +1922,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Concordia BH Annex (BH)": {
+  "56": {
     "name": "Concordia BH Annex (BH)",
     "street": "Avenue Belmore",
     "housenumber": "3600",
@@ -1949,7 +1949,7 @@ export const LOYOLA_BUILDING_POLYGONS = {
       }
     ]
   },
-  "Oscar Peterson Concert Hall (PT)": {
+  "57": {
     "name": "Oscar Peterson Concert Hall (PT)",
     "street": "Rue Sherbrooke Ouest",
     "housenumber": "7141",

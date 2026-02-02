@@ -1,5 +1,5 @@
 export const BUILDING_POLYGONS = {
-  "LB - J. W. McConnell Building (Library Building)": {
+  "1": {
     "name": "LB - J. W. McConnell Building (Library Building)",
     "street": "Boulevard de Maisonneuve Ouest",
     "housenumber": "1400",
@@ -126,7 +126,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "H - Henry F. Hall Building": {
+  "2": {
     "name": "H - Henry F. Hall Building",
     "street": "Boulevard de Maisonneuve Ouest",
     "housenumber": "1455",
@@ -186,7 +186,7 @@ export const BUILDING_POLYGONS = {
     ]
   },
   
-  "GM - Guy Metro Building": {
+  "3": {
     "name": "GM - Guy Metro Building",
     "street": "Boulevard De Maisonneuve Ouest",
     "housenumber": "1550",
@@ -241,7 +241,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "MB - John Molson School of Business": {
+  "4": {
     "name": "MB - John Molson School of Business",
     "street": "Guy St.",
     "housenumber": "1450",
@@ -328,7 +328,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "MI - MI Annex": {
+  "5": {
     "name": "MI - MI Annex",
     "street": "Bishop St.",
     "housenumber": "2130",
@@ -371,7 +371,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "D - D Annex": {
+  "6": {
     "name": "D - D Annex",
     "street": "Bishop St.",
     "housenumber": "2140",
@@ -430,7 +430,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "K - K Annex": {
+  "7": {
     "name": "K - K Annex",
     "street": "Bishop St.",
     "housenumber": "2150",
@@ -461,7 +461,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "MU - MU Annex": {
+  "8": {
     "name": "MU - MU Annex",
     "street": "Bishop St.",
     "housenumber": "2170",
@@ -496,7 +496,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "M - M Annex": {
+  "9": {
     "name": "M - M Annex",
     "street": "Mackay St.",
     "housenumber": "2135",
@@ -543,7 +543,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "S - S Annex": {
+  "10": {
     "name": "S - S Annex",
     "street": "Mackay St.",
     "housenumber": "2145",
@@ -594,7 +594,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "CI - CI Annex": {
+  "11": {
     "name": "CI - CI Annex",
     "street": "Mackay St.",
     "housenumber": "2149",
@@ -641,7 +641,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "way_103896385": {
+  "12": {
     "name": "ER Building",
     "street": "Rue Guy",
     "housenumber": "2155",
@@ -684,7 +684,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "LS - Concordia Learning Square": {
+  "13": {
     "name": "LS - Concordia Learning Square",
     "street": "Boulevard De Maisonneuve Ouest",
     "housenumber": "1535",
@@ -720,7 +720,7 @@ export const BUILDING_POLYGONS = {
     ]
   
   },
-  "TD - Toronto-Dominion Building": {
+  "14": {
     "name": "TD - Toronto-Dominion Building",
     "street": "Guy St.",
     "housenumber": "1410",
@@ -775,7 +775,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "FB - Faubourg Tower": {
+  "15": {
     "name": "FB - Faubourg Tower",
     "street": "Ste-Catherine St. W.",
     "housenumber": "1600",
@@ -874,7 +874,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "FG - Le Faubourg": {
+  "16": {
     "name": "FG - Le Faubourg",
     "street": "Ste-Catherine St. W.",
     "housenumber": "1610",
@@ -933,7 +933,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "Maison-Mère des Sœurs grises": {
+  "17": {
     "name": "Maison-Mère des Sœurs grises",
     "street": "Rue Guy",
     "housenumber": "1190",
@@ -1552,7 +1552,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "GA - Grey Nuns Annex": {
+  "18": {
     "name": "Grey Nuns Annex",
     "street": "	St-Mathieu St.",
     "housenumber": "1211-1215",
@@ -1611,7 +1611,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "way_103892966": {
+  "19": {
     "name": "way_103892966",
     "street": null,
     "housenumber": null,
@@ -1670,7 +1670,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "PR - PR Annex": {
+  "20": {
     "name": "PR - PR Annex",
     "street": "Mackay St.",
     "housenumber": "2100",
@@ -1717,7 +1717,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "Z - Z Annex": {
+  "21": {
     "name": "Z - Z Annex",
     "street": "Mackay St.",
     "housenumber": "2090",
@@ -1756,7 +1756,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "X - X Annex": {
+  "22": {
     "name": "X - X Annex",
     "street": "Mackay St.",
     "housenumber": "2080",
@@ -1835,7 +1835,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "EN - EN Annex": {
+  "23": {
     "name": "EN - EN Annex",
     "street": "Mackay St.",
     "housenumber": "2070",
@@ -1890,7 +1890,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "FA - FA Annex": {
+  "24": {
     "name": "FA - FA Annex",
     "street": "MacKay St.",
     "housenumber": "2060",
@@ -1917,7 +1917,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "R - R Annex": {
+  "25": {
     "name": "R - R Annex",
     "street": "Mackay St.",
     "housenumber": "2050",
@@ -1972,7 +1972,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "way_103892942": {
+  "26": {
     "name": "way_103892942",
     "street": null,
     "housenumber": null,
@@ -2003,7 +2003,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "RR - RR Annex": {
+  "27": {
     "name": "RR - RR Annex",
     "street": "Mackay St.",
     "housenumber": "2040",
@@ -2069,7 +2069,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "T - T Annex": {
+  "28": {
     "name": "T - T Annex",
     "street": "Rue Mackay",
     "housenumber": "2030",
@@ -2096,7 +2096,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "P - P Annex": {
+  "29": {
     "name": "P - P Annex",
     "street": "Rue Mackay",
     "housenumber": "2020",
@@ -2127,7 +2127,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "Q - Q Annex": {
+  "30": {
     "name": "Q - Q Annex",
     "street": "Rue Mackay",
     "housenumber": "2010",
@@ -2158,7 +2158,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "way_103892933": {
+  "31": {
     "name": "way_103892933",
     "street": null,
     "housenumber": null,
@@ -2197,7 +2197,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "EV - Engineering, Computer Science and Visual Arts Integrated Complex": {
+  "32": {
     "name": "EV - Engineering, Computer Science and Visual Arts Integrated Complex",
     "street": "Ste-Catherine St. W.",
     "housenumber": 1151,
@@ -2308,7 +2308,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "VA - Visual Arts Building": {
+  "33": {
     "name": "VA - Visual Arts Building",
     "street": "René-Lévesque Blvd. W.",
     "housenumber": "1395",
@@ -2359,7 +2359,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "CL - CL Annex": {
+  "34": {
     "name": "CL - CL Annex",
     "street": "Ste-Catherine St. W.",
     "housenumber": "1665",
