@@ -1,4 +1,5 @@
 import Animated from 'react-native-reanimated';
+import React from 'react';
 
 export function HelloWave() {
   return (
