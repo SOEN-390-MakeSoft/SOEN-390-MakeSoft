@@ -1,14 +1,14 @@
 package com.makesoft.app.domain.model.building;
 
 public class Building {
-    private final Long buildingId;
+    private final BuildingId buildingId;
     private String name;
     private String code;
     private String address;
     private String campus;
     private BuildingFeatures buildingFeatures;
 
-    public Building(Long buildingId, String name, String code, String address, String campus,
+    public Building(BuildingId buildingId, String name, String code, String address, String campus,
                     BuildingFeatures buildingFeatures) {
         this.buildingId = buildingId;
         this.name = name;
@@ -18,7 +18,7 @@ public class Building {
         this.buildingFeatures = buildingFeatures;
     }
 
-    public Long getBuildingId() {
+    public BuildingId getBuildingId() {
         return buildingId;
     }
 
