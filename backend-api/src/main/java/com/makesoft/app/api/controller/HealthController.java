@@ -1,4 +1,4 @@
-package com.makesoft.app.controller;
+package com.makesoft.app.api.controller;
 
 import org.slf4j.Logger;
 import org.springframework.web.bind.annotation.GetMapping;
