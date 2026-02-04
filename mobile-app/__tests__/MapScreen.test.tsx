@@ -3,12 +3,12 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 
+// Import component
+import MapScreen from '../components/MapScreen';
+
 // Mock dependencies
 jest.mock('react-native-maps', () => 'MapView');
 jest.mock('expo-location');
-
-// Import component
-import MapScreen from '../components/MapScreen';
 
 // Mock Alert.alert after import
 const mockAlertFn = jest.fn();
