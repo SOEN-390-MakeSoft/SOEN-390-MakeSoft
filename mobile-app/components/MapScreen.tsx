@@ -9,17 +9,16 @@ export default function MapScreen() {
   const [isLocating, setIsLocating] = useState(false);
 
   const openAppSettings = async () => {
-    // This is the correct way in React Native
     await Linking.openSettings();
   };
 
   const promptToOpenSettings = () => {
     Alert.alert(
-      "Location permission needed",
-      "Location access is disabled. Please enable it in Settings to use “My Location”.",
+      'Location permission needed',
+      'Location access is disabled. Please enable it in Settings to use "My Location".',
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Open Settings", onPress: openAppSettings },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => void openAppSettings() },
       ]
     );
   };
@@ -85,6 +84,7 @@ export default function MapScreen() {
     <View style={{ flex: 1 }}>
       <MapView
         ref={mapRef}
+        testID="map-view"
         style={{ flex: 1 }}
         provider="google"
         initialRegion={{
@@ -97,6 +97,7 @@ export default function MapScreen() {
       />
 
       <Pressable
+        testID="location-button"
         onPress={goToUserLocation}
         disabled={isLocating}
         style={{
@@ -118,7 +119,7 @@ export default function MapScreen() {
         }}
       >
         {isLocating ? (
-          <ActivityIndicator size="small" color="#c41230" />
+          <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
         ) : (
           <MaterialIcons name="my-location" size={24} color="#c41230" />
         )}
