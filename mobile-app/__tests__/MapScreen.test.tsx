@@ -8,10 +8,22 @@ import MapScreen from '../components/MapScreen';
 
 // Mock dependencies
 jest.mock('react-native-maps', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native');
+
+  // eslint-disable-next-line react/display-name
+  const MockMapView = React.forwardRef((props: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({
+      animateToRegion: jest.fn(),
+    }));
+    return React.createElement(View, props);
+  });
+
   return {
     __esModule: true,
-    default: View,
+    default: MockMapView,
   };
 });
 jest.mock('expo-location');
