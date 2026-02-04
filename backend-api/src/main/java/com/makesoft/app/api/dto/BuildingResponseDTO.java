@@ -1,6 +1,6 @@
 package com.makesoft.app.api.dto;
 
-public record BuildingInfoResponse(
+public record BuildingResponseDTO(
         Long id,
         String name,
         String code,

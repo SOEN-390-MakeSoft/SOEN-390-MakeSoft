@@ -1,7 +1,7 @@
 package com.makesoft.app.api.controller;
 
-import com.makesoft.app.api.dto.BuildingInfoResponse;
-import com.makesoft.app.api.mapper.BuildingInfoResponseMapper;
+import com.makesoft.app.api.dto.BuildingResponseDTO;
+import com.makesoft.app.api.mapper.BuildingResponseMapper;
 import com.makesoft.app.application.service.building.GetBuildingInfoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,20 +17,20 @@ public class BuildingController {
     private static final Logger logger = LoggerFactory.getLogger(BuildingController.class);
 
     private final GetBuildingInfoService getBuildingInfoService;
-    private final BuildingInfoResponseMapper buildingInfoResponseMapper;
+    private final BuildingResponseMapper buildingResponseMapper;
 
     public BuildingController(GetBuildingInfoService getBuildingInfoService,
-                              BuildingInfoResponseMapper buildingInfoResponseMapper) {
+                              BuildingResponseMapper buildingResponseMapper) {
         this.getBuildingInfoService = getBuildingInfoService;
-        this.buildingInfoResponseMapper = buildingInfoResponseMapper;
+        this.buildingResponseMapper = buildingResponseMapper;
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<BuildingInfoResponse> getBuildingById(@PathVariable("id") Long id) {
+    public ResponseEntity<BuildingResponseDTO> getBuildingById(@PathVariable("id") Long id) {
         logger.info("Endpoint called | GET /api/buildings/{}", id);
 
         var building = getBuildingInfoService.getById(id);
-        return ResponseEntity.ok(buildingInfoResponseMapper.toResponse(building));
+        return ResponseEntity.ok(buildingResponseMapper.toResponse(building));
     }
 
 }
