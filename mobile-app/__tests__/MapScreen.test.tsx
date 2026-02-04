@@ -2,6 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { TamaguiProvider, Theme } from 'tamagui';
 import config from '../tamagui.config';
+import { SettingsProvider } from '../context/settings';
 import MapScreen from '../components/MapScreen';
 
 /**
@@ -19,14 +20,16 @@ jest.mock('react-native-maps', () => {
 });
 
 /**
- * Helper function to wrap components with TamaguiProvider and Theme.
- * Required because MapScreen uses useTheme() which needs a Tamagui context.
+ * Helper function to wrap components with TamaguiProvider, Theme, and SettingsProvider.
+ * Required because MapScreen uses useTheme() and useSettings() which need their respective contexts.
  */
 const renderWithProviders = (component: React.ReactElement) => {
     return render(
         <TamaguiProvider config={config}>
             <Theme name="light">
-                {component}
+                <SettingsProvider>
+                    {component}
+                </SettingsProvider>
             </Theme>
         </TamaguiProvider>
     );

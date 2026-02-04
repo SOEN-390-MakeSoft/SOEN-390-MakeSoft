@@ -21,11 +21,6 @@ describe('API Service', () => {
             ok: true,
             json: async () => ({ data: 'test' })
         });
-
-        // Import and test your API functions here
-        // const result = await yourApiFunction();
-        // expect(fetch).toHaveBeenCalled();
-        // expect(result).toEqual({ data: 'test' });
     });
 
     /**
@@ -34,7 +29,5 @@ describe('API Service', () => {
      */
     it('should handle network errors', async () => {
         (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
-
-        // Test error handling
     });
 });
