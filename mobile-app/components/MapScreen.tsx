@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal } from "react-native";
+import { Platform, View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal, useWindowDimensions } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { Text, YStack, useTheme } from "tamagui";
 import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
+import { useSettings } from "../context/settings";
 
 
 type LatLng = { latitude: number; longitude: number };
@@ -19,14 +21,51 @@ export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
     const [isLocating, setIsLocating] = useState(false);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+    const { colourBlindMode } = useSettings();
+    const router = useRouter();
+
+    const { width, height } = useWindowDimensions();
+    const menuButtonSize = Math.max(64, Math.min(width * 0.2, 88));
+    const menuIconSize = Math.max(36, Math.min(menuButtonSize * 0.6, 52));
+    
+    const menuTop =
+        Platform.OS === "ios"
+            ? Math.max(16, Math.round(height * 0.04))
+            : Math.max(12, Math.round(height * 0.02));
+    const menuLeft =
+        Platform.OS === "ios"
+            ? Math.max(10, Math.round(width * 0.04))
+            : Math.max(8, Math.round(width * 0.02));
 
     // store user location
     const [userLocation, setUserLocation] = useState<LatLng | null>(null);
     const theme = useTheme();
 
-    const polygonRed = theme.cred?.get() ?? "#912338";
-    const polygonFill = toRgba(polygonRed, 0.3);
-    const polygonFillSelected = toRgba(polygonRed, 0.90);
+    let polygonFillBase = "";
+    let polygonStrokeBase = "";
+
+    if (colourBlindMode) {
+        if (theme.colourBlind1) {
+            polygonFillBase = theme.colourBlind1.get();
+        }
+        if (theme.colourBlind2) {
+            polygonStrokeBase = theme.colourBlind2.get();
+        }
+    } else if (theme.buildingPrimary) {
+        polygonFillBase = theme.buildingPrimary.get();
+        polygonStrokeBase = theme.buildingPrimary.get();
+    }
+
+    if (!polygonFillBase && theme.cred) {
+        polygonFillBase = theme.cred.get();
+    }
+    if (!polygonStrokeBase && theme.cred) {
+        polygonStrokeBase = theme.cred.get();
+    }
+
+
+    const polygonFill = toRgba(polygonFillBase, 0.3);
+    const polygonFillSelected = toRgba(polygonFillBase, 0.9);
 
     // --- Building logic ---
     const handleSelectBuilding = (id: string) => {
@@ -62,9 +101,13 @@ export default function MapScreen() {
         return (Object.entries(allPolygons) as [string, BuildingRecord][])
             .map(([id, record]) => {
                 const lookup = addressLookup.get(normalizeLabel(record.name));
-                const address = formatAddress(record) ?? lookup?.address ?? null;
-                const name = lookup?.name ?? record.name;
-                return { id, name, address, polygon: record.polygon };
+                let address = formatAddress(record);
+                if (!address && lookup) {
+                    address = lookup.address;
+                }
+                let name = record.name;
+                
+                return { id, name, address: address ?? null, polygon: record.polygon };
             })
             .filter((building) => building.polygon.length > 0);
     }, [addressLookup]);
@@ -96,6 +139,10 @@ export default function MapScreen() {
                 { text: "Open Settings", onPress: openAppSettings },
             ]
         );
+    };
+
+    const handleOpenMenu = () => {
+        router.push("/menu");
     };
 
     const ensureLocationPermission = async (): Promise<boolean> => {
@@ -147,15 +194,17 @@ export default function MapScreen() {
 
             setUserLocation(currentPoint);
 
-            mapRef.current?.animateToRegion(
-                {
-                    latitude: currentPoint.latitude,
-                    longitude: currentPoint.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                },
-                500
-            );
+            if (mapRef.current) {
+                mapRef.current.animateToRegion(
+                    {
+                        latitude: currentPoint.latitude,
+                        longitude: currentPoint.longitude,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    },
+                    500
+                );
+            }
 
             // Auto-select the building if the user is inside
             const buildingInside = buildings.find((b) =>
@@ -199,7 +248,7 @@ export default function MapScreen() {
                         <React.Fragment key={building.id}>
                             <Polygon
                                 coordinates={[...building.polygon]}
-                                strokeColor={polygonRed}
+                                strokeColor={polygonStrokeBase}
                                 fillColor={isSelected ? polygonFillSelected : polygonFill}
                                 strokeWidth={2}
                                 tappable
@@ -239,6 +288,32 @@ export default function MapScreen() {
             </MapView>
 
             <Pressable
+                onPress={handleOpenMenu}
+                style={({ pressed }) => [
+                    {
+                        position: "absolute",
+                        top: menuTop,
+                        left: menuLeft,
+                        backgroundColor: "transparent",
+                        borderRadius: menuButtonSize / 2,
+                        width: menuButtonSize,
+                        height: menuButtonSize,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        opacity: pressed ? 0.7 : 1,
+                    },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Open menu"
+            >
+                <MaterialIcons
+                    name="menu"
+                    size={menuIconSize}
+                    color={theme.cred ? theme.cred.get() : "#912338"}
+                />
+            </Pressable>
+
+            <Pressable
                 onPress={goToUserLocation}
                 disabled={isLocating}
                 style={{
@@ -273,14 +348,26 @@ export default function MapScreen() {
                 animationType="fade"
                 onRequestClose={() => setSelectedBuildingId(null)}
             >
+                {
+                    (() => {
+                        let modalTitle = "";
+                        let modalAddress = "Address unavailable";
+                        if (selectedBuilding) {
+                            modalTitle = selectedBuilding.name;
+                            if (selectedBuilding.address) {
+                                modalAddress = selectedBuilding.address;
+                            }
+                        }
+                        return (
                 <Pressable style={styles.modalOverlay} onPress={() => setSelectedBuildingId(null)}>
                     <YStack style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>{selectedBuilding?.name}</Text>
-                        <Text style={styles.modalAddress}>
-                            {selectedBuilding?.address ?? "Address unavailable"}
-                        </Text>
+                        <Text style={styles.modalTitle}>{modalTitle}</Text>
+                        <Text style={styles.modalAddress}>{modalAddress}</Text>
                     </YStack>
                 </Pressable>
+                        );
+                    })()
+                }
             </Modal>
         </View>
     );
