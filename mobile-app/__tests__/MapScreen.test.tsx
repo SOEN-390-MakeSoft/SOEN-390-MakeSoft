@@ -7,7 +7,13 @@ import * as Location from 'expo-location';
 import MapScreen from '../components/MapScreen';
 
 // Mock dependencies
-jest.mock('react-native-maps', () => 'MapView');
+jest.mock('react-native-maps', () => {
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: View,
+  };
+});
 jest.mock('expo-location');
 
 // Mock Alert.alert after import
@@ -30,8 +36,8 @@ describe('MapScreen - User Permission Tests', () => {
         coords: { latitude: 45.5017, longitude: -73.5673 },
       });
 
-      const { getByTestId } = render(<MapScreen />);
-      const locationButton = getByTestId('location-button');
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
 
@@ -51,8 +57,10 @@ describe('MapScreen - User Permission Tests', () => {
         coords: { latitude: 45.5017, longitude: -73.5673 },
       });
 
-      const { getByTestId } = render(<MapScreen />);
-      fireEvent.press(getByTestId('location-button'));
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
+
+      fireEvent.press(locationButton);
 
       await waitFor(() => {
         expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
@@ -64,8 +72,10 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
       (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
 
-      const { getByTestId } = render(<MapScreen />);
-      fireEvent.press(getByTestId('location-button'));
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
+
+      fireEvent.press(locationButton);
 
       await waitFor(() => {
         expect(mockAlertFn).toHaveBeenCalledWith(
@@ -80,8 +90,10 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
       (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
 
-      const { getByTestId } = render(<MapScreen />);
-      fireEvent.press(getByTestId('location-button'));
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
+
+      fireEvent.press(locationButton);
 
       await waitFor(() => expect(mockAlertFn).toHaveBeenCalled());
 
@@ -101,8 +113,10 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
       (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(new Error('Location unavailable'));
 
-      const { getByTestId } = render(<MapScreen />);
-      fireEvent.press(getByTestId('location-button'));
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
+
+      fireEvent.press(locationButton);
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith('Error getting location:', expect.any(Error));
@@ -122,8 +136,8 @@ describe('MapScreen - User Permission Tests', () => {
         }), 100))
       );
 
-      const { getByTestId } = render(<MapScreen />);
-      const locationButton = getByTestId('location-button');
+      const { findByTestId } = render(<MapScreen />);
+      const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
 
@@ -133,4 +147,3 @@ describe('MapScreen - User Permission Tests', () => {
     });
   });
 });
-
