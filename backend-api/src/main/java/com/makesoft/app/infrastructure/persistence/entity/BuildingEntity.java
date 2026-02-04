@@ -3,7 +3,7 @@ package com.makesoft.app.infrastructure.persistence.entity;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "building")
+@Table(name = "buildings")
 public class BuildingEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
