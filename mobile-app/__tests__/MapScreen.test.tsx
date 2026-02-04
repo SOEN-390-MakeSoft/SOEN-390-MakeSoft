@@ -133,4 +133,3 @@ describe('MapScreen - User Permission Tests', () => {
     });
   });
 });
-
