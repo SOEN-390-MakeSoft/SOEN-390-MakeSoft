@@ -16,7 +16,7 @@ import jakarta.validation.constraints.Positive;
 
 @Validated
 @RestController
-@RequestMapping("api/buildings")
+@RequestMapping("/api/buildings")
 public class BuildingController {
     private static final Logger logger = LoggerFactory.getLogger(BuildingController.class);
 
