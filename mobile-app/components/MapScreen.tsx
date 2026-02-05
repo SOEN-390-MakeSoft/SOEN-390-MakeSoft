@@ -27,7 +27,7 @@ export default function MapScreen() {
     const { width, height } = useWindowDimensions();
     const menuButtonSize = Math.max(64, Math.min(width * 0.2, 88));
     const menuIconSize = Math.max(36, Math.min(menuButtonSize * 0.6, 52));
-    
+
     const menuTop =
         Platform.OS === "ios"
             ? Math.max(16, Math.round(height * 0.04))
@@ -106,7 +106,7 @@ export default function MapScreen() {
                     address = lookup.address;
                 }
                 let name = record.name;
-                
+
                 return { id, name, address: address ?? null, polygon: record.polygon };
             })
             .filter((building) => building.polygon.length > 0);
@@ -133,10 +133,19 @@ export default function MapScreen() {
     const promptToOpenSettings = () => {
         Alert.alert(
             "Location permission needed",
-            "Location access is disabled. Please enable it in Settings to use “My Location”.",
+            "Location access is disabled. Please enable it in Settings to use \"My Location\".",
             [
                 { text: "Cancel", style: "cancel" },
-                { text: "Open Settings", onPress: openAppSettings },
+                {
+                    text: "Open Settings",
+                    onPress: async () => {
+                        try {
+                            await openAppSettings();
+                        } catch (error) {
+                            console.warn('Failed to open app settings:', error);
+                        }
+                    },
+                },
             ]
         );
     };
@@ -164,13 +173,17 @@ export default function MapScreen() {
                 console.log("Permission check error:", e);
             }
         })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const goToUserLocation = async () => {
         setIsLocating(true);
         try {
             const ok = await ensureLocationPermission();
-            if (!ok) return;
+            if (!ok) {
+                setIsLocating(false);
+                return;
+            }
 
             const location = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Balanced,
@@ -180,17 +193,6 @@ export default function MapScreen() {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
             };
-
-            // const currentPoint = { // FOR TESTING. THIS ASSUMES THE USER IS IN CONCORDIA.
-            //     latitude: 45.497092,
-            //     longitude: -73.578800,
-            // };
-            
-            
-            // const currentPoint = { // FOR TESTING. THIS ASSUMES THE USER IS IN LOYOLA.
-            //     latitude: 45.456180572509766,
-            //     longitude: -73.6386489868164,
-            // };
 
             setUserLocation(currentPoint);
 
@@ -230,6 +232,7 @@ export default function MapScreen() {
         <View style={styles.container}>
             <MapView
                 ref={mapRef}
+                testID="map-view"
                 style={styles.map}
                 provider="google"
                 initialRegion={{
@@ -239,7 +242,6 @@ export default function MapScreen() {
                     longitudeDelta: 0.01,
                 }}
                 showsUserLocation={!!userLocation && !isUserInsideConcordia}
-            // (Original google map location blue icon)
             >
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
@@ -314,6 +316,7 @@ export default function MapScreen() {
             </Pressable>
 
             <Pressable
+                testID="location-button"
                 onPress={goToUserLocation}
                 disabled={isLocating}
                 style={{
@@ -335,13 +338,13 @@ export default function MapScreen() {
                 }}
             >
                 {isLocating ? (
-                    <ActivityIndicator size="small" color="#c41230" />
+                    <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
                 ) : (
                     <MaterialIcons name="my-location" size={24} color="#c41230" />
                 )}
             </Pressable>
 
-            
+
             <Modal
                 transparent
                 visible={!!selectedBuilding}
@@ -451,3 +454,4 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8, color: "#1c1c1e" },
     modalAddress: { fontSize: 14, color: "#5a5a5a", marginBottom: 16 },
 });
+

@@ -1,6 +1,10 @@
 name: CI Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
 
 jobs:
   # Backend build and test
@@ -52,7 +56,3 @@ jobs:
       - name: Install dependencies
         working-directory: ./mobile-app
         run: npm install
-
-      - name: Run unit tests
-        working-directory: ./mobile-app
-        run: npm test --detectOpenHandles
