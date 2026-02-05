@@ -12,10 +12,7 @@ import MapScreen from '../components/MapScreen';
 // Create mock function for animateToRegion
 const mockAnimateToRegion = jest.fn();
 
-/**
- * Mock react-native-maps module to avoid native module errors during testing.
- * Replaces MapView with a forwarded ref component that supports animateToRegion.
- */
+// Mock dependencies
 jest.mock('react-native-maps', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
@@ -215,4 +212,3 @@ describe('MapScreen - User Permission Tests', () => {
     });
   });
 });
-
