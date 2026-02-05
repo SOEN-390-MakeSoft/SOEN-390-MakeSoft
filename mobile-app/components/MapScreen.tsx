@@ -55,7 +55,10 @@ export default function MapScreen() {
     setIsLocating(true);
     try {
       const ok = await ensureLocationPermission();
-      if (!ok) return;
+      if (!ok) {
+        setIsLocating(false);
+        return;
+      }
 
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
