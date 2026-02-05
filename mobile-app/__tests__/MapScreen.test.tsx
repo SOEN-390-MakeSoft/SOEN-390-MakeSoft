@@ -6,6 +6,9 @@ import * as Location from 'expo-location';
 // Import component
 import MapScreen from '../components/MapScreen';
 
+// Create mock function for animateToRegion
+const mockAnimateToRegion = jest.fn();
+
 // Mock dependencies
 jest.mock('react-native-maps', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -16,7 +19,7 @@ jest.mock('react-native-maps', () => {
   // eslint-disable-next-line react/display-name
   const MockMapView = React.forwardRef((props: any, ref: any) => {
     React.useImperativeHandle(ref, () => ({
-      animateToRegion: jest.fn(),
+      animateToRegion: mockAnimateToRegion,
     }));
     return React.createElement(View, props);
   });
@@ -57,6 +60,19 @@ describe('MapScreen - User Permission Tests', () => {
         expect(Location.getCurrentPositionAsync).toHaveBeenCalledWith({
           accuracy: Location.Accuracy.Balanced,
         });
+      });
+
+      // Verify map animates to user location
+      await waitFor(() => {
+        expect(mockAnimateToRegion).toHaveBeenCalledWith(
+          {
+            latitude: 45.5017,
+            longitude: -73.5673,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          },
+          500
+        );
       });
     });
   });
