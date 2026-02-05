@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { Platform, View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal, useWindowDimensions } from "react-native";
+import { Platform, View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal, useWindowDimensions, Image } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
@@ -10,6 +10,8 @@ import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { useSettings } from "../context/settings";
+import SearchBar from "./SearchBar";
+import CampusSwitch from "./CampusSwitch";
 
 
 type LatLng = { latitude: number; longitude: number };
@@ -23,6 +25,9 @@ export default function MapScreen() {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     const { colourBlindMode } = useSettings();
     const router = useRouter();
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCampus, setSelectedCampus] = useState<"SGW" | "Loyola">("SGW");
 
     const { width, height } = useWindowDimensions();
     const menuButtonSize = Math.max(64, Math.min(width * 0.2, 88));
@@ -136,16 +141,7 @@ export default function MapScreen() {
             "Location access is disabled. Please enable it in Settings to use \"My Location\".",
             [
                 { text: "Cancel", style: "cancel" },
-                {
-                    text: "Open Settings",
-                    onPress: async () => {
-                        try {
-                            await openAppSettings();
-                        } catch (error) {
-                            console.warn('Failed to open app settings:', error);
-                        }
-                    },
-                },
+                { text: "Open Settings", onPress: () => { void openAppSettings(); } },
             ]
         );
     };
@@ -225,6 +221,16 @@ export default function MapScreen() {
             Alert.alert("Error", "Could not get your location.");
         } finally {
             setIsLocating(false);
+        }
+    };
+
+    const handleCampusChange = (campus: "SGW" | "Loyola") => {
+        setSelectedCampus(campus);
+        if (mapRef.current) {
+            const region = campus === "SGW"
+                ? { latitude: 45.4973, longitude: -73.5789, latitudeDelta: 0.01, longitudeDelta: 0.01 }
+                : { latitude: 45.4581, longitude: -73.6402, latitudeDelta: 0.015, longitudeDelta: 0.015 };
+            mapRef.current.animateToRegion(region, 500);
         }
     };
 
@@ -314,6 +320,71 @@ export default function MapScreen() {
                     color={theme.cred ? theme.cred.get() : "#912338"}
                 />
             </Pressable>
+
+            {/* Search Bar and Icon Row */}
+            <View
+                style={{
+                    position: "absolute",
+                    top: menuTop,
+                    left: menuLeft + menuButtonSize + 10,
+                    right: 20,
+                    alignItems: "center",
+                }}
+            >
+                <View
+                    style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        width: "100%",
+                        gap: 10,
+                    }}
+                >
+                    <View style={{ flex: 1 }}>
+                        <SearchBar
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            placeholder="Search"
+                        />
+                    </View>
+                    <Pressable
+                        style={{
+                            width: 55,
+                            height: 55,
+                            borderRadius: 27.5,
+                            backgroundColor: "#fff",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 3,
+                        }}
+                    >
+                        <Image
+                            source={require("../assets/images/Concordia_icon.png")}
+                            style={{ width: 40, height: 40 }}
+                            resizeMode="contain"
+                        />
+                    </Pressable>
+                </View>
+            </View>
+
+            {/* Campus Switch - Separate container, centered on screen */}
+            <View
+                style={{
+                    position: "absolute",
+                    top: menuTop + 64,
+                    left: 0,
+                    right: 0,
+                    alignItems: "center",
+                }}
+            >
+                <CampusSwitch
+                    selectedCampus={selectedCampus}
+                    onCampusChange={handleCampusChange}
+                />
+            </View>
 
             <Pressable
                 testID="location-button"
@@ -416,7 +487,7 @@ function formatAddress(record: BuildingRecord): string | null {
 }
 
 function normalizeLabel(value: string): string {
-    return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 }
 
 function toRgba(color: string, alpha: number): string {
@@ -424,9 +495,9 @@ function toRgba(color: string, alpha: number): string {
     const hex = color.replace("#", "");
     const fullHex = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
     if (fullHex.length !== 6) return color;
-    const red = parseInt(fullHex.slice(0, 2), 16);
-    const green = parseInt(fullHex.slice(2, 4), 16);
-    const blue = parseInt(fullHex.slice(4, 6), 16);
+    const red = Number.parseInt(fullHex.slice(0, 2), 16);
+    const green = Number.parseInt(fullHex.slice(2, 4), 16);
+    const blue = Number.parseInt(fullHex.slice(4, 6), 16);
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
