@@ -6,11 +6,15 @@ import com.makesoft.app.application.service.building.GetBuildingInfoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.Positive;
+
+@Validated
 @RestController
 @RequestMapping("api/buildings")
 public class BuildingController {
@@ -26,7 +30,7 @@ public class BuildingController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<BuildingResponseDTO> getBuildingById(@PathVariable("id") Long id) {
+    public ResponseEntity<BuildingResponseDTO> getBuildingById(@PathVariable @Positive Long id) {
         logger.info("Endpoint called | GET /api/buildings/{}", id);
 
         var building = getBuildingInfoService.getById(id);
