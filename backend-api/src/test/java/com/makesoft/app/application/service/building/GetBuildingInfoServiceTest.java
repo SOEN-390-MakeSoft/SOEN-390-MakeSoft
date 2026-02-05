@@ -1,5 +1,6 @@
 package com.makesoft.app.application.service.building;
 
+import com.makesoft.app.application.exception.BuildingNotFoundException;
 import com.makesoft.app.application.port.BuildingRepository;
 import com.makesoft.app.domain.model.building.Building;
 import com.makesoft.app.domain.model.building.BuildingFeatures;
@@ -26,6 +27,10 @@ class GetBuildingInfoServiceTest {
     @InjectMocks
     GetBuildingInfoService service;
 
+    /**
+     * Test GetBuildingInfoService.getById when building is found by repository.
+     * Should return a Building domain object.
+     */
     @Test
     void getByIdTest_WhenBuildingIsFound() {
         var building = new Building(new BuildingId(1L), "Name", "C", "Addr", "Campus",
@@ -39,12 +44,16 @@ class GetBuildingInfoServiceTest {
         assertThat(result.getName()).isEqualTo("Name");
     }
 
+    /**
+     * Test GetBuildingInfoService.getById when building is not found by repository.
+     * Should throw a BuildingNotFoundException.
+     */
     @Test
     void getByIdTest_WhenBuildingIsNotFound() {
-        // Arrange
         when(buildingRepository.findById(any(BuildingId.class))).thenReturn(Optional.empty());
 
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> service.getById(999L));
+        BuildingNotFoundException exception = assertThrows(BuildingNotFoundException.class, () -> service.getById(999L));
+        assertThat(exception.getBuildingId()).isEqualTo(999L);
+        assertThat(exception.getMessage()).contains("Building not found with id: 999");
     }
 }

@@ -1,5 +1,6 @@
 package com.makesoft.app.application.service.building;
 
+import com.makesoft.app.application.exception.BuildingNotFoundException;
 import com.makesoft.app.application.port.BuildingRepository;
 import com.makesoft.app.domain.model.building.Building;
 import com.makesoft.app.domain.model.building.BuildingId;
@@ -25,7 +26,7 @@ public class GetBuildingInfoService {
 
         if (maybe.isEmpty()) {
             logger.info("Building not found for id={}", id);
-            throw new RuntimeException("Building not found");
+            throw new BuildingNotFoundException(id);
         }
 
         Building building = maybe.get();
