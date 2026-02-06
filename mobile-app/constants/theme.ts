@@ -8,6 +8,10 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+/** Concordia University brand red - use for primary actions and accents */
+export const ConcordiaRed = '#912338';
+export const ConcordiaRedMuted = 'rgba(145, 35, 56, 0.12)';
+
 export const Colors = {
   light: {
     text: '#11181C',
