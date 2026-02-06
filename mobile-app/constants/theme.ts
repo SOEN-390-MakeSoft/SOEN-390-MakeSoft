@@ -12,6 +12,14 @@ const tintColorDark = '#fff';
 export const ConcordiaRed = '#912338';
 export const ConcordiaRedMuted = 'rgba(145, 35, 56, 0.12)';
 
+/** Footer building card backgrounds (mockup: red, green, orange, blue) */
+export const FooterCardColors = [
+  ConcordiaRed,
+  '#2E7D32',   // green
+  '#E65100',   // orange
+  '#1565C0',   // dark blue
+] as const;
+
 export const Colors = {
   light: {
     text: '#11181C',
