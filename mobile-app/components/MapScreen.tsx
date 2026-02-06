@@ -151,15 +151,17 @@ export default function MapScreen() {
     };
 
     const handleOpenMenu = () => {
-        router.push("/menu");
+        // cast to any to satisfy expo-router's strict path typing without refactoring routes
+        router.push("/menu" as any);
     };
 
     const ensureLocationPermission = async (): Promise<boolean> => {
+        // safe-check responses before reading .status
         const current = await Location.getForegroundPermissionsAsync();
-        if (current.status === "granted") return true;
+        if (current && current.status === "granted") return true;
 
         const requested = await Location.requestForegroundPermissionsAsync();
-        if (requested.status === "granted") return true;
+        if (requested && requested.status === "granted") return true;
 
         promptToOpenSettings();
         return false;
