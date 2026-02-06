@@ -9,9 +9,33 @@ Mini-Capstone.
 3. Run <code>mvn clean install</code> in order to install required dependencies.
 4. Run <code>mvn spring-boot:run</code> in order to boot-up the backend.
 
+### Database (Neon PostgreSQL)
+
+The backend uses **PostgreSQL** (e.g. [Neon](https://neon.tech)). Configure the connection with environment variables.
+
+#### 1. Copy the example env file and add your credentials:sh\
+`cp backend-api/.env.example backend-api/.env`
+
+#### 2. Edit `backend-api/.env` and set:
+* DATABASE_URL – JDBC URL (e.g. from Neon: `jdbc:postgresql://HOST/DATABASE?sslmode=require`)
+* DATABASE_USERNAME – database user
+* DATABASE_PASSWORD – database password
+
+#### 3. Spring Boot reads these when you run the app.\
+To use .env from the shell, you can run:\
+```
+   cd backend-api
+   export $(cat .env | xargs)
+   mvn spring-boot:run
+```
+Or set the variables in your IDE/run configuration.
+
+
 ### Technologies Used
 - <b>Spring Boot</b> – Chosen for its ease of use and developer productivity. Built on top of Spring, it provides a solid infrastructure for building scalable and maintainable applications.
 - <b>Maven</b> – Used as the build tool to simplify dependency management, automate tasks, and streamline the process of running the backend.
+- <b>PostgreSQL</b> – The application database (hosted on [Neon](https://neon.tech)). Used for persistent storage and configured via environment variables.
+- <b>Spring Data JPA</b> – Used for data access and object–relational mapping with the PostgreSQL database.
 
 ## For Frontend
 

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
+    Image,
     Pressable,
     SafeAreaView,
     StyleSheet,
@@ -17,6 +18,7 @@ import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
 import { BUILDING_ID_BY_CODE } from "../data/buildingIdByCode";
 import { BuildingResponse, getBuildingById } from "../services/api";
+import CampusSwitch from "./CampusSwitch";
 
 type LatLng = { latitude: number; longitude: number };
 type BuildingRecord =
@@ -340,7 +342,11 @@ export default function MapScreen() {
                         />
                     </View>
                     <View style={styles.brandBadge}>
-                        <Text style={styles.brandBadgeText}>C</Text>
+                        <Image
+                            source={require("../assets/images/Concordia_icon.png")}
+                            style={styles.brandBadgeImage}
+                            resizeMode="contain"
+                        />
                     </View>
                 </View>
                 {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
@@ -365,38 +371,12 @@ export default function MapScreen() {
                     </View>
                 )}
                 <View style={styles.campusToggle}>
-                    <Pressable
-                        onPress={() => handleSelectCampus("sgw")}
-                        style={[
-                            styles.campusButton,
-                            activeCampus === "sgw" && styles.campusButtonActive,
-                        ]}
-                    >
-                        <Text
-                            style={[
-                                styles.campusButtonText,
-                                activeCampus === "sgw" && styles.campusButtonTextActive,
-                            ]}
-                        >
-                            SGW
-                        </Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={() => handleSelectCampus("loyola")}
-                        style={[
-                            styles.campusButton,
-                            activeCampus === "loyola" && styles.campusButtonActive,
-                        ]}
-                    >
-                        <Text
-                            style={[
-                                styles.campusButtonText,
-                                activeCampus === "loyola" && styles.campusButtonTextActive,
-                            ]}
-                        >
-                            Loyola
-                        </Text>
-                    </Pressable>
+                    <CampusSwitch
+                        selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
+                        onCampusChange={(campus) =>
+                            handleSelectCampus(campus === "SGW" ? "sgw" : "loyola")
+                        }
+                    />
                 </View>
             </View>
 
@@ -606,31 +586,8 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     map: { flex: 1 },
     campusToggle: {
-        flexDirection: "row",
-        backgroundColor: "rgba(255,255,255,0.85)",
-        borderRadius: 999,
-        padding: 6,
         alignSelf: "center",
         marginTop: 10,
-        borderWidth: 1,
-        borderColor: "#d8d8d8",
-    },
-    campusButton: {
-        paddingVertical: 9,
-        paddingHorizontal: 22,
-        borderRadius: 999,
-        marginHorizontal: 2,
-    },
-    campusButtonActive: {
-        backgroundColor: "#b21b2c",
-    },
-    campusButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#4a4a4a",
-    },
-    campusButtonTextActive: {
-        color: "#fff",
     },
     topControls: {
         position: "absolute",
@@ -688,14 +645,19 @@ const styles = StyleSheet.create({
     searchResultTitle: { fontSize: 16, fontWeight: "600", color: "#2b2b2b" },
     searchResultMeta: { fontSize: 14, color: "#6b6b6b", marginTop: 2 },
     brandBadge: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        backgroundColor: "#b21b2c",
+        width: 55,
+        height: 55,
+        borderRadius: 27.5,
+        backgroundColor: "#fff",
         alignItems: "center",
         justifyContent: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    brandBadgeText: { color: "#fff", fontWeight: "700", fontSize: 37, lineHeight: 40 },
+    brandBadgeImage: { width: 40, height: 40 },
     infoCardWrapper: {
         position: "absolute",
         left: 16,
