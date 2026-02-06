@@ -60,4 +60,20 @@ export const testConnection = async () => {
   }
 };
 
+export type BuildingResponse = {
+  id: number;
+  name: string;
+  code: string;
+  address: string;
+  campus: string;
+  hasElevator: boolean;
+  hasAccessibility: boolean;
+  hasMetroAccess: boolean;
+};
+
+export const getBuildingById = async (id: number) => {
+  const response = await api.get<BuildingResponse>(`/buildings/${id}`);
+  return response.data;
+};
+
 export default api;
