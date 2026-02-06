@@ -64,8 +64,6 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('MapScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
   });
 
   /**
@@ -81,8 +79,6 @@ describe('MapScreen', () => {
 describe('MapScreen - User Permission Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
   });
 
   describe('Permission Granted', () => {
