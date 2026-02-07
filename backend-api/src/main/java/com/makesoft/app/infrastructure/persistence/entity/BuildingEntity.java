@@ -32,7 +32,7 @@ public class BuildingEntity {
     private boolean hasMetroAccess = false;
 
     // JPA requires a no-arg constructor
-    protected BuildingEntity() {}
+    public BuildingEntity() {}
 
     public Long getBuildingId() {
         return buildingId;
