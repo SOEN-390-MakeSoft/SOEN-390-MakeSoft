@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { Platform, View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal, useWindowDimensions } from "react-native";
+import { Platform, View, Pressable, ActivityIndicator, Alert, Linking, StyleSheet, Modal, useWindowDimensions, Image } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
@@ -10,6 +10,8 @@ import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { useSettings } from "../context/settings";
+import SearchBar from "./SearchBar";
+import CampusSwitch from "./CampusSwitch";
 
 
 type LatLng = { latitude: number; longitude: number };
@@ -23,6 +25,9 @@ export default function MapScreen() {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     const { colourBlindMode } = useSettings();
     const router = useRouter();
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCampus, setSelectedCampus] = useState<"SGW" | "Loyola">("SGW");
 
     const { width, height } = useWindowDimensions();
     const menuButtonSize = Math.max(64, Math.min(width * 0.2, 88));
@@ -66,7 +71,6 @@ export default function MapScreen() {
     if (!polygonStrokeBase && theme.cred) {
         polygonStrokeBase = theme.cred.get() || defaultColor;
     }
-
     const polygonFill = toRgba(polygonFillBase, 0.3);
     const polygonFillSelected = toRgba(polygonFillBase, 0.9);
 
@@ -229,6 +233,16 @@ export default function MapScreen() {
         }
     };
 
+    const handleCampusChange = (campus: "SGW" | "Loyola") => {
+        setSelectedCampus(campus);
+        if (mapRef.current) {
+            const region = campus === "SGW"
+                ? { latitude: 45.4973, longitude: -73.5789, latitudeDelta: 0.01, longitudeDelta: 0.01 }
+                : { latitude: 45.4581, longitude: -73.6402, latitudeDelta: 0.015, longitudeDelta: 0.015 };
+            mapRef.current.animateToRegion(region, 500);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <MapView
@@ -315,6 +329,72 @@ export default function MapScreen() {
                     color={theme.cred ? theme.cred.get() : "#912338"}
                 />
             </Pressable>
+
+            {/* Search Bar and Icon Row */}
+            <View
+                style={{
+                    position: "absolute",
+                    top: menuTop,
+                    left: menuLeft + menuButtonSize + 10,
+                    right: 20,
+                    alignItems: "center",
+                }}
+            >
+                <View
+                    style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        width: "100%",
+                        gap: 10,
+                    }}
+                >
+                    <View style={{ flex: 1 }}>
+                        <SearchBar
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            placeholder="Search"
+                        />
+                    </View>
+                    <Pressable
+                        style={{
+                            width: 55,
+                            height: 55,
+                            borderRadius: 27.5,
+                            backgroundColor: "#fff",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 3,
+                        }}
+                    >
+                        <Image
+                            source={require("../assets/images/Concordia_icon.png")}
+                            style={{ width: 40, height: 40 }}
+                            resizeMode="contain"
+                        />
+                    </Pressable>
+                </View>
+            </View>
+
+            {/* Campus Switch - Separate container, centered on screen */}
+            <View
+                style={{
+                    position: "absolute",
+                    top: menuTop + 64,
+                    left: 0,
+                    right: 0,
+                    alignItems: "center",
+                }}
+            >
+                <CampusSwitch
+                    selectedCampus={selectedCampus}
+                    onCampusChange={handleCampusChange}
+                />
+            </View>
+
 
             <Pressable
                 testID="location-button"

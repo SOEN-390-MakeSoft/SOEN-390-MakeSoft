@@ -18,7 +18,6 @@ async function fetchRelation() {
     out skel qt;
   `;
 
-  console.error(String(lastError));
   throw new Error("Overpass failed on all endpoints");
 }
 
