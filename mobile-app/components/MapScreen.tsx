@@ -46,29 +46,31 @@ export default function MapScreen() {
     const [userLocation, setUserLocation] = useState<LatLng | null>(null);
     const theme = useTheme();
 
-    let polygonFillBase = "";
-    let polygonStrokeBase = "";
+    // Default Concordia red as fallback
+    const defaultColor = "#912338";
+    let polygonFillBase = defaultColor;
+    let polygonStrokeBase = defaultColor;
 
     if (colourBlindMode) {
         if (theme.colourBlind1) {
-            polygonFillBase = theme.colourBlind1.get();
+            polygonFillBase = theme.colourBlind1.get() || defaultColor;
         }
         if (theme.colourBlind2) {
-            polygonStrokeBase = theme.colourBlind2.get();
+            polygonStrokeBase = theme.colourBlind2.get() || defaultColor;
         }
     } else if (theme.buildingPrimary) {
-        polygonFillBase = theme.buildingPrimary.get();
-        polygonStrokeBase = theme.buildingPrimary.get();
+        const primaryColor = theme.buildingPrimary.get() || defaultColor;
+        polygonFillBase = primaryColor;
+        polygonStrokeBase = primaryColor;
     }
 
+    // Additional fallback check
     if (!polygonFillBase && theme.cred) {
-        polygonFillBase = theme.cred.get();
+        polygonFillBase = theme.cred.get() || defaultColor;
     }
     if (!polygonStrokeBase && theme.cred) {
-        polygonStrokeBase = theme.cred.get();
+        polygonStrokeBase = theme.cred.get() || defaultColor;
     }
-
-
     const polygonFill = toRgba(polygonFillBase, 0.3);
     const polygonFillSelected = toRgba(polygonFillBase, 0.9);
 
@@ -141,21 +143,28 @@ export default function MapScreen() {
             "Location access is disabled. Please enable it in Settings to use \"My Location\".",
             [
                 { text: "Cancel", style: "cancel" },
-                { text: "Open Settings", onPress: () => { void openAppSettings(); } },
+                {
+                    text: "Open Settings",
+                    onPress: () => {
+                        void openAppSettings();
+                    },
+                },
             ]
         );
     };
 
     const handleOpenMenu = () => {
-        router.push("/menu");
+        // cast to any to satisfy expo-router's strict path typing without refactoring routes
+        router.push("/menu" as any);
     };
 
     const ensureLocationPermission = async (): Promise<boolean> => {
+        // safe-check responses before reading .status
         const current = await Location.getForegroundPermissionsAsync();
-        if (current.status === "granted") return true;
+        if (current && current.status === "granted") return true;
 
         const requested = await Location.requestForegroundPermissionsAsync();
-        if (requested.status === "granted") return true;
+        if (requested && requested.status === "granted") return true;
 
         promptToOpenSettings();
         return false;
@@ -386,6 +395,7 @@ export default function MapScreen() {
                 />
             </View>
 
+
             <Pressable
                 testID="location-button"
                 onPress={goToUserLocation}
@@ -451,7 +461,7 @@ export default function MapScreen() {
 
 function isPointInPolygon(
     point: LatLng,
-    polygon: ReadonlyArray<LatLng>
+    polygon: readonly LatLng[]
 ): boolean {
     let inside = false;
 
@@ -472,7 +482,7 @@ function isPointInPolygon(
     return inside;
 }
 
-function polygonCentroid(points: ReadonlyArray<LatLng>): LatLng {
+function polygonCentroid(points: readonly LatLng[]): LatLng {
     if (points.length === 0) return { latitude: 45.4973, longitude: -73.5789 };
     const sum = points.reduce(
         (acc, p) => ({ latitude: acc.latitude + p.latitude, longitude: acc.longitude + p.longitude }),
@@ -490,7 +500,8 @@ function normalizeLabel(value: string): string {
     return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 }
 
-function toRgba(color: string, alpha: number): string {
+function toRgba(color: string | undefined, alpha: number): string {
+    if (!color) return `rgba(145, 35, 56, ${alpha})`; // Default Concordia red
     if (!color.startsWith("#")) return color;
     const hex = color.replace("#", "");
     const fullHex = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;

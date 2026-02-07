@@ -18,33 +18,6 @@ async function fetchRelation() {
     out skel qt;
   `;
 
-  let lastError = null;
-
-  for (const url of OVERPASS_URLS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-          "User-Agent": USER_AGENT,
-        },
-        body: query,
-      });
-
-      const text = await res.text();
-
-      if (text.trim().startsWith("<")) {
-        lastError = new Error(`Overpass returned HTML/XML from ${url}`);
-        continue;
-      }
-
-      return JSON.parse(text);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  console.error(String(lastError));
   throw new Error("Overpass failed on all endpoints");
 }
 
