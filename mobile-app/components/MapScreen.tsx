@@ -4,7 +4,6 @@ import {
     Animated,
     Image,
     Pressable,
-    SafeAreaView,
     StyleSheet,
     Switch,
     Text,
@@ -13,6 +12,7 @@ import {
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
