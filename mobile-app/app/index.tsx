@@ -48,6 +48,7 @@ export default function WelcomeScreen() {
           color="white"
           paddingHorizontal="$8"
           marginBottom="$10"
+          testID="get-started"
           //Press effect for button
           pressStyle={{
             opacity: 0.7,       // fades the button a bit on press

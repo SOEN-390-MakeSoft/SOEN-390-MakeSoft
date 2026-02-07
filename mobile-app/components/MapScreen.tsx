@@ -283,12 +283,13 @@ export default function MapScreen() {
         : POLYGON_FILL_SELECTED;
 
     return (
-        <View style={styles.container}>
+        <View style={styles.container} testID="map-screen">
             <MapView
                 ref={mapRef}
                 style={styles.map}
                 provider="google"
                 initialRegion={DEFAULT_REGION}
+                testID="campus-map"
             >
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
@@ -468,7 +469,7 @@ export default function MapScreen() {
                             setIsQuickPickOpen(nextOpen);
                         }}
                     >
-                        <Text style={styles.quickPickTitle}>
+                        <Text style={styles.quickPickTitle} testID="campus-label">
                             {activeCampus === "loyola" ? "LOYOLA" : "SGW"}
                         </Text>
                     </Pressable>

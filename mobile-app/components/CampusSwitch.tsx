@@ -15,6 +15,7 @@ export default function CampusSwitch({ selectedCampus, onCampusChange }: CampusS
         <View style={styles.container}>
             <Pressable
                 onPress={() => onCampusChange("SGW")}
+                testID="campus-btn-sgw"
                 style={[
                     styles.button,
                     styles.leftButton,
@@ -25,6 +26,7 @@ export default function CampusSwitch({ selectedCampus, onCampusChange }: CampusS
             </Pressable>
             <Pressable
                 onPress={() => onCampusChange("Loyola")}
+                testID="campus-btn-loyola"
                 style={[
                     styles.button,
                     styles.rightButton,
