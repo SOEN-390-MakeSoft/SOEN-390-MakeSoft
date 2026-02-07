@@ -2,6 +2,9 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
+import { TamaguiProvider, Theme } from 'tamagui';
+import config from '../tamagui.config';
+import { SettingsProvider } from '../context/settings';
 
 // Import component
 import MapScreen from '../components/MapScreen';
@@ -21,14 +24,17 @@ jest.mock('react-native-maps', () => {
     React.useImperativeHandle(ref, () => ({
       animateToRegion: mockAnimateToRegion,
     }));
-    return React.createElement(View, props);
+    return React.createElement(View, { ...props, testID: props.testID || 'map-view' });
   });
 
   return {
     __esModule: true,
     default: MockMapView,
+    Marker: (props: any) => React.createElement(View, { testID: 'marker', ...props }),
+    Polygon: (props: any) => React.createElement(View, { testID: 'polygon', ...props }),
   };
 });
+
 jest.mock('expo-location');
 
 // Mock Alert.alert after import
@@ -38,6 +44,37 @@ Alert.alert = mockAlertFn;
 // Mock Linking.openSettings
 const mockOpenSettings = jest.fn().mockResolvedValue(true);
 Linking.openSettings = mockOpenSettings;
+
+/**
+ * Helper function to wrap components with TamaguiProvider, Theme, and SettingsProvider.
+ * Required because MapScreen uses useTheme() and useSettings() which need their respective contexts.
+ */
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <TamaguiProvider config={config}>
+      <Theme name="light">
+        <SettingsProvider>
+          {component}
+        </SettingsProvider>
+      </Theme>
+    </TamaguiProvider>
+  );
+};
+
+describe('MapScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * Test: Verifies that the MapScreen component renders the map view.
+   * Ensures the mocked MapView component is present in the rendered output.
+   */
+  it('renders map view', () => {
+    const { getByTestId } = renderWithProviders(<MapScreen />);
+    expect(getByTestId('map-view')).toBeTruthy();
+  });
+});
 
 describe('MapScreen - User Permission Tests', () => {
   beforeEach(() => {
@@ -51,7 +88,7 @@ describe('MapScreen - User Permission Tests', () => {
         coords: { latitude: 45.5017, longitude: -73.5673 },
       });
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
@@ -85,7 +122,7 @@ describe('MapScreen - User Permission Tests', () => {
         coords: { latitude: 45.5017, longitude: -73.5673 },
       });
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
@@ -100,7 +137,7 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
       (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
@@ -118,7 +155,7 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
       (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
@@ -141,7 +178,7 @@ describe('MapScreen - User Permission Tests', () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
       (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(new Error('Location unavailable'));
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
@@ -164,7 +201,7 @@ describe('MapScreen - User Permission Tests', () => {
         }), 100))
       );
 
-      const { findByTestId } = render(<MapScreen />);
+      const { findByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = await findByTestId('location-button');
 
       fireEvent.press(locationButton);
