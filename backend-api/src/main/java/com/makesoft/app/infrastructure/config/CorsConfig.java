@@ -1,4 +1,4 @@
-package com.makesoft.app.config;
+package com.makesoft.app.infrastructure.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -11,12 +11,12 @@ import Constants from 'expo-constants';
 // fall back to emulator/simulator host when running in emulators.
 const envHost = ((Constants?.expoConfig || (Constants as any).manifest || {}).extra?.PC_IP) ||  undefined;
 
-const ANDROID_EMULATOR_HOST = '10.0.2.2:8081';
-const IOS_SIMULATOR_HOST = 'localhost:8081';
+const ANDROID_EMULATOR_HOST = '10.0.2.2:8080';
+const IOS_SIMULATOR_HOST = 'localhost:8080';
 
-// normalize env host (append :8081 if missing)
+// normalize env host (append :8080 if missing)
 const normalizedEnvHost = typeof envHost === 'string' && envHost.length > 0
-  ? (envHost.includes(':') ? envHost : `${envHost}:8081`)
+  ? (envHost.includes(':') ? envHost : `${envHost}:8080`)
   : undefined;
 
 const host = (() => {
@@ -27,8 +27,8 @@ const host = (() => {
   }
   if (Platform.OS === 'android' && !isDevice) return ANDROID_EMULATOR_HOST;
   if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST;
-  // Fallback: env host if present, otherwise localhost:8081
-  return normalizedEnvHost ?? 'localhost:8081';
+  // Fallback: env host if present, otherwise localhost:8080
+  return normalizedEnvHost ?? 'localhost:8080';
 })();
 
 // DEBUG: show the final chosen host
@@ -58,6 +58,22 @@ export const testConnection = async () => {
 
     return { success: false, error: errorMessage };
   }
+};
+
+export type BuildingResponse = {
+  id: number;
+  name: string;
+  code: string;
+  address: string;
+  campus: string;
+  hasElevator: boolean;
+  hasAccessibility: boolean;
+  hasMetroAccess: boolean;
+};
+
+export const getBuildingById = async (id: number) => {
+  const response = await api.get<BuildingResponse>(`/buildings/${id}`);
+  return response.data;
 };
 
 export default api;

@@ -3,22 +3,20 @@ logging:
     com.makesoft.app: DEBUG
 
 server:
-  port: 8081
+  port: 8080
   address: 0.0.0.0  # Allow connections from all network interfaces (not just localhost)
 
 spring:
   application:
     name: makesoft-backend
+
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/your_database}
-    username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
   jpa:
     hibernate:
-      ddl-auto: update  # Options: none, validate, update, create, create-drop
-    show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+      ddl-auto: validate
+
+    show-sql: false

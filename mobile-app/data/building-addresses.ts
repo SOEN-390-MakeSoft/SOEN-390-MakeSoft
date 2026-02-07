@@ -56,7 +56,11 @@ export const BUILDING_ADDRESSES: BuildingAddress[] = [
         "GN",
         "Grey Nuns Building",
         "1190 Guy St, Montreal, QC",
-        ["Grey Nuns Building (St-Mathieu Entrance)", "1175 St-Mathieu St"]
+        [
+            "Grey Nuns Building (St-Mathieu Entrance)",
+            "1175 St-Mathieu St",
+            "Maison-Mere des Soeurs grises",
+        ]
     ),
     makeBuilding("GS", "GS Building", "1538 Sherbrooke St W, Montreal, QC"),
     makeBuilding(
