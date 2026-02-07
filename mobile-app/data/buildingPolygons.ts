@@ -1612,9 +1612,9 @@ export const BUILDING_POLYGONS = {
     ]
   },
   "19": {
-    "name": "way_103892966",
-    "street": null,
-    "housenumber": null,
+    "name": "EN Annex",
+    "street": "Mackay St.",
+    "housenumber": "2070",
     "polygon": [
       {
         "latitude": 45.4971124,
@@ -1972,37 +1972,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "26": {
-    "name": "way_103892942",
-    "street": null,
-    "housenumber": null,
-    "polygon": [
-      {
-        "latitude": 45.4967406,
-        "longitude": -73.5795156
-      },
-      {
-        "latitude": 45.4967793,
-        "longitude": -73.579597
-      },
-      {
-        "latitude": 45.4967907,
-        "longitude": -73.5795851
-      },
-      {
-        "latitude": 45.4968834,
-        "longitude": -73.5794977
-      },
-      {
-        "latitude": 45.4968443,
-        "longitude": -73.5794153
-      },
-      {
-        "latitude": 45.4967406,
-        "longitude": -73.5795156
-      }
-    ]
-  },
+
   "27": {
     "name": "RR - RR Annex",
     "street": "Mackay St.",
@@ -2031,9 +2001,9 @@ export const BUILDING_POLYGONS = {
     ]
   },
   "": {
-    "name": "",
+    "name": "RR Annex",
     "street": "Rue Mackay",
-    "housenumber": "20X0",
+    "housenumber": "2040",
     "polygon": [
       {
         "latitude": 45.4967535,
@@ -2158,45 +2128,7 @@ export const BUILDING_POLYGONS = {
       }
     ]
   },
-  "31": {
-    "name": "way_103892933",
-    "street": null,
-    "housenumber": null,
-    "polygon": [
-      {
-        "latitude": 45.4966157,
-        "longitude": -73.5789525
-      },
-      {
-        "latitude": 45.4965066,
-        "longitude": -73.5790578
-      },
-      {
-        "latitude": 45.4965148,
-        "longitude": -73.5790751
-      },
-      {
-        "latitude": 45.4964372,
-        "longitude": -73.5791501
-      },
-      {
-        "latitude": 45.4964652,
-        "longitude": -73.5792093
-      },
-      {
-        "latitude": 45.4965484,
-        "longitude": -73.579129
-      },
-      {
-        "latitude": 45.496652,
-        "longitude": -73.579029
-      },
-      {
-        "latitude": 45.4966157,
-        "longitude": -73.5789525
-      }
-    ]
-  },
+
   "32": {
     "name": "EV - Engineering, Computer Science and Visual Arts Integrated Complex",
     "street": "Ste-Catherine St. W.",

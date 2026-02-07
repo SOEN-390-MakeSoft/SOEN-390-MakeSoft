@@ -7,6 +7,8 @@ const OVERPASS_URLS = [
     "https://overpass.nchc.org.tw/api/interpreter",
 ];
 const USER_AGENT = "MakeSoft-Overpass/1.0";
+const MIN_POLYGON_POINTS = 4;
+const OVERPASS_TIMEOUT = 120;
 
 const LOYOLA_BBOX = {
     south: 45.4540,
@@ -57,7 +59,7 @@ const LOYOLA_BUILDING_CODES = [
 async function fetchLoyolaBuildings() {
     // Fetch BOTH ways and relations tagged as buildings
     const query = `
-    [out:json][timeout:120];
+    [out:json][timeout:${OVERPASS_TIMEOUT}];
     (
         way["building"]
           (${LOYOLA_BBOX.south},${LOYOLA_BBOX.west},${LOYOLA_BBOX.north},${LOYOLA_BBOX.east});
@@ -68,43 +70,16 @@ async function fetchLoyolaBuildings() {
     out body qt;
   `;
 
-    let lastError = null;
-
-    for (const url of OVERPASS_URLS) {
-        try {
-            const res = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "text/plain",
-                    "User-Agent": USER_AGENT,
-                },
-                body: query,
-            });
-
-            const text = await res.text();
-
-            if (text.trim().startsWith("<")) {
-                lastError = new Error(`Overpass returned HTML/XML from ${url}`);
-                continue;
-            }
-
-            return JSON.parse(text);
-        } catch (error) {
-            lastError = error;
-        }
-    }
-
-    console.error(String(lastError));
     throw new Error("Overpass failed on all endpoints");
 }
 
 function resolveWay(way, nodes) {
-    if (!way.nodes || way.nodes.length < 4) return null;
+    if (!way.nodes || way.nodes.length < MIN_POLYGON_POINTS) return null;
     const polygon = way.nodes
         .map((id) => nodes.get(id))
         .filter(Boolean)
         .map((n) => ({ latitude: n.lat, longitude: n.lon }));
-    return polygon.length >= 4 ? polygon : null;
+    return polygon.length >= MIN_POLYGON_POINTS ? polygon : null;
 }
 
 // Stitch multiple outer ways of a relation into one ordered ring
@@ -146,7 +121,7 @@ function resolveRelation(relation, ways, nodes) {
         .map((id) => nodes.get(id))
         .filter(Boolean)
         .map((n) => ({ latitude: n.lat, longitude: n.lon }));
-    return polygon.length >= 4 ? polygon : null;
+    return polygon.length >= MIN_POLYGON_POINTS ? polygon : null;
 }
 
 function canonicalizeName(name) {
