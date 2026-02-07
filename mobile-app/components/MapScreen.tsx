@@ -26,7 +26,14 @@ type BuildingRecord =
     | (typeof LOYOLA_BUILDING_POLYGONS)[keyof typeof LOYOLA_BUILDING_POLYGONS];
 type Building = { id: string; name: string; address: string | null; code: string | null; polygon: LatLng[] };
 type Campus = "sgw" | "loyola";
-type QuickPick = { code: string; label: string; color: string; icon: keyof typeof MaterialIcons.glyphMap; hint?: string };
+type QuickPick = {
+    code: string;
+    label: string;
+    color: string;
+    colorBlind?: string;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    hint?: string;
+};
 
 const DEFAULT_REGION = {
     latitude: 45.4973,
@@ -45,19 +52,76 @@ const LOYOLA_REGION = {
 const POLYGON_STROKE = "rgba(178, 27, 44, 0.9)";
 const POLYGON_FILL = "rgba(178, 27, 44, 0.25)";
 const POLYGON_FILL_SELECTED = "rgba(178, 27, 44, 0.7)";
+const COLOR_BLIND_CARD_TEXT = "#4b4b4b";
 
 const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
     sgw: [
-        { code: "H", label: "Pavillon\nHenry F Hall", color: "#b24a53", icon: "location-city", hint: "Hall" },
-        { code: "LB", label: "Pavillon\nMcConnell Bldg", color: "#4f7f86", icon: "place", hint: "McConnell" },
-        { code: "LB", label: "Pavillon\nJW McConnell", color: "#d5964a", icon: "location-city", hint: "McConnell" },
-        { code: "MB", label: "John Molson\nSchool of Business", color: "#6b8f76", icon: "location-city", hint: "Molson" },
+        {
+            code: "H",
+            label: "Pavillon\nHenry F Hall",
+            color: "#b24a53",
+            colorBlind: "#f3e0a6",
+            icon: "location-city",
+            hint: "Hall",
+        },
+        {
+            code: "LB",
+            label: "Pavillon\nMcConnell Bldg",
+            color: "#4f7f86",
+            colorBlind: "#cfd6df",
+            icon: "place",
+            hint: "McConnell",
+        },
+        {
+            code: "LB",
+            label: "Pavillon\nJW McConnell",
+            color: "#d5964a",
+            colorBlind: "#bcd0e8",
+            icon: "location-city",
+            hint: "McConnell",
+        },
+        {
+            code: "MB",
+            label: "John Molson\nSchool of Business",
+            color: "#6b8f76",
+            colorBlind: "#a7b6ad",
+            icon: "location-city",
+            hint: "Molson",
+        },
     ],
     loyola: [
-        { code: "AD", label: "AD Building", color: "#7ba56e", icon: "location-city", hint: "Administration" },
-        { code: "FC", label: "F.C. Smith\nBuilding", color: "#4f7f9b", icon: "location-city", hint: "Smith" },
-        { code: "CC", label: "Central\nBuilding", color: "#d5964a", icon: "location-city", hint: "Central" },
-        { code: "SP", label: "Richard J. Renaud\nScience Complex", color: "#b24a6a", icon: "place", hint: "Renaud" },
+        {
+            code: "AD",
+            label: "AD Building",
+            color: "#7ba56e",
+            colorBlind: "#a3b097",
+            icon: "location-city",
+            hint: "Administration",
+        },
+        {
+            code: "FC",
+            label: "F.C. Smith\nBuilding",
+            color: "#4f7f9b",
+            colorBlind: "#8fa3b8",
+            icon: "location-city",
+            hint: "Smith",
+        },
+        {
+            code: "CC",
+            label: "Central\nBuilding",
+            color: "#d5964a",
+            colorBlind: "#c8d1e3",
+            icon: "location-city",
+            hint: "Central",
+        },
+        {
+            code: "SP",
+            label: "Richard J. Renaud\nScience Complex",
+            color: "#b24a6a",
+            colorBlind: "#d5cfb7",
+            icon: "place",
+            hint: "Renaud",
+        },
     ],
 };
 
@@ -488,18 +552,23 @@ export default function MapScreen() {
                                 }
                             }}
                         >
-                            {FEATURED_BUILDINGS[activeCampus].map((pick) => (
+                            {FEATURED_BUILDINGS[activeCampus].map((pick) => {
+                                const cardBackground =
+                                    isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
+                                const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : "#fff";
+                                return (
                                 <Pressable
                                     key={pick.label}
-                                    style={[styles.quickPickCard, { backgroundColor: pick.color }]}
+                                    style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
                                     onPress={() => handleQuickPick(pick)}
                                 >
-                                <MaterialIcons name={pick.icon} size={21} color="#fff" />
-                                <Text style={styles.quickPickLabel} numberOfLines={3}>
+                                <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
+                                <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
                                     {pick.label}
                                 </Text>
                                 </Pressable>
-                            ))}
+                                );
+                            })}
                         </View>
                     </Animated.View>
                 </View>
