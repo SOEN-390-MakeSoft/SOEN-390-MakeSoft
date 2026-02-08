@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
-import { BUILDING_ID_BY_CODE } from "../data/buildingIdByCode";
 import { BuildingResponse, getBuildingById } from "../services/api";
 import CampusSwitch from "./CampusSwitch";
 
@@ -216,10 +215,8 @@ export default function MapScreen() {
             return;
         }
 
-        const code = selectedBuilding.code ? selectedBuilding.code.toUpperCase() : null;
-        const mappedId = code ? BUILDING_ID_BY_CODE[code] : undefined;
         const numericId = Number(selectedBuildingId);
-        const requestId = mappedId ?? (Number.isFinite(numericId) ? numericId : null);
+        const requestId = Number.isFinite(numericId) ? numericId : null;
 
         if (!requestId) {
             setRemoteBuilding(null);
