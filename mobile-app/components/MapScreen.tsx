@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Image,
+    Linking,
     Pressable,
     StyleSheet,
     Switch,
@@ -11,6 +13,7 @@ import {
     View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
+import * as Location from "expo-location";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BUILDING_POLYGONS } from "../data/buildingPolygons";
@@ -128,6 +131,7 @@ export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [activeCampus, setActiveCampus] = useState<Campus>("sgw");
     const [remoteBuilding, setRemoteBuilding] = useState<BuildingResponse | null>(null);
@@ -140,6 +144,69 @@ export default function MapScreen() {
     const quickPickVisibleHeight = useRef(new Animated.Value(0)).current;
     const searchInputRef = useRef<TextInput>(null);
     const isSearchDisabled = true;
+
+    const openAppSettings = async () => {
+        await Linking.openSettings();
+    };
+
+    const promptToOpenSettings = () => {
+        Alert.alert(
+            'Location permission needed',
+            'Location access is disabled. Please enable it in Settings to use "My Location".',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => void openAppSettings() },
+            ]
+        );
+    };
+
+    const ensureLocationPermission = async (): Promise<boolean> => {
+        // Check current permission
+        const current = await Location.getForegroundPermissionsAsync();
+
+        if (current.status === "granted") return true;
+
+        // Try requesting (OS may show popup only if allowed)
+        const requested = await Location.requestForegroundPermissionsAsync();
+
+        if (requested.status === "granted") return true;
+
+        // If still denied, direct user to settings (this covers "Don't ask again" cases)
+        promptToOpenSettings();
+        return false;
+    };
+
+    const goToUserLocation = async () => {
+        setIsLocating(true);
+        try {
+            const ok = await ensureLocationPermission();
+            if (!ok) {
+                setIsLocating(false);
+                return;
+            }
+
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+
+            const { latitude, longitude } = location.coords;
+
+            mapRef.current?.animateToRegion(
+                {
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                },
+                500
+            );
+        } catch (error) {
+            console.error("Error getting location:", error);
+            Alert.alert("Error", "Could not get your location.");
+        } finally {
+            setIsLocating(false);
+        }
+    };
 
     const addressLookup = useMemo(() => {
         const lookup = new Map<string, { name: string; address: string; code: string }>();
@@ -351,6 +418,7 @@ export default function MapScreen() {
                 provider="google"
                 initialRegion={DEFAULT_REGION}
                 testID="campus-map"
+                showsUserLocation
             >
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
@@ -511,11 +579,17 @@ export default function MapScreen() {
                     pointerEvents="auto"
                 >
                     <Pressable
-                        style={styles.recenterButton}
-                        onPress={() => handleSelectCampus(activeCampus)}
-                        accessibilityLabel="Recenter map"
+                        testID="location-button"
+                        style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
+                        onPress={goToUserLocation}
+                        disabled={isLocating}
+                        accessibilityLabel="Go to my location"
                     >
-                        <MaterialIcons name="my-location" size={32} color="#6b6b6b" />
+                        {isLocating ? (
+                            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
+                        ) : (
+                            <MaterialIcons name="my-location" size={32} color="#c41230" />
+                        )}
                     </Pressable>
                     <Pressable
                         style={styles.quickPickHeader}
