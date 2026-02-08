@@ -32,6 +32,7 @@ mobile-app/android/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+mobile-app/coverage/
 
 # Environment files
 .env

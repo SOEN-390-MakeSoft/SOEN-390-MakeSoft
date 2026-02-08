@@ -1,0 +1,25 @@
+logging:
+  level:
+    com.makesoft.app: DEBUG
+
+server:
+  port: 8080
+  address: 0.0.0.0  # Allow connections from all network interfaces (not just localhost)
+
+spring:
+  application:
+    name: makesoft-backend
+
+  config:
+    import: optional:file:.env[.properties] # Look for a .env to import, its optional so if you dont have one itll be fine.
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+    show-sql: false
