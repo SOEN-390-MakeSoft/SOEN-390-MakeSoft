@@ -75,12 +75,12 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
             hint: "McConnell",
         },
         {
-            code: "LB",
-            label: "Pavillon\nJW McConnell",
+            code: "EV",
+            label: "Pavillon EV",
             color: "#d5964a",
             colorBlind: "#bcd0e8",
             icon: "location-city",
-            hint: "McConnell",
+            hint: "EV",
         },
         {
             code: "MB",
