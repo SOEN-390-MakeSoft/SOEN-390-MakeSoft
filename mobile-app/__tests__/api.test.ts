@@ -2,7 +2,7 @@
  * Mock the global fetch function to intercept all HTTP requests during testing.
  * Allows simulation of API responses without making actual network calls.
  */
-global.fetch = jest.fn();
+globalThis.fetch = jest.fn();
 
 describe('API Service', () => {
     /**

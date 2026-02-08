@@ -20,7 +20,6 @@ jest.mock('../context/settings', () => ({
 }));
 
 jest.mock('tamagui', () => {
-  const React = require('react');
   const { View, Text, Pressable } = require('react-native');
   const Switch = ({ checked, onCheckedChange, ...props }: any) => (
     <Pressable
@@ -44,7 +43,6 @@ jest.mock('tamagui', () => {
 });
 
 jest.mock('@expo/vector-icons', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return { MaterialIcons: (props: any) => <View {...props} /> };
 });

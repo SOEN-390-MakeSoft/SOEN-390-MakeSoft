@@ -1,6 +1,6 @@
 import React from 'react';
 import MapScreen from '@/components/MapScreen';
 
-export default function Map() {
+export default function MapTab() {
   return <MapScreen />;
 }
