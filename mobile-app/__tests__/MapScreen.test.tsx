@@ -55,7 +55,6 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'Light' },
 }));
 jest.mock('tamagui', () => {
-  const React = require('react');
   const { View, Text } = require('react-native');
   return {
     TamaguiProvider: ({ children, ...props }: any) => <View {...props}>{children}</View>,

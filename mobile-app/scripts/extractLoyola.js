@@ -1,5 +1,5 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const OVERPASS_URLS = [
     "https://overpass.kumi.systems/api/interpreter",
@@ -141,105 +141,113 @@ function extractPolygons(data) {
         if (el.type === "relation") relations.set(el.id, el);
     }
 
-    // Track ways that belong to a relation so we don't use them standalone
-    const waysInRelations = new Set();
-    for (const [, rel] of relations) {
-        for (const member of rel.members) {
-            if (member.type === "way") waysInRelations.add(member.ref);
+    // Get all way IDs referenced by any relation
+    function getWaysInRelations(relationsMap) {
+        const wayIds = new Set();
+        for (const [, rel] of relationsMap) {
+            rel.members?.forEach(member => {
+                if (member.type === "way") wayIds.add(member.ref);
+            });
+        }
+        return wayIds;
+    }
+    const waysInRelations = getWaysInRelations(relations);
+
+    // Helper for creating result record and logging
+    function addPolygonResult(result, key, sourceType, tags, polygon) {
+        result[key] = {
+            name: key,
+            street: tags["addr:street"] || null,
+            housenumber: tags["addr:housenumber"] || null,
+            polygon,
+        };
+        console.log(`  ✅ ${sourceType}: "${key}" (${polygon.length} points)`);
+    }
+
+    // Extract polygons from relations
+    function processRelations(relationsMap, waysMap, nodesMap, result, canonicalize) {
+        for (const [, rel] of relationsMap) {
+            const tags = rel.tags || {};
+            if (!tags.name) continue;
+
+            const canonical = canonicalize(tags.name);
+            if (!canonical) {
+                console.log(`  ⏭️  Skipped relation "${tags.name}" — not in allowed list`);
+                continue;
+            }
+
+            const polygon = resolveRelation(rel, waysMap, nodesMap);
+            if (!polygon) continue;
+
+            addPolygonResult(result, canonical, "Relation", tags, polygon);
+        }
+    }
+
+    // Extract standalone way polygons (not referenced by relations)
+    function processStandaloneWays(waysMap, nodesMap, result, canonicalize, waysInRelationsSet) {
+        for (const [id, way] of waysMap) {
+            if (waysInRelationsSet.has(id)) continue;
+
+            const tags = way.tags || {};
+            if (!tags.name) continue;
+
+            const canonical = canonicalize(tags.name);
+            if (!canonical) {
+                console.log(`  ⏭️  Skipped way "${tags.name}" — not in allowed list`);
+                continue;
+            }
+
+            // Don't overwrite a relation result
+            if (result[canonical]) continue;
+
+            const polygon = resolveWay(way, nodesMap);
+            if (!polygon) continue;
+
+            addPolygonResult(result, canonical, "Way", tags, polygon);
         }
     }
 
     const result = {};
 
-    // --- Relations first ---
-    for (const [, rel] of relations) {
-        const tags = rel.tags || {};
-        if (!tags.name) continue;
-
-        const canonical = canonicalizeName(tags.name);
-        if (!canonical) {
-            console.log(`  ⏭️  Skipped relation "${tags.name}" — not in allowed list`);
-            continue;
-        }
-
-        const polygon = resolveRelation(rel, ways, nodes);
-        if (!polygon) continue;
-
-        result[canonical] = {
-            name: canonical,
-            street: tags["addr:street"] || null,
-            housenumber: tags["addr:housenumber"] || null,
-            polygon,
-        };
-        console.log(`  ✅ Relation: "${canonical}" (${polygon.length} points)`);
-    }
-
-    // --- Standalone ways (skip fragments belonging to a relation) ---
-    for (const [id, way] of ways) {
-        if (waysInRelations.has(id)) continue;
-
-        const tags = way.tags || {};
-        if (!tags.name) continue;
-
-        const canonical = canonicalizeName(tags.name);
-        if (!canonical) {
-            console.log(`  ⏭️  Skipped way "${tags.name}" — not in allowed list`);
-            continue;
-        }
-
-        // Don't overwrite a relation result
-        if (result[canonical]) continue;
-
-        const polygon = resolveWay(way, nodes);
-        if (!polygon) continue;
-
-        result[canonical] = {
-            name: canonical,
-            street: tags["addr:street"] || null,
-            housenumber: tags["addr:housenumber"] || null,
-            polygon,
-        };
-        console.log(`  ✅ Way: "${canonical}" (${polygon.length} points)`);
-    }
+    processRelations(relations, ways, nodes, result, canonicalizeName);
+    processStandaloneWays(ways, nodes, result, canonicalizeName, waysInRelations);
 
     return result;
 }
 
-(async () => {
-    console.log("▶ Fetching Loyola campus buildings…\n");
+console.log("▶ Fetching Loyola campus buildings…\n");
 
-    const data = await fetchLoyolaBuildings();
-    const polygons = extractPolygons(data);
+const data = await fetchLoyolaBuildings();
+const polygons = extractPolygons(data);
 
-    console.log(`\n📍 Output: ${Object.keys(polygons).length} buildings\n`);
+console.log(`\n📍 Output: ${Object.keys(polygons).length} buildings\n`);
 
-    // Check which allowed buildings are missing
-    const missing = ALLOWED_BUILDINGS.filter((name) => !polygons[name]);
-    if (missing.length > 0) {
-        console.log(`⚠️  These allowed buildings were NOT found in OSM data:`);
-        missing.forEach((name) => console.log(`     ${name}`));
-    }
+// Check which allowed buildings are missing
+const missing = ALLOWED_BUILDINGS.filter((name) => !polygons[name]);
+if (missing.length > 0) {
+    console.log(`⚠️  These allowed buildings were NOT found in OSM data:`);
+    missing.forEach((name) => console.log(`     ${name}`));
+}
 
-    // Check which official codes are still missing entirely
-    const foundNames = Object.keys(polygons).map((n) => n.toUpperCase());
-    const missingCodes = LOYOLA_BUILDING_CODES.filter(
-        (code) => !foundNames.some((n) => n.includes(code))
-    );
-    if (missingCodes.length > 0) {
-        console.log(`\n⚠️  Official codes with no polygon: ${missingCodes.join(", ")}`);
-    }
+// Check which official codes are still missing entirely
+const foundNames = Object.keys(polygons).map((n) => n.toUpperCase());
+const missingCodes = LOYOLA_BUILDING_CODES.filter(
+    (code) => !foundNames.some((n) => n.includes(code))
+);
+if (missingCodes.length > 0) {
+    console.log(`\n⚠️  Official codes with no polygon: ${missingCodes.join(", ")}`);
+}
 
-    const output = `// ⚠️ AUTO-GENERATED — DO NOT EDIT
+const output = `// ⚠️ AUTO-GENERATED — DO NOT EDIT
 // Source: OpenStreetMap bounding box query for Concordia Loyola Campus
 // Bbox: south=${LOYOLA_BBOX.south}, west=${LOYOLA_BBOX.west}, north=${LOYOLA_BBOX.north}, east=${LOYOLA_BBOX.east}
 
 export const LOYOLA_BUILDING_POLYGONS = ${JSON.stringify(polygons, null, 2)} as const;
 `;
 
-    const outDir = path.resolve(process.cwd(), "data");
-    const outFile = path.join(outDir, "buildingPolygonsLoyola.ts");
-    fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(outFile, output);
+const outDir = path.resolve(process.cwd(), "data");
+const outFile = path.join(outDir, "buildingPolygonsLoyola.ts");
+fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(outFile, output);
 
-    console.log(`\n✅ Wrote ${Object.keys(polygons).length} buildings -> ${outFile}`);
-})();
+console.log(`\n✅ Wrote ${Object.keys(polygons).length} buildings -> ${outFile}`);
