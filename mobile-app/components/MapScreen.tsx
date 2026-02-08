@@ -23,7 +23,7 @@ type LatLng = { latitude: number; longitude: number };
 type BuildingRecord =
     | (typeof BUILDING_POLYGONS)[keyof typeof BUILDING_POLYGONS]
     | (typeof LOYOLA_BUILDING_POLYGONS)[keyof typeof LOYOLA_BUILDING_POLYGONS];
-type Building = { id: string; name: string; address: string | null; code: string | null; polygon: LatLng[] };
+type Building = { id: string; name: string; address: string | null; code: string | null; polygon: readonly LatLng[] };
 type Campus = "sgw" | "loyola";
 type QuickPick = {
     code: string;
