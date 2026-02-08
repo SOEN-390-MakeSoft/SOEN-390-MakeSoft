@@ -30,7 +30,7 @@ describe('Testing Network Configuration Logic', () => {
         const { API_BASE_URL } = require('../../services/api');
 
         // The Host IP is expected to be the host machine's local host in conjuction with the backend API (Android behaviour)
-        expect(API_BASE_URL).toBe('http://10.0.2.2:8080/api');
+        expect(API_BASE_URL).toBe('https://10.0.2.2:8080/api');
     });
 
     /*
@@ -51,7 +51,7 @@ describe('Testing Network Configuration Logic', () => {
         const { API_BASE_URL } = require('../../services/api');
 
         // The emulator URL is expected to share the host network's in conjuction with the backend API (iOS behaviour)
-        expect(API_BASE_URL).toBe('http://localhost:8080/api');
+        expect(API_BASE_URL).toBe('https://localhost:8080/api');
     });
 
     /*
@@ -78,7 +78,7 @@ describe('Testing Network Configuration Logic', () => {
         const { API_BASE_URL } = require('../../services/api');
 
         // The logic should append the specified port (:8080, in this case) to the end of the IP
-        expect(API_BASE_URL).toBe(`http://${MOCK_PC_IP}:8080/api`);
+        expect(API_BASE_URL).toBe(`https://${MOCK_PC_IP}:8080/api`);
 
     });
 
@@ -106,6 +106,6 @@ describe('Testing Network Configuration Logic', () => {
         const { API_BASE_URL } = require('../../services/api');
 
         // The logic should should respect the specified port
-        expect(API_BASE_URL).toBe(`http://${MOCK_PC_IP_WITH_PORT}/api`);
+        expect(API_BASE_URL).toBe(`https://${MOCK_PC_IP_WITH_PORT}/api`);
     });
 });

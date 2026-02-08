@@ -39,7 +39,7 @@ const host = (() => {
 // DEBUG: show the final chosen host
 // console.log('DEBUG: selected API host =', host);
 
-export const API_BASE_URL = `http://${host}/api`;
+export const API_BASE_URL = `https://${host}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
