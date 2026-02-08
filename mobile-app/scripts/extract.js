@@ -1,5 +1,5 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const OVERPASS_URLS = [
   "https://overpass.kumi.systems/api/interpreter",
@@ -62,35 +62,28 @@ async function fetchWayTags(wayId) {
 async function extractPolygons(data) {
   const nodes = new Map();
   const ways = new Map();
-  const relation = data.elements.find(
-    el => el.type === "relation" && el.id === RELATION_ID
-  );
 
+  // Populate nodes and ways maps
   for (const el of data.elements) {
     if (el.type === "node") nodes.set(el.id, el);
     if (el.type === "way") ways.set(el.id, el);
   }
 
+  const relation = data.elements.find(
+    el => el.type === "relation" && el.id === RELATION_ID
+  );
+
   const result = {};
   const wayTagCache = new Map();
 
-  const getAddressFields = (tags) => {
-    if (!tags) {
-      return { street: null, housenumber: null };
-    }
-    return {
-      street: tags["addr:street"] || null,
-      housenumber: tags["addr:housenumber"] || null,
-    };
-  };
+  const getAddressFields = (tags) => ({
+    street: tags?.["addr:street"] || null,
+    housenumber: tags?.["addr:housenumber"] || null,
+  });
 
-  for (const member of relation.members) {
-    if (member.type !== "way") continue;
-
-    const way = ways.get(member.ref);
-    if (!way || !way.nodes) continue;
-
-    const polygon = way.nodes
+  // Extract polygon points from given way, filtered by valid nodes
+  const getPolygonFromWay = (way) => 
+    (way.nodes || [])
       .map(id => nodes.get(id))
       .filter(Boolean)
       .map(n => ({
@@ -98,10 +91,12 @@ async function extractPolygons(data) {
         longitude: n.lon,
       }));
 
+  // Retrieve tags, populating the cache if necessary
+  async function getWayTagsWithCache(way) {
     let tags = way.tags || {};
     const { street, housenumber } = getAddressFields(tags);
     const hasAddress = street || housenumber;
-
+    // If missing either name or address, try fetching tags
     if (!tags?.name || !hasAddress) {
       if (!wayTagCache.has(way.id)) {
         wayTagCache.set(way.id, fetchWayTags(way.id));
@@ -111,43 +106,59 @@ async function extractPolygons(data) {
         tags = { ...fetchedTags, ...tags };
       }
     }
+    return tags;
+  }
+
+  // For each way member, extract polygon and build result object
+  async function processWayMember(member) {
+    if (member.type !== "way") return;
+
+    const way = ways.get(member.ref);
+    if (!way || !way.nodes) return;
+
+    const polygon = getPolygonFromWay(way);
+    let tags = await getWayTagsWithCache(way);
 
     const name =
       tags?.name ||
       tags?.ref ||
       `way_${way.id}`;
-    const addressFields = getAddressFields(tags);
+    const { street, housenumber } = getAddressFields(tags);
 
     result[name] = {
       name,
-      street: addressFields.street,
-      housenumber: addressFields.housenumber,
+      street,
+      housenumber,
       polygon,
     };
+  }
+
+  // Sequentially process each way member of the relation
+  for (const member of relation.members) {
+    // eslint-disable-next-line no-await-in-loop
+    await processWayMember(member); // Do not parallelize to preserve cache optimization
   }
 
   return result;
 }
 
-(async () => {
-  console.log("▶ Fetching campus relation…");
+console.log("▶ Fetching campus relation…");
 
-  const data = await fetchRelation();
-  const polygons = await extractPolygons(data);
+const data = await fetchRelation();
+const polygons = await extractPolygons(data);
 
-  const output = `
+const output = `
 // ⚠️ AUTO-GENERATED — DO NOT EDIT
 // Source: OpenStreetMap relation ${RELATION_ID}
 
 export const BUILDING_POLYGONS = ${JSON.stringify(polygons, null, 2)} as const;
 `;
 
-  const outDir = path.resolve(process.cwd(), "data");
-  const outFile = path.join(outDir, "buildingPolygons.ts");
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(outFile, output);
+const outDir = path.resolve(process.cwd(), "data");
+const outFile = path.join(outDir, "buildingPolygons.ts");
+fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(outFile, output);
 
-  console.log(
-    `✅ Extracted ${Object.keys(polygons).length} buildings -> ${outFile}`
-  );
-})();
+console.log(
+  `✅ Extracted ${Object.keys(polygons).length} buildings -> ${outFile}`
+);

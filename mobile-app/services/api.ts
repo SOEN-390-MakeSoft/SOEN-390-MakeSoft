@@ -9,15 +9,20 @@ import Constants from 'expo-constants';
 
 // Read host Expo extra;
 // fall back to emulator/simulator host when running in emulators.
-const envHost = ((Constants?.expoConfig || (Constants as any).manifest || {}).extra?.PC_IP) ||  undefined;
+const envHost = Constants?.expoConfig?.extra?.PC_IP ?? (Constants as any).manifest?.extra?.PC_IP;
 
 const ANDROID_EMULATOR_HOST = '10.0.2.2:8080';
 const IOS_SIMULATOR_HOST = 'localhost:8080';
 
 // normalize env host (append :8080 if missing)
-const normalizedEnvHost = typeof envHost === 'string' && envHost.length > 0
-  ? (envHost.includes(':') ? envHost : `${envHost}:8080`)
-  : undefined;
+let normalizedEnvHost: string | undefined;
+if (typeof envHost !== 'string' || envHost.length === 0) {
+  normalizedEnvHost = undefined;
+} else if (envHost.includes(':')) {
+  normalizedEnvHost = envHost;
+} else {
+  normalizedEnvHost = `${envHost}:8080`;
+}
 
 const host = (() => {
   const isDevice = Constants?.isDevice ?? false;

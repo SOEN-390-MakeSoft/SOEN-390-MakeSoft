@@ -2,7 +2,6 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => {
-  const React = require('react');
   const { View, Text } = require('react-native');
 
   const Stack = ({ children, ...props }: any) => (
@@ -23,7 +22,6 @@ jest.mock('expo-router', () => {
 });
 
 jest.mock('tamagui', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return {
     TamaguiProvider: ({ children, ...props }: any) => (
@@ -38,7 +36,6 @@ jest.mock('tamagui', () => {
 jest.mock('../tamagui.config', () => ({}));
 
 jest.mock('@/components/MapScreen', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return {
     __esModule: true,
