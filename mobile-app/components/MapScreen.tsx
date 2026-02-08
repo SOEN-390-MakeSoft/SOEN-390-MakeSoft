@@ -336,7 +336,6 @@ export default function MapScreen() {
     };
 
     const handleSelectCampus = (campus: Campus) => {
-        if (campus === activeCampus) return;
         setActiveCampus(campus);
         setSelectedBuildingId(null);
         setErrorMessage(null);
@@ -419,8 +418,12 @@ export default function MapScreen() {
                 initialRegion={DEFAULT_REGION}
                 testID="campus-map"
                 showsUserLocation
+                showsCompass={false}
+                showsMyLocationButton={false}
             >
-                {buildings.map((building) => {
+
+
+            {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
                     const isSelected = building.id === selectedBuildingId;
                     return (
