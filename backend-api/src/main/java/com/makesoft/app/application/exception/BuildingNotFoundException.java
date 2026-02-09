@@ -15,16 +15,6 @@ public class BuildingNotFoundException extends RuntimeException {
         this.buildingId = buildingId;
     }
 
-    public BuildingNotFoundException(Long buildingId, String message) {
-        super(message);
-        this.buildingId = buildingId;
-    }
-
-    public BuildingNotFoundException(Long buildingId, String message, Throwable cause) {
-        super(message, cause);
-        this.buildingId = buildingId;
-    }
-
     public Long getBuildingId() {
         return buildingId;
     }
