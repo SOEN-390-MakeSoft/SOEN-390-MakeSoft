@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
-import { Alert, MapView } from "react-native";
+import { Alert } from "react-native";
+import MapView from "react-native-maps";
 import { BuildingResponse, getBuildingById } from "../services/api";
 import { polygonCentroid } from "../utils/mapUtils";
 
@@ -13,9 +14,9 @@ type Building = {
     polygon: readonly LatLng[];
 };
 
-/**
- * Hook to manage building selection and remote building data fetching
- */
+
+ //Hook to manage building selection and remote building data fetching
+ 
 export function useSelectedBuilding(buildings: Building[], mapRef: React.RefObject<MapView>) {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     const [remoteBuilding, setRemoteBuilding] = useState<BuildingResponse | null>(null);
@@ -71,9 +72,9 @@ export function useSelectedBuilding(buildings: Building[], mapRef: React.RefObje
         };
     }, [selectedBuilding, selectedBuildingId]);
 
-    /**
-     * Selects a building by ID and animates the map to it
-     */
+    
+     // Selects a building by ID and animates the map to it
+     
     const handleSelectBuilding = (id: string) => {
         setSelectedBuildingId(id);
         setErrorMessage(null);
@@ -89,9 +90,9 @@ export function useSelectedBuilding(buildings: Building[], mapRef: React.RefObje
         }
     };
 
-    /**
-     * Closes the building info card and clears selection
-     */
+    
+      //Closes the building info card and clears selection
+     
     const handleCloseCard = () => {
         setSelectedBuildingId(null);
         setErrorMessage(null);
