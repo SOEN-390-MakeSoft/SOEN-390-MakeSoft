@@ -52,9 +52,9 @@ export default function QuickPickPanel({
     onHeightChange,
     onQuickPick,
     onLocationPress,
-}: QuickPickPanelProps) {
+}: Readonly<QuickPickPanelProps>) {
     return (
-        <View style={styles.quickPickWrapper} pointerEvents="auto">
+        <View style={styles.quickPickWrapper} pointerEvents="auto" testID="quick-pick-panel">
             <Pressable
                 testID="location-button"
                 style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
