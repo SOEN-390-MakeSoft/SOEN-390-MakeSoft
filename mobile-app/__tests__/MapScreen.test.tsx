@@ -489,6 +489,15 @@ describe('MapScreen', () => {
       expect(searchInput.props.editable).toBe(false);
     });
 
+    it('should keep search unfocused when input is disabled', () => {
+      const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
+      const searchInput = getByPlaceholderText('Search');
+
+      fireEvent(searchInput, 'focus');
+
+      expect(mockSetIsSearchFocused).not.toHaveBeenCalled();
+    });
+
     it('should clear search when switching campuses', () => {
       const { getByText } = renderWithProviders(<MapScreen />);
 
