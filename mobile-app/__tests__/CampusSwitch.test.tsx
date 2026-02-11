@@ -7,13 +7,22 @@ jest.mock('tamagui', () => ({
 }));
 
 describe('CampusSwitch', () => {
+  const getColorFromStyle = (style: any) => {
+    if (Array.isArray(style)) {
+      return Object.assign({}, ...style).color;
+    }
+    return style?.color;
+  };
+
   it('highlights the selected campus', () => {
     const { getByText } = render(
       <CampusSwitch selectedCampus="SGW" onCampusChange={jest.fn()} />
     );
 
-    expect(getByText('SGW')).toHaveStyle({ color: '#fff' });
-    expect(getByText('Loyola')).toHaveStyle({ color: '#666' });
+    const sgwColor = getColorFromStyle(getByText('SGW').props.style);
+    const loyolaColor = getColorFromStyle(getByText('Loyola').props.style);
+    expect(sgwColor).toBe('#fff');
+    expect(loyolaColor).toBe('#666');
   });
 
   it('highlights Loyola when selected', () => {
@@ -21,7 +30,8 @@ describe('CampusSwitch', () => {
       <CampusSwitch selectedCampus="Loyola" onCampusChange={jest.fn()} />
     );
 
-    expect(getByText('Loyola')).toHaveStyle({ color: '#fff' });
+    const loyolaColor = getColorFromStyle(getByText('Loyola').props.style);
+    expect(loyolaColor).toBe('#fff');
   });
 
   it('calls onCampusChange when a campus is pressed', () => {

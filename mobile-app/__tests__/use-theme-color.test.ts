@@ -5,7 +5,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
  * Mock the useColorScheme hook to control the returned color scheme.
  * Allows testing both light and dark theme scenarios.
  */
-jest.mock('../hooks/use-color-scheme', () => ({
+jest.mock('@/hooks/use-color-scheme', () => ({
     useColorScheme: jest.fn()
 }));
 

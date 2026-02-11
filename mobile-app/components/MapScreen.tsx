@@ -1,10 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
     Image,
-    Linking,
     Pressable,
     StyleSheet,
     Switch,
@@ -13,21 +9,19 @@ import {
     View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
-import * as Location from "expo-location";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BUILDING_POLYGONS } from "../data/buildingPolygons";
-import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
-import { BUILDING_ADDRESSES } from "../data/building-addresses";
-import { BuildingResponse, getBuildingById } from "../services/api";
 import CampusSwitch from "./CampusSwitch";
+import BuildingInfoCard from "./BuildingInfoCard";
+import QuickPickPanel from "./QuickPickPanel";
+import { useSelectedBuilding } from "../hooks/useSelectedBuilding";
+import { useSearch } from "../hooks/useSearch";
+import { useUserLocation } from "../hooks/useUserLocation";
+import { useMapUI } from "../hooks/useMapUI";
+import { useCampusContext } from "../hooks/useCampusContext";
+import { polygonCentroid } from "../utils/mapUtils";
+import { normalizeLabel } from "../utils/stringUtils";
 
-type LatLng = { latitude: number; longitude: number };
-type BuildingRecord =
-    | (typeof BUILDING_POLYGONS)[keyof typeof BUILDING_POLYGONS]
-    | (typeof LOYOLA_BUILDING_POLYGONS)[keyof typeof LOYOLA_BUILDING_POLYGONS];
-type Building = { id: string; name: string; address: string | null; code: string | null; polygon: readonly LatLng[] };
-type Campus = "sgw" | "loyola";
 type QuickPick = {
     code: string;
     label: string;
@@ -36,6 +30,11 @@ type QuickPick = {
     icon: keyof typeof MaterialIcons.glyphMap;
     hint?: string;
 };
+type Campus = "sgw" | "loyola";
+
+const POLYGON_STROKE = "rgba(178, 27, 44, 0.9)";
+const POLYGON_FILL = "rgba(178, 27, 44, 0.25)";
+const POLYGON_FILL_SELECTED = "rgba(178, 27, 44, 0.7)";
 
 const DEFAULT_REGION = {
     latitude: 45.4973,
@@ -43,18 +42,6 @@ const DEFAULT_REGION = {
     latitudeDelta: 0.008,
     longitudeDelta: 0.008,
 };
-
-const LOYOLA_REGION = {
-    latitude: 45.4581,
-    longitude: -73.6402,
-    latitudeDelta: 0.012,
-    longitudeDelta: 0.012,
-};
-
-const POLYGON_STROKE = "rgba(178, 27, 44, 0.9)";
-const POLYGON_FILL = "rgba(178, 27, 44, 0.25)";
-const POLYGON_FILL_SELECTED = "rgba(178, 27, 44, 0.7)";
-const COLOR_BLIND_CARD_TEXT = "#4b4b4b";
 
 const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
     sgw: [
@@ -127,244 +114,67 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
     ],
 };
 
+const isSearchDisabled = true;
+
 export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
-    const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isLocating, setIsLocating] = useState(false);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [activeCampus, setActiveCampus] = useState<Campus>("sgw");
-    const [remoteBuilding, setRemoteBuilding] = useState<BuildingResponse | null>(null);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isColorBlind, setIsColorBlind] = useState(false);
-    const [isQuickPickOpen, setIsQuickPickOpen] = useState(true);
-    const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const [quickPickContentHeight, setQuickPickContentHeight] = useState(0);
-    const quickPickVisibleHeight = useRef(new Animated.Value(0)).current;
-    const searchInputRef = useRef<TextInput>(null);
-    const isSearchDisabled = true;
 
-    const openAppSettings = async () => {
-        await Linking.openSettings();
-    };
-
-    const promptToOpenSettings = () => {
-        Alert.alert(
-            'Location permission needed',
-            'Location access is disabled. Please enable it in Settings to use "My Location".',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Open Settings', onPress: () => void openAppSettings() },
-            ]
-        );
-    };
-
-    const ensureLocationPermission = async (): Promise<boolean> => {
-        // Check current permission
-        const current = await Location.getForegroundPermissionsAsync();
-
-        if (current.status === "granted") return true;
-
-        // Try requesting (OS may show popup only if allowed)
-        const requested = await Location.requestForegroundPermissionsAsync();
-
-        if (requested.status === "granted") return true;
-
-        // If still denied, direct user to settings (this covers "Don't ask again" cases)
-        promptToOpenSettings();
-        return false;
-    };
-
-    const goToUserLocation = async () => {
-        setIsLocating(true);
-        try {
-            const ok = await ensureLocationPermission();
-            if (!ok) {
-                setIsLocating(false);
-                return;
-            }
-
-            const location = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            });
-
-            const { latitude, longitude } = location.coords;
-
-            mapRef.current?.animateToRegion(
-                {
-                    latitude,
-                    longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                },
-                500
-            );
-        } catch (error) {
-            console.error("Error getting location:", error);
-            Alert.alert("Error", "Could not get your location.");
-        } finally {
-            setIsLocating(false);
-        }
-    };
-
-    const addressLookup = useMemo(() => {
-        const lookup = new Map<string, { name: string; address: string; code: string }>();
-        for (const entry of BUILDING_ADDRESSES) {
-            lookup.set(normalizeLabel(entry.name), {
-                name: entry.name,
-                address: entry.address,
-                code: entry.code,
-            });
-            if (entry.aliases) {
-                for (const alias of entry.aliases) {
-                    lookup.set(normalizeLabel(alias), {
-                        name: entry.name,
-                        address: entry.address,
-                        code: entry.code,
-                    });
-                }
-            }
-        }
-        return lookup;
-    }, []);
-
-    const buildings = useMemo<Building[]>(() => {
-        const campusPolygons =
-            activeCampus === "loyola" ? LOYOLA_BUILDING_POLYGONS : BUILDING_POLYGONS;
-
-        return (Object.entries(campusPolygons) as [string, BuildingRecord][])
-            .map(([id, record]) => {
-                const lookup = addressLookup.get(normalizeLabel(record.name));
-                const address = formatAddress(record) ?? lookup?.address ?? null;
-                const code = lookup?.code ?? extractCodeFromName(record.name);
-                return { id, name: record.name, address, code, polygon: record.polygon };
-            })
-            .filter((building) => building.polygon.length > 0);
-    }, [activeCampus, addressLookup]);
-
-    const selectedBuilding = useMemo(
-        () => buildings.find((b) => b.id === selectedBuildingId) ?? null,
-        [buildings, selectedBuildingId]
-    );
-
-    const quickPickMaxHeight = Math.max(0, quickPickContentHeight);
-
-    const searchResults = useMemo(() => {
-        const query = normalizeLabel(searchQuery);
-        if (!query) return [];
-        return buildings
-            .filter((building) => {
-                const name = normalizeLabel(building.name);
-                const code = building.code ? normalizeLabel(building.code) : "";
-                const address = building.address ? normalizeLabel(building.address) : "";
-                return (
-                    name.includes(query) ||
-                    code.includes(query) ||
-                    address.includes(query)
-                );
-            })
-            .slice(0, 6);
-    }, [buildings, searchQuery]);
-
-    useEffect(() => {
-        if (!quickPickContentHeight) return;
-        if (isQuickPickOpen) {
-            quickPickVisibleHeight.setValue(quickPickContentHeight);
-        }
-    }, [isQuickPickOpen, quickPickContentHeight, quickPickVisibleHeight]);
-
-    useEffect(() => {
-        if (!selectedBuildingId || !selectedBuilding) {
-            setRemoteBuilding(null);
-            setIsLoading(false);
-            setErrorMessage(null);
-            return;
-        }
-
-        const numericId = Number(selectedBuildingId);
-        const requestId = Number.isFinite(numericId) ? numericId : null;
-
-        if (!requestId) {
-            setRemoteBuilding(null);
-            setIsLoading(false);
-            setErrorMessage("Invalid building ID.");
-            return;
-        }
-
-        let isActive = true;
-        setIsLoading(true);
-        setErrorMessage(null);
-        getBuildingById(requestId)
-            .then((data) => {
-                if (!isActive) return;
-                setRemoteBuilding(data);
-            })
-            .catch((error) => {
-                if (!isActive) return;
-                setRemoteBuilding(null);
-                const status = (error as { response?: { status?: number } })?.response?.status;
-                if (status === 404) {
-                    setErrorMessage("Building details not available.");
-                } else {
-                    setErrorMessage("Unable to load building details.");
-                }
-            })
-            .finally(() => {
-                if (!isActive) return;
-                setIsLoading(false);
-            });
-
-        return () => {
-            isActive = false;
-        };
-    }, [selectedBuilding, selectedBuildingId]);
-
-    const handleSelectBuilding = (id: string) => {
-        setSelectedBuildingId(id);
-        setErrorMessage(null);
-        setIsLoading(false);
-        setRemoteBuilding(null);
-        const building = buildings.find((item) => item.id === id);
-        if (building) {
-            const centroid = polygonCentroid(building.polygon);
-            mapRef.current?.animateToRegion(
-                { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-                500
-            );
-        }
-    };
-
-    const handleSelectCampus = (campus: Campus) => {
-        setActiveCampus(campus);
-        setSelectedBuildingId(null);
-        setErrorMessage(null);
-        setIsLoading(false);
-        setRemoteBuilding(null);
-        setSearchQuery("");
-        setIsSearchFocused(false);
-        searchInputRef.current?.blur();
-        const region = campus === "loyola" ? LOYOLA_REGION : DEFAULT_REGION;
-        mapRef.current?.animateToRegion(region, 500);
-    };
-
-    const handleSearchSubmit = () => {
-        if (searchResults.length === 0) return;
-        handleSelectSearchResult(searchResults[0]);
-    };
-
-    const handleSelectSearchResult = (building: Building) => {
-        setSearchQuery(building.name);
-        setIsSearchFocused(false);
-        searchInputRef.current?.blur();
+    // Use custom hooks for state management
+    const { activeCampus, buildings, handleSelectCampus } = useCampusContext();
+    const {
+        selectedBuildingId,
+        remoteBuilding,
+        isLoading,
+        errorMessage,
+        handleSelectBuilding,
+        handleCloseCard,
+    } = useSelectedBuilding(buildings, mapRef);
+    const {
+        searchQuery,
+        setSearchQuery,
+        isSearchFocused,
+        setIsSearchFocused,
+        searchInputRef,
+        searchResults,
+        handleSearchSubmit,
+        handleSelectSearchResult,
+    } = useSearch(buildings, (building) => {
         handleSelectBuilding(building.id);
         const centroid = polygonCentroid(building.polygon);
         mapRef.current?.animateToRegion(
             { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
             500
         );
-    };
+    });
+    const {
+        isMenuOpen,
+        setIsMenuOpen,
+        isColorBlind,
+        setIsColorBlind,
+        isQuickPickOpen,
+        quickPickContentHeight,
+        setQuickPickContentHeight,
+        quickPickVisibleHeight,
+        quickPickMaxHeight,
+        handleToggleQuickPick,
+    } = useMapUI();
+    const { isLocating, goToUserLocation } = useUserLocation(
+        mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>
+    );
 
+    // Get selected building for info card
+    const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+
+    // Polygon colors for color blind mode
+    const polygonStroke = isColorBlind ? "rgba(37, 99, 235, 0.9)" : POLYGON_STROKE;
+    const polygonFill = isColorBlind ? "rgba(37, 99, 235, 0.25)" : POLYGON_FILL;
+    const polygonFillSelected = isColorBlind
+        ? "rgba(37, 99, 235, 0.6)"
+        : POLYGON_FILL_SELECTED;
+
+    /**
+     * Handle quick pick building selection
+     */
     const handleQuickPick = (pick: QuickPick) => {
         const hint = pick.hint ? normalizeLabel(pick.hint) : null;
         const match =
@@ -384,30 +194,15 @@ export default function MapScreen() {
         );
     };
 
-    const handleCloseCard = () => {
-        setSelectedBuildingId(null);
-        setErrorMessage(null);
-        setIsLoading(false);
-        setRemoteBuilding(null);
+    /**
+     * Handle campus selection - reset search and selection
+     */
+    const handleCampusChange = (campus: Campus) => {
+        handleSelectCampus(campus, mapRef);
+        setSearchQuery("");
+        setIsSearchFocused(false);
+        searchInputRef.current?.blur();
     };
-
-    const displayName = remoteBuilding?.name ?? selectedBuilding?.name ?? "";
-    const displayAddress =
-        remoteBuilding?.address ?? selectedBuilding?.address ?? "Address unavailable";
-    const displayCode = remoteBuilding?.code ?? selectedBuilding?.code ?? "Unavailable";
-    const displayCampus = remoteBuilding?.campus ?? (activeCampus === "loyola" ? "LOY" : "SGW");
-    const elevatorValue = remoteBuilding?.hasElevator ?? null;
-    const accessibilityValue = remoteBuilding?.hasAccessibility ?? null;
-    const metroValue = remoteBuilding?.hasMetroAccess ?? null;
-    const elevatorColor = getFeatureColor(elevatorValue);
-    const accessColor = getFeatureColor(accessibilityValue);
-    const metroColor = getMetroColor(metroValue);
-
-    const polygonStroke = isColorBlind ? "rgba(37, 99, 235, 0.9)" : POLYGON_STROKE;
-    const polygonFill = isColorBlind ? "rgba(37, 99, 235, 0.25)" : POLYGON_FILL;
-    const polygonFillSelected = isColorBlind
-        ? "rgba(37, 99, 235, 0.6)"
-        : POLYGON_FILL_SELECTED;
 
     return (
         <View style={styles.container} testID="map-screen">
@@ -421,9 +216,7 @@ export default function MapScreen() {
                 showsCompass={false}
                 showsMyLocationButton={false}
             >
-
-
-            {buildings.map((building) => {
+                {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
                     const isSelected = building.id === selectedBuildingId;
                     return (
@@ -447,6 +240,7 @@ export default function MapScreen() {
                 })}
             </MapView>
 
+            {/* Top Controls: Search, Menu, Brand Badge */}
             <View style={styles.topControls} pointerEvents="box-none">
                 <View style={styles.searchRow}>
                     <Pressable
@@ -507,147 +301,41 @@ export default function MapScreen() {
                     <CampusSwitch
                         selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
                         onCampusChange={(campus) =>
-                            handleSelectCampus(campus === "SGW" ? "sgw" : "loyola")
+                            handleCampusChange(campus === "SGW" ? "sgw" : "loyola")
                         }
                     />
                 </View>
             </View>
 
-            {!!selectedBuilding && (
-                <View style={styles.infoOverlay} pointerEvents="box-none">
-                    <Pressable style={styles.infoBackdrop} onPress={handleCloseCard} />
-                    <View style={styles.infoCardWrapper} pointerEvents="box-none">
-                        <View style={styles.infoCard}>
-                            <Pressable
-                                onPress={handleCloseCard}
-                                accessibilityRole="button"
-                                accessibilityLabel="Close building details"
-                                style={styles.infoClose}
-                            >
-                                <MaterialIcons name="close" size={21} color="#b21b2c" />
-                            </Pressable>
+            {/* Building Info Card */}
+            <BuildingInfoCard
+                selectedBuilding={selectedBuilding}
+                remoteBuilding={remoteBuilding}
+                isLoading={isLoading}
+                errorMessage={errorMessage}
+                onClose={handleCloseCard}
+                isColorBlind={isColorBlind}
+            />
 
-                            <Text style={styles.infoTitle} numberOfLines={2}>
-                                {displayName}
-                            </Text>
-                            <Text style={styles.infoAddress} numberOfLines={1}>
-                                {displayAddress}
-                            </Text>
-
-                            <View style={styles.infoFooterRow}>
-                                <Text style={styles.infoMetaText}>
-                                    {displayCampus} - {displayCode}
-                                </Text>
-                                <View style={styles.featureRow}>
-                                    <View style={styles.featureIconWrap}>
-                                        <MaterialIcons
-                                            name="elevator"
-                                            size={21}
-                                            color={elevatorColor}
-                                        />
-                                    </View>
-                                    <View style={styles.featureIconWrap}>
-                                        <MaterialIcons
-                                            name="accessible"
-                                            size={21}
-                                            color={accessColor}
-                                        />
-                                    </View>
-                                    <View style={styles.featureIconWrap}>
-                                        <MaterialIcons
-                                            name="train"
-                                            size={21}
-                                            color={metroColor}
-                                        />
-                                    </View>
-                                </View>
-                            </View>
-
-                            {isLoading && (
-                                <View style={styles.loadingRow}>
-                                <ActivityIndicator size="small" color="#b21b2c" />
-                                    <Text style={styles.loadingText}>Loading details...</Text>
-                                </View>
-                            )}
-
-                            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-                        </View>
-                    </View>
-                </View>
-            )}
-
+            {/* Quick Pick Panel and Location Button */}
             {!isMenuOpen && (
-                <View
-                    style={styles.quickPickWrapper}
-                    pointerEvents="auto"
-                >
-                    <Pressable
-                        testID="location-button"
-                        style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
-                        onPress={goToUserLocation}
-                        disabled={isLocating}
-                        accessibilityLabel="Go to my location"
-                    >
-                        {isLocating ? (
-                            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
-                        ) : (
-                            <MaterialIcons name="my-location" size={32} color="#c41230" />
-                        )}
-                    </Pressable>
-                    <Pressable
-                        style={styles.quickPickHeader}
-                        onPress={() => {
-                            const nextOpen = !isQuickPickOpen;
-                            const target = nextOpen ? quickPickMaxHeight : 0;
-                            Animated.timing(quickPickVisibleHeight, {
-                                toValue: target,
-                                duration: 220,
-                                useNativeDriver: false,
-                            }).start();
-                            setIsQuickPickOpen(nextOpen);
-                        }}
-                    >
-                        <Text style={styles.quickPickTitle} testID="campus-label">
-                            {activeCampus === "loyola" ? "LOYOLA" : "SGW"}
-                        </Text>
-                    </Pressable>
-                    <Animated.View
-                        style={[
-                            styles.quickPickGridWrapper,
-                            quickPickContentHeight ? { height: quickPickVisibleHeight } : null,
-                        ]}
-                    >
-                        <View
-                            style={styles.quickPickGrid}
-                            onLayout={(event) => {
-                                const height = event.nativeEvent.layout.height;
-                                if (height > 0 && height !== quickPickContentHeight) {
-                                    setQuickPickContentHeight(height);
-                                }
-                            }}
-                        >
-                            {FEATURED_BUILDINGS[activeCampus].map((pick) => {
-                                const cardBackground =
-                                    isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
-                                const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : "#fff";
-                                return (
-                                <Pressable
-                                    key={pick.label}
-                                    style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
-                                    onPress={() => handleQuickPick(pick)}
-                                >
-                                <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
-                                <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
-                                    {pick.label}
-                                </Text>
-                                </Pressable>
-                                );
-                            })}
-                        </View>
-                    </Animated.View>
-                </View>
+                <QuickPickPanel
+                    activeCampus={activeCampus}
+                    isColorBlind={isColorBlind}
+                    isQuickPickOpen={isQuickPickOpen}
+                    quickPickMaxHeight={quickPickMaxHeight}
+                    quickPickVisibleHeight={quickPickVisibleHeight}
+                    quickPickContentHeight={quickPickContentHeight}
+                    featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
+                    isLocating={isLocating}
+                    onToggleOpen={handleToggleQuickPick}
+                    onHeightChange={setQuickPickContentHeight}
+                    onQuickPick={handleQuickPick}
+                    onLocationPress={goToUserLocation}
+                />
             )}
 
+            {/* Menu Overlay */}
             {isMenuOpen && (
                 <View style={styles.menuOverlay}>
                     <SafeAreaView style={styles.menuScreen}>
@@ -681,58 +369,9 @@ export default function MapScreen() {
     );
 }
 
-function polygonCentroid(points: readonly LatLng[]): LatLng {
-    if (points.length === 0) return DEFAULT_REGION;
-    const sum = points.reduce(
-        (acc, p) => ({ latitude: acc.latitude + p.latitude, longitude: acc.longitude + p.longitude }),
-        { latitude: 0, longitude: 0 }
-    );
-    return { latitude: sum.latitude / points.length, longitude: sum.longitude / points.length };
-}
-
-function formatAddress(record: BuildingRecord): string | null {
-    const parts = [record.housenumber, record.street].filter(Boolean);
-    return parts.length ? parts.join(" ") : null;
-}
-
-function normalizeLabel(value: string): string {
-    return value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-}
-
-function extractCodeFromName(name: string): string | null {
-    const dashMatch = name.match(/^([A-Z]{1,3})\s*-/);
-    if (dashMatch) return dashMatch[1];
-
-    const parenMatch = name.match(/\(([A-Z]{1,3})\)\s*$/);
-    if (parenMatch) return parenMatch[1];
-
-    const trailingMatch = name.match(/(?:^|\s)([A-Z]{1,3})\s*$/);
-    return trailingMatch ? trailingMatch[1] : null;
-}
-
-function getFeatureColor(value: boolean | null): string {
-    if (value === true) return "#b21b2c";
-    if (value === false) return "#b8b8b8";
-    return "#d6d6d6";
-}
-
-function getMetroColor(value: boolean | null): string {
-    if (value === true) return "#2f6fe4";
-    if (value === false) return "#b8b8b8";
-    return "#d6d6d6";
-}
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
     map: { flex: 1 },
-    campusToggle: {
-        alignSelf: "center",
-        marginTop: 10,
-    },
     topControls: {
         position: "absolute",
         top: 16,
@@ -742,12 +381,9 @@ const styles = StyleSheet.create({
         padding: 11,
         width: "90%",
     },
-    infoOverlay: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    infoBackdrop: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
+    campusToggle: {
+        alignSelf: "center",
+        marginTop: 10,
     },
     searchRow: { flexDirection: "row", alignItems: "center", columnGap: 11 },
     iconButton: {
@@ -802,131 +438,6 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     brandBadgeImage: { width: 40, height: 40 },
-    infoCardWrapper: {
-        position: "absolute",
-        left: 16,
-        right: 16,
-        top: "35%",
-        alignItems: "center",
-        zIndex: 2,
-    },
-    infoCard: {
-        width: "100%",
-        maxWidth: 456,
-        backgroundColor: "#f7f2f2",
-        borderRadius: 24,
-        padding: 22,
-        borderWidth: 1,
-        borderColor: "#efd9d9",
-        shadowColor: "#000",
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-        elevation: 6,
-    },
-    infoClose: {
-        position: "absolute",
-        top: 9,
-        right: 9,
-        padding: 4,
-        zIndex: 3,
-    },
-    infoTitle: { fontSize: 22, fontWeight: "700", color: "#1c1c1e", paddingRight: 20 },
-    infoAddress: { fontSize: 17, color: "#6b6b6b", marginTop: 4 },
-    infoFooterRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginTop: 8,
-    },
-    infoMetaText: { fontSize: 16, fontWeight: "700", color: "#b21b2c" },
-    loadingRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-    loadingText: { fontSize: 16, color: "#6b6b6b", marginLeft: 8 },
-    featureRow: { flexDirection: "row", columnGap: 6 },
-    featureIconWrap: {
-        width: 37,
-        height: 37,
-        borderRadius: 11,
-        backgroundColor: "#fff",
-        alignItems: "center",
-        justifyContent: "center",
-        shadowColor: "#000",
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    errorText: { fontSize: 16, color: "#b00020", marginTop: 8 },
-    quickPickWrapper: {
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        alignItems: "center",
-        backgroundColor: "#fff",
-        borderTopLeftRadius: 26,
-        borderTopRightRadius: 26,
-        padding: 17,
-        shadowColor: "#000",
-        shadowOpacity: 0.14,
-        shadowRadius: 8,
-        elevation: 4,
-        overflow: "visible",
-        zIndex: 2,
-    },
-    quickPickHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 8,
-    },
-    quickPickTitle: {
-        textAlign: "center",
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#b21b2c",
-        letterSpacing: 1,
-    },
-    quickPickGrid: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        rowGap: 12,
-        columnGap: 12,
-    },
-    quickPickGridWrapper: {
-        width: "100%",
-        overflow: "hidden",
-    },
-    quickPickCard: {
-        width: "48%",
-        borderRadius: 11,
-        paddingVertical: 13,
-        paddingHorizontal: 15,
-        flexDirection: "row",
-        alignItems: "center",
-        columnGap: 11,
-        shadowColor: "#000",
-        shadowOpacity: 0.18,
-        shadowRadius: 4,
-        elevation: 3,
-        height: 83,
-        justifyContent: "center",
-    },
-    quickPickLabel: { color: "#fff", fontSize: 14, fontWeight: "600", flex: 1, lineHeight: 18 },
-    recenterButton: {
-        position: "absolute",
-        top: -44,
-        right: 18,
-        width: 65,
-        height: 65,
-        borderRadius: 32,
-        backgroundColor: "rgba(255,255,255,0.9)",
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: 1,
-        borderColor: "#d8d8d8",
-        zIndex: 4,
-        elevation: 6,
-    },
     menuOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: "rgba(0,0,0,0.15)",

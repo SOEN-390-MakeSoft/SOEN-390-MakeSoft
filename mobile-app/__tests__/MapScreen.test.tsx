@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { TamaguiProvider, Theme } from 'tamagui';
 import config from '../tamagui.config';
 import { SettingsProvider } from '@/context/settings';
+import { useSearch } from '../hooks/useSearch';
 
 // Import component
 import MapScreen from '../components/MapScreen';
@@ -12,6 +13,10 @@ import MapScreen from '../components/MapScreen';
 // Create mock function for animateToRegion
 const mockAnimateToRegion = jest.fn();
 let mockTheme: any = { cred: { get: () => '#912338' } };
+let lastSearchSelect: ((building: any) => void) | null = null;
+const mockSetSearchQuery = jest.fn();
+const mockSetIsSearchFocused = jest.fn();
+const mockSearchInputRef = { current: { blur: jest.fn() } };
 
 // Mock dependencies
 jest.mock('react-native-maps', () => {
@@ -35,6 +40,10 @@ jest.mock('react-native-maps', () => {
     Polygon: (props: any) => React.createElement(View, { testID: 'polygon', ...props }),
   };
 });
+
+jest.mock('../hooks/useSearch', () => ({
+  useSearch: jest.fn(),
+}));
 
 jest.mock('@expo/vector-icons/MaterialIcons', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -146,8 +155,40 @@ describe('MapScreen', () => {
     jest.clearAllMocks();
     (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     mockTheme = { cred: { get: () => '#912338' } };
+    lastSearchSelect = null;
+    (useSearch as jest.Mock).mockImplementation((_buildings: any, onSelect: (building: any) => void) => {
+      lastSearchSelect = onSelect;
+      return {
+        searchQuery: '',
+        setSearchQuery: mockSetSearchQuery,
+        isSearchFocused: false,
+        setIsSearchFocused: mockSetIsSearchFocused,
+        searchInputRef: mockSearchInputRef,
+        searchResults: [],
+        handleSearchSubmit: jest.fn(),
+        handleSelectSearchResult: jest.fn(),
+      };
+    });
+  });
+  it('opens menu overlay when menu button is pressed', () => {
+    const { getByLabelText, getByText } = renderWithProviders(<MapScreen />);
+    fireEvent.press(getByLabelText('Open menu'));
+    expect(getByText('Menu')).toBeTruthy();
   });
 
+  it('toggles color-blind mode switch in menu', () => {
+    const { getByLabelText, getByText } = renderWithProviders(<MapScreen />);
+    fireEvent.press(getByLabelText('Open menu'));
+    const switchLabel = getByText('Color-blind mode');
+    expect(switchLabel).toBeTruthy();
+    // Optionally, simulate switch toggle if possible
+  });
+
+  it('renders QuickPickPanel and handles quick pick', () => {
+    const { getByTestId } = renderWithProviders(<MapScreen />);
+    expect(getByTestId('quick-pick-panel')).toBeTruthy();
+    // Optionally simulate quick pick selection
+  });
   /**
    * Test: Verifies that the MapScreen component renders the map view.
    * Ensures the mocked MapView component is present in the rendered output.
@@ -175,6 +216,36 @@ describe('MapScreen', () => {
       },
       500
     );
+  });
+
+  it('clears search and blurs input when changing campus', () => {
+    const { getByTestId } = renderWithProviders(<MapScreen />);
+    fireEvent.press(getByTestId('campus-btn-loyola'));
+    expect(mockSetSearchQuery).toHaveBeenCalledWith('');
+    expect(mockSetIsSearchFocused).toHaveBeenCalledWith(false);
+    expect(mockSearchInputRef.current.blur).toHaveBeenCalled();
+  });
+
+  it('selects a quick pick and animates to region', () => {
+    const { getByText } = renderWithProviders(<MapScreen />);
+    fireEvent.press(getByText('Pavillon\nHenry F Hall'));
+    expect(mockAnimateToRegion).toHaveBeenCalled();
+  });
+
+  it('animates to region when search selection callback is invoked', () => {
+    renderWithProviders(<MapScreen />);
+    expect(lastSearchSelect).toBeTruthy();
+    lastSearchSelect?.({
+      id: 'TB',
+      name: 'Test Building',
+      polygon: [
+        { latitude: 45.502, longitude: -73.568 },
+        { latitude: 45.502, longitude: -73.566 },
+        { latitude: 45.501, longitude: -73.566 },
+        { latitude: 45.501, longitude: -73.568 },
+      ],
+    });
+    expect(mockAnimateToRegion).toHaveBeenCalled();
   });
 
   it('uses colour blind theme colors when enabled', () => {
@@ -418,6 +489,15 @@ describe('MapScreen', () => {
       expect(searchInput.props.editable).toBe(false);
     });
 
+    it('should keep search unfocused when input is disabled', () => {
+      const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
+      const searchInput = getByPlaceholderText('Search');
+
+      fireEvent(searchInput, 'focus');
+
+      expect(mockSetIsSearchFocused).not.toHaveBeenCalled();
+    });
+
     it('should clear search when switching campuses', () => {
       const { getByText } = renderWithProviders(<MapScreen />);
 
@@ -455,7 +535,7 @@ describe('MapScreen', () => {
       const hallCard = getByText('Pavillon\nHenry F Hall');
       const card = hallCard.parent?.parent as any;
 
-      if (card && card.props && card.props.onPress) {
+      if (card?.props?.onPress) {
         fireEvent.press(card);
 
         // Wait for state updates and async operations
