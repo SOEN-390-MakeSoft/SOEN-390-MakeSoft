@@ -1,6 +1,8 @@
 import React, { useRef } from "react";
 import {
+    Dimensions,
     Image,
+    Platform,
     Pressable,
     StyleSheet,
     Switch,
@@ -11,9 +13,11 @@ import {
 import MapView, { Marker, Polygon } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "tamagui";
 import CampusSwitch from "./CampusSwitch";
 import BuildingInfoCard from "./BuildingInfoCard";
 import QuickPickPanel from "./QuickPickPanel";
+import { useSettings } from "../context/settings";
 import { useSelectedBuilding } from "../hooks/useSelectedBuilding";
 import { useSearch } from "../hooks/useSearch";
 import { useUserLocation } from "../hooks/useUserLocation";
@@ -118,6 +122,7 @@ const isSearchDisabled = true;
 
 export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
+    const { width, height } = Dimensions.get("window");
 
     // Use custom hooks for state management
     const { activeCampus, buildings, handleSelectCampus } = useCampusContext();
@@ -149,8 +154,6 @@ export default function MapScreen() {
     const {
         isMenuOpen,
         setIsMenuOpen,
-        isColorBlind,
-        setIsColorBlind,
         isQuickPickOpen,
         quickPickContentHeight,
         setQuickPickContentHeight,
@@ -158,6 +161,8 @@ export default function MapScreen() {
         quickPickMaxHeight,
         handleToggleQuickPick,
     } = useMapUI();
+    const { colourBlindMode, setColourBlindMode } = useSettings();
+    const theme = useTheme();
     const { isLocating, goToUserLocation } = useUserLocation(
         mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>
     );
@@ -165,12 +170,39 @@ export default function MapScreen() {
     // Get selected building for info card
     const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
 
-    // Polygon colors for color blind mode
-    const polygonStroke = isColorBlind ? "rgba(37, 99, 235, 0.9)" : POLYGON_STROKE;
-    const polygonFill = isColorBlind ? "rgba(37, 99, 235, 0.25)" : POLYGON_FILL;
-    const polygonFillSelected = isColorBlind
-        ? "rgba(37, 99, 235, 0.6)"
-        : POLYGON_FILL_SELECTED;
+    const menuTop =
+        Platform.OS === "ios"
+            ? Math.max(16, Math.round(height * 0.06))
+            : Math.max(12, Math.round(height * 0.02));
+    const menuLeft =
+        Platform.OS === "ios"
+            ? Math.max(10, Math.round(width * 0.04))
+            : Math.max(8, Math.round(width * 0.02));
+
+    const isColorBlind = colourBlindMode;
+    const brandRed = theme?.cred?.get?.() ?? "#b21b2c";
+    const defaultColor = theme?.cred?.get?.() ?? POLYGON_STROKE;
+    let polygonFillBase = POLYGON_FILL;
+    let polygonStrokeBase = POLYGON_STROKE;
+    let polygonFillSelected = POLYGON_FILL_SELECTED;
+
+    if (colourBlindMode) {
+        if (theme?.colourBlind1?.get) {
+            polygonFillBase = theme.colourBlind1.get() || defaultColor;
+            polygonFillSelected = polygonFillBase;
+        }
+        if (theme?.colourBlind2?.get) {
+            polygonStrokeBase = theme.colourBlind2.get() || defaultColor;
+        }
+    } else if (theme?.buildingPrimary?.get) {
+        const primaryColor = theme.buildingPrimary.get() || defaultColor;
+        polygonFillBase = primaryColor;
+        polygonStrokeBase = primaryColor;
+        polygonFillSelected = primaryColor;
+    }
+
+    const polygonStroke = polygonStrokeBase;
+    const polygonFill = polygonFillBase;
 
     /**
      * Handle quick pick building selection
@@ -241,16 +273,22 @@ export default function MapScreen() {
             </MapView>
 
             {/* Top Controls: Search, Menu, Brand Badge */}
-            <View style={styles.topControls} pointerEvents="box-none">
+            <View
+                style={[
+                    styles.topControls,
+                    { top: menuTop, paddingHorizontal: menuLeft },
+                ]}
+                pointerEvents="box-none"
+            >
                 <View style={styles.searchRow}>
                     <Pressable
                         style={styles.iconButton}
                         accessibilityLabel="Open menu"
                         onPress={() => setIsMenuOpen(true)}
                     >
-                        <MaterialIcons name="menu" size={47} color="#b21b2c" />
+                        <MaterialIcons name="menu" size={47} color={brandRed} />
                     </Pressable>
-                    <View style={styles.searchInputWrap}>
+                    <View style={[styles.searchInputWrap, { borderColor: brandRed }]}>
                         <MaterialIcons name="search" size={19} color="#8c8c8c" />
                         <TextInput
                             ref={searchInputRef}
@@ -344,7 +382,7 @@ export default function MapScreen() {
                                 onPress={() => setIsMenuOpen(false)}
                                 style={styles.menuBack}
                             >
-                                <MaterialIcons name="chevron-left" size={43} color="#b21b2c" />
+                                <MaterialIcons name="chevron-left" size={43} color={brandRed} />
                             </Pressable>
                             <Text style={styles.menuTitle}>Menu</Text>
                             <View style={styles.menuSpacer} />
@@ -352,14 +390,14 @@ export default function MapScreen() {
                         <Text style={styles.menuSubtitle}>Customize your map experience</Text>
                         <View style={styles.menuRow}>
                             <View style={styles.menuRowLeft}>
-                                <MaterialIcons name="remove-red-eye" size={21} color="#b21b2c" />
+                                <MaterialIcons name="remove-red-eye" size={21} color={brandRed} />
                                 <Text style={styles.menuRowText}>Color-blind mode</Text>
                             </View>
                             <Switch
                                 value={isColorBlind}
-                                onValueChange={setIsColorBlind}
+                                onValueChange={setColourBlindMode}
                                 trackColor={{ false: "#ddd", true: "#f3b6bf" }}
-                                thumbColor={isColorBlind ? "#b21b2c" : "#fff"}
+                                thumbColor={isColorBlind ? brandRed : "#fff"}
                             />
                         </View>
                     </SafeAreaView>
