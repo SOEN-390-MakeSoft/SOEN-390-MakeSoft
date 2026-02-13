@@ -12,6 +12,7 @@ type ActiveField = "start" | "destination" | null;
 interface NavigationMenuProps {
     startLabel?: string;
     destinationLabel?: string;
+    onActiveFieldChange?: (field: ActiveField) => void;
 }
 
 type SearchEntry = {
@@ -29,6 +30,7 @@ const buildLabel = (name: string, code: string | null) => {
 export default function NavigationMenu({
     startLabel = "Your location",
     destinationLabel = "",
+    onActiveFieldChange,
 }: NavigationMenuProps) {
     const { colourBlindMode } = useSettings();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -50,6 +52,10 @@ export default function NavigationMenu({
     useEffect(() => {
         setDestinationQuery(destinationLabel);
     }, [destinationLabel]);
+
+    useEffect(() => {
+        onActiveFieldChange?.(activeField);
+    }, [activeField, onActiveFieldChange]);
 
     const activeQuery = activeField === "start" ? startQuery : destinationQuery;
     const buildingOptions = useMemo<SearchEntry[]>(() => {
@@ -112,6 +118,7 @@ export default function NavigationMenu({
                     value={value}
                     onChangeText={setValue}
                     onFocus={() => setActiveField(field)}
+                    onBlur={() => setActiveField(null)}
                     placeholder={placeholder}
                     placeholderTextColor="#6b6b6b"
                     style={styles.routeInput}
@@ -121,7 +128,7 @@ export default function NavigationMenu({
                         accessibilityRole="button"
                         accessibilityLabel={clearLabel}
                         onPress={() => setValue("")}
-                        style={styles.clearButton}
+                        style={[styles.clearButton, { backgroundColor: routeCardColor }]}
                     >
                         <MaterialIcons name="close" size={16} color={clearIconColor} />
                     </Pressable>
@@ -164,8 +171,30 @@ export default function NavigationMenu({
                     )}
                 </View>
 
-                {activeField && results.length > 0 && (
+                {activeField && (
                     <View style={styles.resultsCard}>
+                        {activeField === "start" && (
+                            <Pressable
+                                style={[
+                                    styles.resultItem,
+                                    results.length > 0 && styles.resultDivider,
+                                ]}
+                                onPress={() =>
+                                    handleSelect({
+                                        name: "Your location",
+                                        code: null,
+                                        address: null,
+                                    })
+                                }
+                            >
+                                <Text style={styles.resultTitle} numberOfLines={1}>
+                                    Use your location
+                                </Text>
+                                <Text style={styles.resultMeta} numberOfLines={1}>
+                                    Current location
+                                </Text>
+                            </Pressable>
+                        )}
                         {results.map((entry, index) => {
                             const label = buildLabel(entry.name, entry.code);
                             return (
@@ -234,10 +263,12 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
+        position: "relative",
     },
     routeDivider: {
-        height: 1,
-        backgroundColor: "rgba(0,0,0,0.15)",
+        borderStyle: "dotted",
+        borderBottomWidth: 2,
+        borderBottomColor: "rgba(0,0,0,0.2)",
         marginVertical: 8,
         marginLeft: 28,
     },
@@ -247,6 +278,7 @@ const styles = StyleSheet.create({
         color: "#1c1c1e",
         fontWeight: "600",
         paddingVertical: 0,
+        paddingRight: 40,
     },
     clearButton: {
         width: 24,
@@ -254,6 +286,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
+        position: "absolute",
+        right: 0,
+        zIndex: 2,
     },
     resultsCard: {
         marginTop: 8,

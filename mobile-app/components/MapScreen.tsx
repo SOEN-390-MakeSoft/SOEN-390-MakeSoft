@@ -1,10 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
     Dimensions,
     Platform,
-    Pressable,
     StyleSheet,
-    Text,
     View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
@@ -17,6 +15,7 @@ import MapMenu from "./MapMenu";
 import NavigationScreen from "./NavigationScreen";
 import SearchBar from "./SearchBar";
 import { useSettings } from "../context/settings";
+import { useNavigationBetweenBuildings } from "../hooks/useNavigationBetweenBuildings";
 import { useSelectedBuilding } from "../hooks/useSelectedBuilding";
 import { useSearch } from "../hooks/useSearch";
 import { useUserLocation } from "../hooks/useUserLocation";
@@ -122,8 +121,6 @@ const isSearchDisabled = false;
 export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
     const { width, height } = Dimensions.get("window");
-    const [isNavigationOpen, setIsNavigationOpen] = useState(false);
-    const [navigationDestination, setNavigationDestination] = useState<string>("");
 
     // Use custom hooks for state management
     const { activeCampus, buildings, handleSelectCampus } = useCampusContext();
@@ -135,6 +132,21 @@ export default function MapScreen() {
         handleSelectBuilding,
         handleCloseCard,
     } = useSelectedBuilding(buildings, mapRef);
+    const {
+        isNavigationOpen,
+        navigationStart,
+        navigationDestination,
+        routeSummary,
+        modeDurations,
+        isRouteLoading,
+        setNavigationActiveField,
+        openNavigationForBuilding,
+        handleMapBuildingPress,
+        closeNavigation,
+    } = useNavigationBetweenBuildings({
+        buildings,
+        onSelectBuilding: handleSelectBuilding,
+    });
     const {
         searchQuery,
         setSearchQuery,
@@ -170,6 +182,7 @@ export default function MapScreen() {
 
     // Get selected building for info card
     const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+
 
     const menuTop =
         Platform.OS === "ios"
@@ -260,11 +273,11 @@ export default function MapScreen() {
                                 fillColor={isSelected ? polygonFillSelected : polygonFill}
                                 strokeWidth={2}
                                 tappable
-                                onPress={() => handleSelectBuilding(building.id)}
+                                onPress={() => handleMapBuildingPress(building.id)}
                             />
                             <Marker
                                 coordinate={centroid}
-                                onPress={() => handleSelectBuilding(building.id)}
+                                onPress={() => handleMapBuildingPress(building.id)}
                                 anchor={{ x: 0.5, y: 0.5 }}
                                 opacity={0}
                             />
@@ -315,23 +328,20 @@ export default function MapScreen() {
                 onClose={handleCloseCard}
                 isColorBlind={isColorBlind}
                 onDirections={() => {
-                    const destinationName =
-                        remoteBuilding?.name ?? selectedBuilding?.name ?? "Destination";
-                    const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code;
-                    const label = destinationCode
-                        ? `${destinationName} (${destinationCode})`
-                        : destinationName;
-                    setNavigationDestination(label);
-                    setIsNavigationOpen(true);
+                    openNavigationForBuilding(selectedBuilding, remoteBuilding);
                     handleCloseCard();
                 }}
             />
 
             <NavigationScreen
                 visible={isNavigationOpen}
-                startLabel="Your location"
+                startLabel={navigationStart}
                 destinationLabel={navigationDestination}
-                onClose={() => setIsNavigationOpen(false)}
+                onClose={closeNavigation}
+                onActiveFieldChange={setNavigationActiveField}
+                modeDurations={modeDurations}
+                tripSummary={routeSummary}
+                isLoading={isRouteLoading}
             />
 
             {/* Quick Pick Panel and Location Button */}

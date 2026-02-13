@@ -9,6 +9,19 @@ interface NavigationScreenProps {
     startLabel: string;
     destinationLabel: string;
     onClose: () => void;
+    onActiveFieldChange?: (field: "start" | "destination" | null) => void;
+    modeDurations?: {
+        driving?: string;
+        transit?: string;
+        walking?: string;
+    };
+    tripSummary?: {
+        arrivalText: string;
+        distanceText: string;
+        durationText: string;
+        viaText: string;
+    } | null;
+    isLoading?: boolean;
 }
 
 export default function NavigationScreen({
@@ -16,6 +29,10 @@ export default function NavigationScreen({
     startLabel,
     destinationLabel,
     onClose,
+    onActiveFieldChange,
+    modeDurations,
+    tripSummary,
+    isLoading,
 }: NavigationScreenProps) {
     if (!visible) return null;
     const { colourBlindMode } = useSettings();
@@ -33,6 +50,7 @@ export default function NavigationScreen({
             <NavigationMenu
                 startLabel={startLabel}
                 destinationLabel={destinationLabel}
+                onActiveFieldChange={onActiveFieldChange}
             />
 
             <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>
@@ -40,15 +58,21 @@ export default function NavigationScreen({
                     <View style={styles.tripModeRow}>
                         <View style={[styles.modeChip, { backgroundColor: chipColor }]}>
                             <MaterialIcons name="directions-car" size={18} color="#fff" />
-                            <Text style={styles.modeText}>1 min</Text>
+                            <Text style={styles.modeText}>
+                                {modeDurations?.driving ?? "--"}
+                            </Text>
                         </View>
                         <View style={[styles.modeChipMuted, { backgroundColor: chipMutedColor }]}>
                             <MaterialIcons name="directions-bus" size={18} color="#fff" />
-                            <Text style={styles.modeText}>6 min</Text>
+                            <Text style={styles.modeText}>
+                                {modeDurations?.transit ?? "--"}
+                            </Text>
                         </View>
                         <View style={[styles.modeChipMuted, { backgroundColor: chipMutedColor }]}>
                             <MaterialIcons name="directions-walk" size={18} color="#fff" />
-                            <Text style={styles.modeText}>2 min</Text>
+                            <Text style={styles.modeText}>
+                                {modeDurations?.walking ?? "--"}
+                            </Text>
                         </View>
                     </View>
                     <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: closeBg }]}>
@@ -56,11 +80,17 @@ export default function NavigationScreen({
                     </Pressable>
                 </View>
                 <Text style={styles.tripTitle} numberOfLines={2}>
-                    Arrive at 9:44 PM - via Rue Mackay
+                    {tripSummary
+                        ? `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`
+                        : isLoading
+                        ? "Loading route..."
+                        : "Select start and destination"}
                 </Text>
-                <Text style={styles.tripMeta} numberOfLines={1}>
-                    210 m - Mostly flat road
-                </Text>
+                {tripSummary && (
+                    <Text style={styles.tripMeta} numberOfLines={1}>
+                        {tripSummary.distanceText} - {tripSummary.durationText}
+                    </Text>
+                )}
                 <Pressable style={[styles.previewButton, { backgroundColor: previewBg }]}>
                     <MaterialIcons name="arrow-forward" size={16} color={previewTextColor} />
                     <Text style={[styles.previewText, { color: previewTextColor }]}>Preview</Text>
@@ -115,6 +145,11 @@ const styles = StyleSheet.create({
         backgroundColor: "#f6dce0",
         alignItems: "center",
         justifyContent: "center",
+        position: "absolute",
+        right: 0,
+        top: 0,
+        zIndex: 2,
+        elevation: 3,
     },
     tripTitle: {
         marginTop: 12,
