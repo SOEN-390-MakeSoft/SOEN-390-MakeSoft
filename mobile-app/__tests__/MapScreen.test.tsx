@@ -484,18 +484,18 @@ describe('MapScreen', () => {
       const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
       const searchInput = getByPlaceholderText('Search');
 
-      // Verify search input is present and editable is set to false (disabled)
+      // Verify search input is present and editable is true (enabled)
       expect(searchInput).toBeTruthy();
-      expect(searchInput.props.editable).toBe(false);
+      expect(searchInput.props.editable).toBe(true);
     });
 
-    it('should keep search unfocused when input is disabled', () => {
+    it('should allow search focus when input is enabled', () => {
       const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
       const searchInput = getByPlaceholderText('Search');
 
       fireEvent(searchInput, 'focus');
 
-      expect(mockSetIsSearchFocused).not.toHaveBeenCalled();
+      expect(mockSetIsSearchFocused).toHaveBeenCalledWith(true);
     });
 
     it('should clear search when switching campuses', () => {

@@ -2,12 +2,12 @@ import React from "react";
 import {
     Modal,
     Pressable,
-    SafeAreaView,
     StyleSheet,
     Switch,
     Text,
     View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTheme } from "tamagui";
 import { useSettings } from "../context/settings";
