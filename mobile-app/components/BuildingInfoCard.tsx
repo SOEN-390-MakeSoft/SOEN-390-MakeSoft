@@ -9,6 +9,7 @@ import {
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { BuildingResponse } from "../services/api";
 import { getFeatureColor, getMetroColor } from "../utils/colorUtils";
+import DirectionButton from "./DirectionButton";
 
 type Building = {
     id: string;
@@ -25,6 +26,7 @@ interface BuildingInfoCardProps {
     errorMessage: string | null;
     onClose: () => void;
     isColorBlind: boolean;
+    onDirections?: () => void;
 }
 
 /**
@@ -38,6 +40,7 @@ export default function BuildingInfoCard({
     errorMessage,
     onClose,
     isColorBlind,
+    onDirections,
 }: BuildingInfoCardProps) {
     if (!selectedBuilding) return null;
 
@@ -53,7 +56,6 @@ export default function BuildingInfoCard({
     const elevatorColor = getFeatureColor(elevatorValue);
     const accessColor = getFeatureColor(accessibilityValue);
     const metroColor = getMetroColor(metroValue);
-
     return (
         <View style={styles.infoOverlay} pointerEvents="box-none">
             <Pressable style={styles.infoBackdrop} onPress={onClose} />
@@ -103,6 +105,8 @@ export default function BuildingInfoCard({
                             </View>
                         </View>
                     </View>
+
+                    <DirectionButton onPress={onDirections} disabled={!onDirections} />
 
                     {isLoading && (
                         <View style={styles.loadingRow}>

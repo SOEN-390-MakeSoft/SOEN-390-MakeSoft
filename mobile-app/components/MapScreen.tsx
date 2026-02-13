@@ -1,22 +1,21 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
     Dimensions,
-    Image,
     Platform,
     Pressable,
     StyleSheet,
-    Switch,
     Text,
-    TextInput,
     View,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "tamagui";
 import CampusSwitch from "./CampusSwitch";
 import BuildingInfoCard from "./BuildingInfoCard";
 import QuickPickPanel from "./QuickPickPanel";
+import MapMenu from "./MapMenu";
+import NavigationScreen from "./NavigationScreen";
+import SearchBar from "./SearchBar";
 import { useSettings } from "../context/settings";
 import { useSelectedBuilding } from "../hooks/useSelectedBuilding";
 import { useSearch } from "../hooks/useSearch";
@@ -118,11 +117,13 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
     ],
 };
 
-const isSearchDisabled = true;
+const isSearchDisabled = false;
 
 export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
     const { width, height } = Dimensions.get("window");
+    const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+    const [navigationDestination, setNavigationDestination] = useState<string>("");
 
     // Use custom hooks for state management
     const { activeCampus, buildings, handleSelectCampus } = useCampusContext();
@@ -161,7 +162,7 @@ export default function MapScreen() {
         quickPickMaxHeight,
         handleToggleQuickPick,
     } = useMapUI();
-    const { colourBlindMode, setColourBlindMode } = useSettings();
+    const { colourBlindMode } = useSettings();
     const theme = useTheme();
     const { isLocating, goToUserLocation } = useUserLocation(
         mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>
@@ -280,61 +281,21 @@ export default function MapScreen() {
                 ]}
                 pointerEvents="box-none"
             >
-                <View style={styles.searchRow}>
-                    <Pressable
-                        style={styles.iconButton}
-                        accessibilityLabel="Open menu"
-                        onPress={() => setIsMenuOpen(true)}
-                    >
-                        <MaterialIcons name="menu" size={47} color={brandRed} />
-                    </Pressable>
-                    <View style={[styles.searchInputWrap, { borderColor: brandRed }]}>
-                        <MaterialIcons name="search" size={19} color="#8c8c8c" />
-                        <TextInput
-                            ref={searchInputRef}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            placeholder="Search"
-                            placeholderTextColor="#9a9a9a"
-                            style={styles.searchInput}
-                            returnKeyType="search"
-                            inputAccessoryViewID="searchBar"
-                            onSubmitEditing={handleSearchSubmit}
-                            onFocus={() => setIsSearchFocused(true)}
-                            onBlur={() => setIsSearchFocused(false)}
-                            editable={!isSearchDisabled}
-                            showSoftInputOnFocus={!isSearchDisabled}
-                        />
-                    </View>
-                    <View style={styles.brandBadge}>
-                        <Image
-                            source={require("../assets/images/Concordia_icon.png")}
-                            style={styles.brandBadgeImage}
-                            resizeMode="contain"
-                        />
-                    </View>
-                </View>
-                {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
-                    <View style={styles.searchResults}>
-                        {searchResults.map((result, index) => (
-                            <Pressable
-                                key={`${result.id}-${result.name}`}
-                                style={[
-                                    styles.searchResultItem,
-                                    index < searchResults.length - 1 && styles.searchResultDivider,
-                                ]}
-                                onPress={() => handleSelectSearchResult(result)}
-                            >
-                                <Text style={styles.searchResultTitle} numberOfLines={1}>
-                                    {result.name}
-                                </Text>
-                                <Text style={styles.searchResultMeta} numberOfLines={1}>
-                                    {result.code ? `${result.code} · ` : ""}{result.address ?? "Address unavailable"}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
-                )}
+                <SearchBar
+                    searchQuery={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onSubmit={handleSearchSubmit}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                    isSearchFocused={isSearchFocused}
+                    isSearchDisabled={isSearchDisabled}
+                    searchResults={searchResults}
+                    onSelectResult={handleSelectSearchResult}
+                    onOpenMenu={() => setIsMenuOpen(true)}
+                    inputRef={searchInputRef}
+                    brandColor={brandRed}
+                    logoSource={require("../assets/images/Concordia_icon.png")}
+                />
                 <View style={styles.campusToggle}>
                     <CampusSwitch
                         selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
@@ -353,10 +314,28 @@ export default function MapScreen() {
                 errorMessage={errorMessage}
                 onClose={handleCloseCard}
                 isColorBlind={isColorBlind}
+                onDirections={() => {
+                    const destinationName =
+                        remoteBuilding?.name ?? selectedBuilding?.name ?? "Destination";
+                    const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code;
+                    const label = destinationCode
+                        ? `${destinationName} (${destinationCode})`
+                        : destinationName;
+                    setNavigationDestination(label);
+                    setIsNavigationOpen(true);
+                    handleCloseCard();
+                }}
+            />
+
+            <NavigationScreen
+                visible={isNavigationOpen}
+                startLabel="Your location"
+                destinationLabel={navigationDestination}
+                onClose={() => setIsNavigationOpen(false)}
             />
 
             {/* Quick Pick Panel and Location Button */}
-            {!isMenuOpen && (
+            {!isMenuOpen && !isNavigationOpen && (
                 <QuickPickPanel
                     activeCampus={activeCampus}
                     isColorBlind={isColorBlind}
@@ -373,36 +352,7 @@ export default function MapScreen() {
                 />
             )}
 
-            {/* Menu Overlay */}
-            {isMenuOpen && (
-                <View style={styles.menuOverlay}>
-                    <SafeAreaView style={styles.menuScreen}>
-                        <View style={styles.menuHeader}>
-                            <Pressable
-                                onPress={() => setIsMenuOpen(false)}
-                                style={styles.menuBack}
-                            >
-                                <MaterialIcons name="chevron-left" size={43} color={brandRed} />
-                            </Pressable>
-                            <Text style={styles.menuTitle}>Menu</Text>
-                            <View style={styles.menuSpacer} />
-                        </View>
-                        <Text style={styles.menuSubtitle}>Customize your map experience</Text>
-                        <View style={styles.menuRow}>
-                            <View style={styles.menuRowLeft}>
-                                <MaterialIcons name="remove-red-eye" size={21} color={brandRed} />
-                                <Text style={styles.menuRowText}>Color-blind mode</Text>
-                            </View>
-                            <Switch
-                                value={isColorBlind}
-                                onValueChange={setColourBlindMode}
-                                trackColor={{ false: "#ddd", true: "#f3b6bf" }}
-                                thumbColor={isColorBlind ? brandRed : "#fff"}
-                            />
-                        </View>
-                    </SafeAreaView>
-                </View>
-            )}
+            <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
         </View>
     );
 }
@@ -423,94 +373,4 @@ const styles = StyleSheet.create({
         alignSelf: "center",
         marginTop: 10,
     },
-    searchRow: { flexDirection: "row", alignItems: "center", columnGap: 11 },
-    iconButton: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "transparent",
-    },
-    searchInputWrap: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "rgba(255,255,255,0.85)",
-        borderRadius: 26,
-        paddingHorizontal: 13,
-        height: 52,
-        borderWidth: 1,
-        borderColor: "#b21b2c",
-    },
-    searchInput: { flex: 1, fontSize: 17, color: "#2b2b2b", marginLeft: 9 },
-    searchResults: {
-        marginTop: 10,
-        backgroundColor: "rgba(255,255,255,0.96)",
-        borderRadius: 17,
-        borderWidth: 1,
-        borderColor: "#d8d8d8",
-        overflow: "hidden",
-    },
-    searchResultItem: {
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-    },
-    searchResultDivider: {
-        borderBottomWidth: 1,
-        borderBottomColor: "#ececec",
-    },
-    searchResultTitle: { fontSize: 16, fontWeight: "600", color: "#2b2b2b" },
-    searchResultMeta: { fontSize: 14, color: "#6b6b6b", marginTop: 2 },
-    brandBadge: {
-        width: 55,
-        height: 55,
-        borderRadius: 27.5,
-        backgroundColor: "#fff",
-        alignItems: "center",
-        justifyContent: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    brandBadgeImage: { width: 40, height: 40 },
-    menuOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: "rgba(0,0,0,0.15)",
-        justifyContent: "flex-start",
-    },
-    menuScreen: {
-        flex: 1,
-        backgroundColor: "#f9f1f4",
-        paddingHorizontal: 26,
-        paddingTop: 14,
-    },
-    menuHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginTop: 12,
-        marginBottom: 19,
-    },
-    menuBack: {
-        width: 53,
-        height: 53,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    menuTitle: { fontSize: 24, fontWeight: "700", color: "#1c1c1e" },
-    menuSpacer: { width: 53 },
-    menuSubtitle: { fontSize: 17, color: "#b9a9ad", marginBottom: 22 },
-    menuRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#fff",
-        borderRadius: 22,
-        padding: 19,
-    },
-    menuRowLeft: { flexDirection: "row", alignItems: "center", columnGap: 10 },
-    menuRowText: { fontSize: 19, color: "#4a4a4a", fontWeight: "600" },
 });
