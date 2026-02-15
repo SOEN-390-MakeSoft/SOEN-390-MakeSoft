@@ -35,6 +35,14 @@ public class ShuttleController {
             return ResponseEntity.badRequest().build();
         }
 
+        // Validate offMinutes parameter
+        if (offMinutes < 0) {
+            logger.warn("Invalid offMinutes: {}", offMinutes);
+            return ResponseEntity.badRequest().build();
+        }
+
+
+
         List<LocalDateTime> nextShuttles = getNextShuttleService.findNextShuttle(departureCampus, offMinutes);
         // trip duration is returned in the response:  do response.getTripDuration(). the trip duration is 30 minutes always so its a constant
         ShuttleResponseDTO response = new ShuttleResponseDTO(nextShuttles);
