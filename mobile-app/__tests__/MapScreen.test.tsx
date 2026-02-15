@@ -202,6 +202,22 @@ describe('MapScreen', () => {
     (Platform as any).OS = originalOS;
   });
 
+  describe('Map tap listener', () => {
+    it('shows "Building not found" toast when map is tapped far from any campus building', () => {
+      const { getByTestId, getByText } = renderWithProviders(<MapScreen />);
+      const map = getByTestId('campus-map');
+
+      fireEvent.press(map, {
+        nativeEvent: {
+          coordinate: { latitude: 45.6, longitude: -73.4 },
+        },
+      } as any);
+
+      expect(getByTestId('building-not-found-toast')).toBeTruthy();
+      expect(getByText('Building not found')).toBeTruthy();
+    });
+  });
+
   it('animates map when switching campuses', () => {
     const { getByText } = renderWithProviders(<MapScreen />);
     const loyolaText = getByText('Loyola');

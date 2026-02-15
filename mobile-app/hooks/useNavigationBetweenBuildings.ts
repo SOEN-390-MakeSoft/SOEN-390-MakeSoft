@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import * as Location from "expo-location";
-import { polygonCentroid } from "../utils/mapUtils";
+import {
+    polygonCentroid,
+    findBuildingAtOrNearCoordinate,
+    type LatLng,
+} from "../utils/mapUtils";
 
-type LatLng = { latitude: number; longitude: number };
+const MAX_TAP_DISTANCE_METERS = 80;
 
 type Building = {
     id: string;
@@ -33,11 +37,14 @@ type ModeDurations = {
 interface UseNavigationBetweenBuildingsParams {
     buildings: Building[];
     onSelectBuilding: (buildingId: string) => void;
+    /** Called when user taps the map and the tap is far from any campus building */
+    onBuildingNotFound?: () => void;
 }
 
 export function useNavigationBetweenBuildings({
     buildings,
     onSelectBuilding,
+    onBuildingNotFound,
 }: UseNavigationBetweenBuildingsParams) {
     const [isNavigationOpen, setIsNavigationOpen] = useState(false);
     const [navigationStart, setNavigationStart] = useState<string>("Your location");
@@ -52,6 +59,7 @@ export function useNavigationBetweenBuildings({
     const [navigationActiveField, setNavigationActiveField] = useState<
         "start" | "destination" | null
     >(null);
+    const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
 
     const formatBuildingLabel = useCallback((name: string, code: string | null) => {
         if (!code) return name;
@@ -186,14 +194,15 @@ export function useNavigationBetweenBuildings({
 
     const handleMapBuildingPress = useCallback(
         (buildingId: string) => {
+            const building = buildings.find((b) => b.id === buildingId);
+            if (!building) return;
+            const centroid = polygonCentroid(building.polygon);
+            setTapMarkerCoordinate(centroid);
             if (!isNavigationOpen) {
                 onSelectBuilding(buildingId);
                 return;
             }
-            const building = buildings.find((b) => b.id === buildingId);
-            if (!building) return;
             const label = formatBuildingLabel(building.name, building.code);
-            const centroid = polygonCentroid(building.polygon);
             if (navigationActiveField === "start") {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
@@ -206,13 +215,13 @@ export function useNavigationBetweenBuildings({
                 setRouteSummary(null);
                 return;
             }
-            if (!navigationDestination) {
-                setNavigationDestination(label);
-                setNavigationDestinationCoord(centroid);
-                setRouteSummary(null);
-            } else {
+            if (navigationDestination) {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
+                setRouteSummary(null);
+            } else {
+                setNavigationDestination(label);
+                setNavigationDestinationCoord(centroid);
                 setRouteSummary(null);
             }
         },
@@ -226,10 +235,29 @@ export function useNavigationBetweenBuildings({
         ]
     );
 
-    const closeNavigation = () => {
+    const handleMapCoordinatePress = useCallback(
+        (coordinate: LatLng) => {
+            const building = findBuildingAtOrNearCoordinate(
+                coordinate,
+                buildings,
+                MAX_TAP_DISTANCE_METERS
+            );
+            if (building) {
+                handleMapBuildingPress(building.id);
+            } else {
+                setTapMarkerCoordinate(null);
+                onBuildingNotFound?.();
+            }
+        },
+        [buildings, handleMapBuildingPress, onBuildingNotFound]
+    );
+
+    const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
-    };
+        setTapMarkerCoordinate(null);
+    }, []);
+
 
     return {
         isNavigationOpen,
@@ -241,6 +269,8 @@ export function useNavigationBetweenBuildings({
         setNavigationActiveField,
         openNavigationForBuilding,
         handleMapBuildingPress,
+        handleMapCoordinatePress,
         closeNavigation,
+        tapMarkerCoordinate,
     };
 }

@@ -1,9 +1,10 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
     Dimensions,
     Platform,
     StyleSheet,
     View,
+    Text,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -132,6 +133,14 @@ export default function MapScreen() {
         handleSelectBuilding,
         handleCloseCard,
     } = useSelectedBuilding(buildings, mapRef);
+    const [buildingNotFoundToast, setBuildingNotFoundToast] = useState(false);
+    const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
+    useEffect(() => {
+        if (!buildingNotFoundToast) return;
+        const t = setTimeout(() => setBuildingNotFoundToast(false), 2500);
+        return () => clearTimeout(t);
+    }, [buildingNotFoundToast]);
+
     const {
         isNavigationOpen,
         navigationStart,
@@ -142,10 +151,13 @@ export default function MapScreen() {
         setNavigationActiveField,
         openNavigationForBuilding,
         handleMapBuildingPress,
+        handleMapCoordinatePress,
         closeNavigation,
+        tapMarkerCoordinate,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
+        onBuildingNotFound: showBuildingNotFoundToast,
     });
     const {
         searchQuery,
@@ -261,7 +273,18 @@ export default function MapScreen() {
                 showsUserLocation
                 showsCompass={false}
                 showsMyLocationButton={false}
+                onPress={(e) => {
+                    const { coordinate } = e.nativeEvent;
+                    handleMapCoordinatePress(coordinate);
+                }}
             >
+                {tapMarkerCoordinate && (
+                    <Marker
+                        coordinate={tapMarkerCoordinate}
+                        testID="map-tap-marker"
+                        pinColor={brandRed}
+                    />
+                )}
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
                     const isSelected = building.id === selectedBuildingId;
@@ -363,6 +386,12 @@ export default function MapScreen() {
             )}
 
             <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+
+            {buildingNotFoundToast && (
+                <View style={styles.toast} testID="building-not-found-toast">
+                    <Text style={styles.toastText}>Building not found</Text>
+                </View>
+            )}
         </View>
     );
 }
@@ -382,5 +411,18 @@ const styles = StyleSheet.create({
     campusToggle: {
         alignSelf: "center",
         marginTop: 10,
+    },
+    toast: {
+        position: "absolute",
+        bottom: 100,
+        alignSelf: "center",
+        backgroundColor: "rgba(0,0,0,0.8)",
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    toastText: {
+        color: "#fff",
+        fontSize: 14,
     },
 });
