@@ -25,8 +25,9 @@ public class GetNextShuttleService {
      * Returns all nulls for weekends (Saturday/Sunday).
      * @param departureCampus The campus to depart from: "SGW" or "LOY"
      * @param offMinutes The number of minutes needed to reach the shuttle departure area
+     * @param referenceDateTime Optional reference date/time. If null, uses current time.
      */
-    public List<LocalDateTime> findNextShuttle(String departureCampus, int offMinutes) {
+    public List<LocalDateTime> findNextShuttle(String departureCampus, int offMinutes, LocalDateTime referenceDateTime) {
         try {
             // Load schedule.json from resources
             InputStream inputStream = getClass().getClassLoader()
@@ -38,9 +39,9 @@ public class GetNextShuttleService {
 
             JsonNode scheduleRoot = objectMapper.readTree(inputStream);
 
-            // Get current date and time, then add offset minutes
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime adjustedTime = now.plusMinutes(offMinutes);
+            // Use provided reference time or current time, then add offset minutes
+            LocalDateTime baseTime = (referenceDateTime != null) ? referenceDateTime : LocalDateTime.now();
+            LocalDateTime adjustedTime = baseTime.plusMinutes(offMinutes);
             DayOfWeek dayOfWeek = adjustedTime.getDayOfWeek();
 
             // Return all nulls for weekends

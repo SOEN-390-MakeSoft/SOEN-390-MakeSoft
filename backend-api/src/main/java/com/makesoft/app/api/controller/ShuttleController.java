@@ -27,7 +27,8 @@ public class ShuttleController {
     @GetMapping("/next")
     public ResponseEntity<ShuttleResponseDTO> getNextShuttles(
             @RequestParam String departureCampus,
-            @RequestParam(defaultValue = "0") int offMinutes) {
+            @RequestParam(defaultValue = "0") int offMinutes,
+            @RequestParam(required = false) String dateTime) {
 
         // Validate campus parameter
         if (!departureCampus.equals("SGW") && !departureCampus.equals("LOY")) {
@@ -41,10 +42,18 @@ public class ShuttleController {
             return ResponseEntity.badRequest().build();
         }
 
+        //  optional dateTime parameter (format: yyyy-MM-ddTHH:mm:ss)
+        LocalDateTime referenceDateTime = null;
+        if (dateTime != null && !dateTime.isEmpty()) {
+            try {
+                referenceDateTime = LocalDateTime.parse(dateTime);
+            } catch (Exception e) {
+                logger.warn("Invalid dateTime format: {}. Expected ISO format (yyyy-MM-ddTHH:mm:ss)", dateTime);
+                return ResponseEntity.badRequest().build();
+            }
+        }
 
-
-        List<LocalDateTime> nextShuttles = getNextShuttleService.findNextShuttle(departureCampus, offMinutes);
-        // trip duration is returned in the response:  do response.getTripDuration(). the trip duration is 30 minutes always so its a constant
+        List<LocalDateTime> nextShuttles = getNextShuttleService.findNextShuttle(departureCampus, offMinutes, referenceDateTime);
         ShuttleResponseDTO response = new ShuttleResponseDTO(nextShuttles);
 
         return ResponseEntity.ok(response);
