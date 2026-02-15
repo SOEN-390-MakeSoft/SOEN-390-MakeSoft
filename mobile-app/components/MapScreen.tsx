@@ -334,7 +334,7 @@ export default function MapScreen() {
                     brandColor={brandRed}
                     logoSource={require("../assets/images/Concordia_icon.png")}
                 />
-                <View style={styles.campusToggle}>
+                <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
                     <CampusSwitch
                         selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
                         onCampusChange={(campus) =>
@@ -415,6 +415,9 @@ const styles = StyleSheet.create({
     campusToggle: {
         alignSelf: "center",
         marginTop: 10,
+    },
+    campusToggleNavigation: {
+        marginTop: 80,
     },
     toast: {
         position: "absolute",
