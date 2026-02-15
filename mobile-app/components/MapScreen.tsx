@@ -148,6 +148,8 @@ export default function MapScreen() {
         routeSummary,
         modeDurations,
         isRouteLoading,
+        directionsError,
+        isGetDirectionsDisabled,
         setNavigationActiveField,
         openNavigationForBuilding,
         handleMapBuildingPress,
@@ -365,6 +367,8 @@ export default function MapScreen() {
                 modeDurations={modeDurations}
                 tripSummary={routeSummary}
                 isLoading={isRouteLoading}
+                directionsError={directionsError}
+                isGetDirectionsDisabled={isGetDirectionsDisabled}
             />
 
             {/* Quick Pick Panel and Location Button */}

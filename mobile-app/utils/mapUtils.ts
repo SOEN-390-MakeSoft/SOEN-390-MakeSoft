@@ -52,6 +52,19 @@ export function pointInPolygon(point: LatLng, polygon: readonly LatLng[]): boole
     return inside;
 }
 
+/** Tolerance in degrees for comparing coordinates (≈10 m at equator). */
+const COORD_EPSILON = 0.0001;
+
+/**
+ * Returns true if two coordinates are effectively the same (within COORD_EPSILON).
+ */
+export function coordsEqual(a: LatLng, b: LatLng): boolean {
+    return (
+        Math.abs(a.latitude - b.latitude) < COORD_EPSILON &&
+        Math.abs(a.longitude - b.longitude) < COORD_EPSILON
+    );
+}
+
 /**
  * Approximate distance in meters between two coordinates (Haversine).
  */

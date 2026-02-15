@@ -155,4 +155,106 @@ describe("useNavigationBetweenBuildings", () => {
             expect(result.current.tapMarkerCoordinate).not.toBeNull();
         });
     });
+
+    describe("validation and error handling", () => {
+        it("should have Get Directions disabled when fields are empty (initial state)", () => {
+            // Arrange
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+
+            // Assert: no origin, no destination label
+            expect(result.current.isGetDirectionsDisabled).toBe(true);
+        });
+
+        it("should have Get Directions disabled when destination has name but no coords", () => {
+            // Arrange: open with remote building only (no selected building) -> label set, coord null
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+            act(() => {
+                result.current.closeNavigation();
+            });
+            act(() => {
+                result.current.openNavigationForBuilding(null, {
+                    name: "Destination",
+                    code: null,
+                });
+            });
+            // Destination label set but no coords -> missing_coordinates, button disabled
+            expect(result.current.isGetDirectionsDisabled).toBe(true);
+        });
+
+        it("should set directionsError to same_origin_destination when origin equals destination", () => {
+            // Arrange
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+            act(() => {
+                result.current.openNavigationForBuilding(mockBuildings[0], null);
+            });
+            act(() => {
+                result.current.setNavigationActiveField("start");
+            });
+            act(() => {
+                result.current.handleMapBuildingPress("TB");
+            });
+
+            // Assert: start and destination are both TB -> same coords
+            expect(result.current.directionsError).toBe("same_origin_destination");
+            expect(result.current.isGetDirectionsDisabled).toBe(true);
+        });
+
+        it("should set directionsError to missing_coordinates when destination has name but no coords", () => {
+            // Arrange: open navigation with remote building only (no selected building -> no coords)
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+            act(() => {
+                result.current.openNavigationForBuilding(null, {
+                    name: "Remote Building",
+                    code: "RB",
+                });
+            });
+
+            // Assert
+            expect(result.current.directionsError).toBe("missing_coordinates");
+            expect(result.current.isGetDirectionsDisabled).toBe(true);
+        });
+
+        it("should have no directionsError when origin and destination are valid and different", () => {
+            // Arrange: set origin (e.g. "Your location" requires async location; use a building for start)
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+            act(() => {
+                result.current.openNavigationForBuilding(mockBuildings[0], null);
+            });
+            act(() => {
+                result.current.setNavigationActiveField("start");
+            });
+            act(() => {
+                result.current.handleMapBuildingPress("H");
+            });
+
+            // Assert: start = Hall (H), destination = Test Building (TB), different coords
+            expect(result.current.directionsError).toBeNull();
+            expect(result.current.isGetDirectionsDisabled).toBe(false);
+        });
+    });
 });

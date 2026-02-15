@@ -3,6 +3,7 @@ import {
     formatAddress,
     pointInPolygon,
     distanceMeters,
+    coordsEqual,
     findBuildingAtOrNearCoordinate,
     type LatLng,
     type BuildingWithPolygon,
@@ -126,6 +127,43 @@ describe("mapUtils", () => {
 
             // Act
             const result = pointInPolygon(point, []);
+
+            // Assert
+            expect(result).toBe(false);
+        });
+    });
+
+    describe("coordsEqual", () => {
+        it("should return true for identical coordinates (happy path)", () => {
+            // Arrange
+            const a: LatLng = { latitude: 45.497, longitude: -73.579 };
+
+            // Act
+            const result = coordsEqual(a, a);
+
+            // Assert
+            expect(result).toBe(true);
+        });
+
+        it("should return true for coordinates within epsilon (edge case)", () => {
+            // Arrange
+            const a: LatLng = { latitude: 45.497, longitude: -73.579 };
+            const b: LatLng = { latitude: 45.49700005, longitude: -73.57900005 };
+
+            // Act
+            const result = coordsEqual(a, b);
+
+            // Assert
+            expect(result).toBe(true);
+        });
+
+        it("should return false when coordinates differ beyond epsilon (failure case)", () => {
+            // Arrange
+            const a: LatLng = { latitude: 45.497, longitude: -73.579 };
+            const b: LatLng = { latitude: 45.498, longitude: -73.58 };
+
+            // Act
+            const result = coordsEqual(a, b);
 
             // Assert
             expect(result).toBe(false);
