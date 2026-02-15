@@ -1,12 +1,12 @@
+# Test profile: use H2 in-memory only. Do not import .env so test URL is not overridden.
 spring:
-
-  config:
-    import: optional:file:.env[.properties] # Look for a .env to import, its optional so if you dont have one itll be fine.
-
   datasource:
     url: jdbc:h2:mem:testdb
     driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
 
   jpa:
     hibernate:
       ddl-auto: create-drop # Automatically builds/clears tables for tests
+    database-platform: org.hibernate.dialect.H2Dialect
