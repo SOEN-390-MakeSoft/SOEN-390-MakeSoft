@@ -4,6 +4,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import NavigationMenu from "./NavigationMenu";
 import { useSettings } from "../context/settings";
 
+export type DirectionsErrorType = "same_origin_destination" | "missing_coordinates" | null;
+
 interface NavigationScreenProps {
     visible: boolean;
     startLabel: string;
@@ -22,7 +24,14 @@ interface NavigationScreenProps {
         viaText: string;
     } | null;
     isLoading?: boolean;
+    directionsError?: DirectionsErrorType;
+    isGetDirectionsDisabled?: boolean;
 }
+
+const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
+    same_origin_destination: "Origin and destination cannot be the same.",
+    missing_coordinates: "Coordinates are missing for the selected name.",
+};
 
 export default function NavigationScreen({
     visible,
@@ -33,10 +42,19 @@ export default function NavigationScreen({
     modeDurations,
     tripSummary,
     isLoading,
-}: NavigationScreenProps) {
-    if (!visible) return null;
+    directionsError = null,
+    isGetDirectionsDisabled = true,
+}: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
     const isColorBlind = colourBlindMode;
+    if (!visible) return null;
+
+    let tripTitleText: string;
+    if (tripSummary)
+        tripTitleText = `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`;
+    else if (isLoading) tripTitleText = "Loading route...";
+    else tripTitleText = "Select start and destination";
+
     const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
     const chipColor = isColorBlind ? "#6c7a85" : "#9a2d3a";
     const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.15)";
@@ -80,20 +98,44 @@ export default function NavigationScreen({
                     </Pressable>
                 </View>
                 <Text style={styles.tripTitle} numberOfLines={2}>
-                    {tripSummary
-                        ? `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`
-                        : isLoading
-                        ? "Loading route..."
-                        : "Select start and destination"}
+                    {tripTitleText}
                 </Text>
                 {tripSummary && (
                     <Text style={styles.tripMeta} numberOfLines={1}>
                         {tripSummary.distanceText} - {tripSummary.durationText}
                     </Text>
                 )}
-                <Pressable style={[styles.previewButton, { backgroundColor: previewBg }]}>
-                    <MaterialIcons name="arrow-forward" size={16} color={previewTextColor} />
-                    <Text style={[styles.previewText, { color: previewTextColor }]}>Preview</Text>
+                {directionsError && (
+                    <Text style={styles.errorText} testID="directions-error">
+                        {DIRECTIONS_ERROR_MESSAGES[directionsError]}
+                    </Text>
+                )}
+                <Pressable
+                    style={[
+                        styles.getDirectionsButton,
+                        { backgroundColor: previewBg },
+                        isGetDirectionsDisabled && styles.getDirectionsButtonDisabled,
+                    ]}
+                    disabled={isGetDirectionsDisabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Get directions"
+                    testID="get-directions-button"
+                >
+                    <MaterialIcons
+                        name="arrow-forward"
+                        size={16}
+                        color={isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor}
+                    />
+                    <Text
+                        style={[
+                            styles.getDirectionsText,
+                            {
+                                color: isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor,
+                            },
+                        ]}
+                    >
+                        Get Directions
+                    </Text>
                 </Pressable>
             </View>
         </View>
@@ -158,7 +200,13 @@ const styles = StyleSheet.create({
         fontWeight: "700",
     },
     tripMeta: { marginTop: 4, fontSize: 14, color: "#f3d7dc" },
-    previewButton: {
+    errorText: {
+        marginTop: 8,
+        fontSize: 14,
+        color: "#fff",
+        textAlign: "center",
+    },
+    getDirectionsButton: {
         marginTop: 14,
         alignSelf: "center",
         flexDirection: "row",
@@ -169,5 +217,8 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 18,
     },
-    previewText: { color: "#7f1f2a", fontSize: 14, fontWeight: "700" },
+    getDirectionsButtonDisabled: {
+        opacity: 0.6,
+    },
+    getDirectionsText: { fontSize: 14, fontWeight: "700" },
 });

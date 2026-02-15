@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import {
     polygonCentroid,
     findBuildingAtOrNearCoordinate,
+    coordsEqual,
     type LatLng,
 } from "../utils/mapUtils";
 
@@ -61,6 +62,26 @@ export function useNavigationBetweenBuildings({
     >(null);
     const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
 
+    const hasOrigin = navigationOrigin !== null;
+    const hasDestinationLabel = navigationDestination.trim() !== "";
+    const hasDestinationCoord = navigationDestinationCoord !== null;
+    const sameOriginDestination =
+        hasOrigin &&
+        hasDestinationCoord &&
+        navigationOrigin !== null &&
+        navigationDestinationCoord !== null &&
+        coordsEqual(navigationOrigin, navigationDestinationCoord);
+    const missingCoordinates = hasDestinationLabel && !hasDestinationCoord;
+
+    let directionsError: "same_origin_destination" | "missing_coordinates" | null = null;
+    if (sameOriginDestination) directionsError = "same_origin_destination";
+    else if (missingCoordinates) directionsError = "missing_coordinates";
+    const isGetDirectionsDisabled =
+        !hasOrigin ||
+        !hasDestinationLabel ||
+        sameOriginDestination ||
+        missingCoordinates;
+
     const formatBuildingLabel = useCallback((name: string, code: string | null) => {
         if (!code) return name;
         return name.includes(`(${code})`) ? name : `${name} (${code})`;
@@ -104,6 +125,7 @@ export function useNavigationBetweenBuildings({
     useEffect(() => {
         if (!isNavigationOpen) return;
         if (!navigationOrigin || !navigationDestinationCoord) return;
+        if (sameOriginDestination || missingCoordinates) return;
 
         const key = getDirectionsKey();
         if (!key) return;
@@ -174,7 +196,13 @@ export function useNavigationBetweenBuildings({
         return () => {
             cancelled = true;
         };
-    }, [isNavigationOpen, navigationOrigin, navigationDestinationCoord]);
+    }, [
+        isNavigationOpen,
+        navigationOrigin,
+        navigationDestinationCoord,
+        sameOriginDestination,
+        missingCoordinates,
+    ]);
 
     const openNavigationForBuilding = useCallback(
         (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
@@ -266,6 +294,8 @@ export function useNavigationBetweenBuildings({
         routeSummary,
         modeDurations,
         isRouteLoading,
+        directionsError,
+        isGetDirectionsDisabled,
         setNavigationActiveField,
         openNavigationForBuilding,
         handleMapBuildingPress,
