@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, fireEvent } from "@testing-library/react-native";
 import NavigationScreen from "../components/NavigationScreen";
 
 jest.mock("../context/settings", () => ({
@@ -112,6 +112,69 @@ describe("NavigationScreen", () => {
                 screen.queryByText("Coordinates are missing for the selected name.")
             ).toBeNull();
             expect(screen.queryByTestId("directions-error")).toBeNull();
+        });
+    });
+
+    describe("transport mode chips", () => {
+        it("should render driving and walking mode chips", () => {
+            render(<NavigationScreen {...defaultProps} />);
+            expect(screen.getByTestId("mode-chip-driving")).toBeTruthy();
+            expect(screen.getByTestId("mode-chip-walking")).toBeTruthy();
+        });
+
+        it("should render disabled shuttle bus chip", () => {
+            render(<NavigationScreen {...defaultProps} />);
+            expect(screen.getByTestId("mode-chip-shuttle-disabled")).toBeTruthy();
+        });
+
+        it("should display mode durations when provided", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    modeDurations={{ driving: "15 mins", walking: "45 mins" }}
+                />
+            );
+            expect(screen.getByText("15 mins")).toBeTruthy();
+            expect(screen.getByText("45 mins")).toBeTruthy();
+        });
+
+        it("should display '--' when mode durations are not provided", () => {
+            render(<NavigationScreen {...defaultProps} />);
+            const dashes = screen.getAllByText("--");
+            expect(dashes.length).toBe(2);
+        });
+
+        it("should call onTransportModeChange with 'walking' when walking chip is pressed", () => {
+            const onTransportModeChange = jest.fn();
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    selectedTransportMode="driving"
+                    onTransportModeChange={onTransportModeChange}
+                />
+            );
+            fireEvent.press(screen.getByTestId("mode-chip-walking"));
+            expect(onTransportModeChange).toHaveBeenCalledWith("walking");
+        });
+
+        it("should call onTransportModeChange with 'driving' when driving chip is pressed", () => {
+            const onTransportModeChange = jest.fn();
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    selectedTransportMode="walking"
+                    onTransportModeChange={onTransportModeChange}
+                />
+            );
+            fireEvent.press(screen.getByTestId("mode-chip-driving"));
+            expect(onTransportModeChange).toHaveBeenCalledWith("driving");
+        });
+
+        it("should not throw when shuttle chip is pressed (it is not a Pressable)", () => {
+            render(<NavigationScreen {...defaultProps} />);
+            const shuttleChip = screen.getByTestId("mode-chip-shuttle-disabled");
+            // View does not respond to press, this should not throw
+            expect(() => fireEvent.press(shuttleChip)).not.toThrow();
         });
     });
 });

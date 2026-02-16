@@ -219,7 +219,8 @@ export function useNavigationBetweenBuildings({
         ): Promise<ModeRoute | null> => {
             const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
             const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
-            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}&key=${key}`;
+            const trafficParam = mode === "driving" ? "&departure_time=now" : "";
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}${trafficParam}&key=${key}`;
             const response = await fetch(url);
             const data = await response.json();
             if (data.status !== "OK" || !data.routes?.length) return null;
@@ -231,9 +232,12 @@ export function useNavigationBetweenBuildings({
                 ? decodePolyline(route.overview_polyline.points)
                 : [];
 
+            // Prefer duration_in_traffic for driving (requires departure_time=now)
+            const duration = leg.duration_in_traffic ?? leg.duration;
+
             return {
-                durationText: leg.duration?.text ?? "",
-                durationSec: leg.duration?.value ?? 0,
+                durationText: duration?.text ?? "",
+                durationSec: duration?.value ?? 0,
                 distanceText: leg.distance?.text ?? "",
                 viaText: route.summary || "",
                 polyline,

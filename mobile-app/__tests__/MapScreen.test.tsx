@@ -38,6 +38,7 @@ jest.mock('react-native-maps', () => {
     default: MockMapView,
     Marker: (props: any) => React.createElement(View, { testID: 'marker', ...props }),
     Polygon: (props: any) => React.createElement(View, { testID: 'polygon', ...props }),
+    Polyline: (props: any) => React.createElement(View, { testID: 'polyline', ...props }),
   };
 });
 

@@ -56,6 +56,7 @@ function ModeChip({
     return (
         <Pressable
             onPress={() => onPress(mode)}
+            testID={`mode-chip-${mode}`}
             style={
                 isSelected
                     ? [styles.modeChip, { backgroundColor: chipColor }]
@@ -129,7 +130,7 @@ export default function NavigationScreen({
                             chipMutedColor={chipMutedColor}
                             onPress={onTransportModeChange ?? (() => {})}
                         />
-                        <View style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                        <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
                             <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
                         </View>
                     </View>
