@@ -39,6 +39,39 @@ const mockBuildings: Building[] = [
 ];
 
 describe("useNavigationBetweenBuildings", () => {
+    const MOCK_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
+
+    function setupDirectionsMocks() {
+        jest.clearAllMocks();
+        process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = "test-api-key";
+        (Platform as any).OS = "android";
+        (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+            status: "granted",
+        });
+        (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+            coords: { latitude: 45.505, longitude: -73.572 },
+        });
+    }
+
+    function teardownDirectionsMocks() {
+        delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
+        jest.restoreAllMocks();
+    }
+
+    function createDrivingWalkingFetch(
+        drivingResponse: object,
+        walkingResponse: object
+    ) {
+        let callCount = 0;
+        const mockFetch = jest.fn().mockImplementation((url: string) => {
+            callCount++;
+            const response = url.includes("mode=driving") ? drivingResponse : walkingResponse;
+            return Promise.resolve({ json: () => Promise.resolve(response) });
+        });
+        global.fetch = mockFetch;
+        return { mockFetch, getCallCount: () => callCount };
+    }
+
     describe("handleMapCoordinatePress", () => {
         it("should call onSelectBuilding and set tap marker when coordinate is inside a building (happy path)", () => {
             // Arrange
@@ -450,7 +483,6 @@ describe("useNavigationBetweenBuildings", () => {
     });
 
     describe("directions fetch effect", () => {
-        const MOCK_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
         const MOCK_STEPS = [
             {
                 html_instructions: "Head <b>north</b> on Rue Guy",
@@ -482,22 +514,8 @@ describe("useNavigationBetweenBuildings", () => {
             ],
         });
 
-        beforeEach(() => {
-            jest.clearAllMocks();
-            process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = "test-api-key";
-            (Platform as any).OS = "android";
-            (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-                status: "granted",
-            });
-            (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
-                coords: { latitude: 45.505, longitude: -73.572 },
-            });
-        });
-
-        afterEach(() => {
-            delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
-            jest.restoreAllMocks();
-        });
+        beforeEach(setupDirectionsMocks);
+        afterEach(teardownDirectionsMocks);
 
         it("should fetch driving and walking directions and set route data", async () => {
             const mockFetch = jest.fn().mockResolvedValue({
@@ -676,7 +694,6 @@ describe("useNavigationBetweenBuildings", () => {
     });
 
     describe("mode-switch effect with routes loaded", () => {
-        const MOCK_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
         const MOCK_DRIVING_STEPS = [
             {
                 html_instructions: "Take the <b>highway</b>",
@@ -715,36 +732,14 @@ describe("useNavigationBetweenBuildings", () => {
             ],
         });
 
-        beforeEach(() => {
-            jest.clearAllMocks();
-            process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = "test-api-key";
-            (Platform as any).OS = "android";
-            (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-                status: "granted",
-            });
-            (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
-                coords: { latitude: 45.505, longitude: -73.572 },
-            });
-        });
-
-        afterEach(() => {
-            delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
-            jest.restoreAllMocks();
-        });
+        beforeEach(setupDirectionsMocks);
+        afterEach(teardownDirectionsMocks);
 
         it("should update polyline and summary when switching from driving to walking", async () => {
-            let callCount = 0;
-            global.fetch = jest.fn().mockImplementation((url: string) => {
-                callCount++;
-                if (url.includes("mode=driving")) {
-                    return Promise.resolve({
-                        json: () => Promise.resolve(makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS)),
-                    });
-                }
-                return Promise.resolve({
-                    json: () => Promise.resolve(makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)),
-                });
-            });
+            const { getCallCount } = createDrivingWalkingFetch(
+                makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS),
+                makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)
+            );
 
             const { result } = renderHook(() =>
                 useNavigationBetweenBuildings({
@@ -758,7 +753,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
 
             await waitFor(() => {
-                expect(callCount).toBe(2);
+                expect(getCallCount()).toBe(2);
             });
 
             await waitFor(() => {
@@ -787,18 +782,10 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should update steps back to driving when switching mode", async () => {
-            let callCount = 0;
-            global.fetch = jest.fn().mockImplementation((url: string) => {
-                callCount++;
-                if (url.includes("mode=driving")) {
-                    return Promise.resolve({
-                        json: () => Promise.resolve(makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS)),
-                    });
-                }
-                return Promise.resolve({
-                    json: () => Promise.resolve(makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)),
-                });
-            });
+            const { getCallCount } = createDrivingWalkingFetch(
+                makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS),
+                makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)
+            );
 
             const { result } = renderHook(() =>
                 useNavigationBetweenBuildings({
@@ -812,7 +799,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
 
             await waitFor(() => {
-                expect(callCount).toBe(2);
+                expect(getCallCount()).toBe(2);
             });
 
             await waitFor(() => {
