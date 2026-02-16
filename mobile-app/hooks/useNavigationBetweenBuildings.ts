@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import * as Location from "expo-location";
 import {
@@ -7,6 +7,9 @@ import {
     coordsEqual,
     type LatLng,
 } from "../utils/mapUtils";
+import { normalizeLabel, extractCodeFromName } from "../utils/stringUtils";
+import { BUILDING_POLYGONS } from "../data/buildingPolygons";
+import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 
 const MAX_TAP_DISTANCE_METERS = 80;
 
@@ -153,6 +156,23 @@ export function useNavigationBetweenBuildings({
     const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
     const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
 
+    // Combined building list across both campuses for search/coordinate resolution
+    const allBuildings = useMemo<Building[]>(() => {
+        const fromPolygons = (polygons: Record<string, { name: string; polygon: readonly LatLng[] }>) =>
+            Object.entries(polygons)
+                .filter(([, r]) => r.polygon.length > 0)
+                .map(([id, r]) => ({
+                    id,
+                    name: r.name,
+                    code: extractCodeFromName(r.name),
+                    polygon: r.polygon,
+                }));
+        return [
+            ...fromPolygons(BUILDING_POLYGONS as Record<string, { name: string; polygon: readonly LatLng[] }>),
+            ...fromPolygons(LOYOLA_BUILDING_POLYGONS as Record<string, { name: string; polygon: readonly LatLng[] }>),
+        ];
+    }, []);
+
     const hasOrigin = navigationOrigin !== null;
     const hasDestinationLabel = navigationDestination.trim() !== "";
     const hasDestinationCoord = navigationDestinationCoord !== null;
@@ -215,11 +235,20 @@ export function useNavigationBetweenBuildings({
 
     useEffect(() => {
         if (!isNavigationOpen) return;
-        if (!navigationOrigin || !navigationDestinationCoord) return;
-        if (sameOriginDestination || missingCoordinates) return;
+        if (!navigationOrigin || !navigationDestinationCoord) {
+            setIsRouteLoading(false);
+            return;
+        }
+        if (sameOriginDestination || missingCoordinates) {
+            setIsRouteLoading(false);
+            return;
+        }
 
         const key = getDirectionsKey();
-        if (!key) return;
+        if (!key) {
+            setIsRouteLoading(false);
+            return;
+        }
 
         let cancelled = false;
 
@@ -345,12 +374,27 @@ export function useNavigationBetweenBuildings({
                 viaText: route.viaText || "Suggested route",
             });
             setNavigationSteps(route.steps);
-        } else {
+        } else if (allModeRoutes.driving || allModeRoutes.walking) {
+            // Only clear when we genuinely have route data but the selected
+            // mode is unavailable.  When allModeRoutes is empty (a new fetch
+            // is in-flight after an endpoint change) we keep the previous
+            // polyline visible as a placeholder.
             setRoutePolyline([]);
             setRouteRegion(null);
             setNavigationSteps([]);
         }
     }, [selectedTransportMode, allModeRoutes, isNavigationOpen]);
+
+    /** Clear stale trip text and invalidate cached routes so the next fetch
+     *  overwrites everything.  We set isRouteLoading immediately so the UI
+     *  shows "Loading route..." instead of "Select start and destination".
+     *  Old polyline, region, steps and modeDurations stay visible as
+     *  placeholders while the new route loads. */
+    const resetRouteState = useCallback(() => {
+        setRouteSummary(null);
+        setAllModeRoutes({});
+        setIsRouteLoading(true);
+    }, []);
 
     const openNavigationForBuilding = useCallback(
         (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
@@ -362,10 +406,10 @@ export function useNavigationBetweenBuildings({
             if (selectedBuilding) {
                 setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
             }
-            setRouteSummary(null);
+            resetRouteState();
             setIsNavigationOpen(true);
         },
-        [formatBuildingLabel]
+        [formatBuildingLabel, resetRouteState]
     );
 
     const handleMapBuildingPress = useCallback(
@@ -382,23 +426,23 @@ export function useNavigationBetweenBuildings({
             if (navigationActiveField === "start") {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
-                setRouteSummary(null);
+                resetRouteState();
                 return;
             }
             if (navigationActiveField === "destination") {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
-                setRouteSummary(null);
+                resetRouteState();
                 return;
             }
             if (navigationDestination) {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
-                setRouteSummary(null);
+                resetRouteState();
             } else {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
-                setRouteSummary(null);
+                resetRouteState();
             }
         },
         [
@@ -408,6 +452,7 @@ export function useNavigationBetweenBuildings({
             navigationActiveField,
             navigationDestination,
             onSelectBuilding,
+            resetRouteState,
         ]
     );
 
@@ -428,13 +473,44 @@ export function useNavigationBetweenBuildings({
         [buildings, handleMapBuildingPress, onBuildingNotFound]
     );
 
+    const handleSearchSelect = useCallback(
+        (field: "start" | "destination", name: string, code: string | null) => {
+            const label = formatBuildingLabel(name, code);
+            // Search across ALL campus buildings so cross-campus selections
+            // always resolve coordinates correctly.
+            const building = allBuildings.find((b) => {
+                if (code && b.code?.toUpperCase() === code.toUpperCase()) return true;
+                return normalizeLabel(b.name).includes(normalizeLabel(name));
+            });
+
+            if (field === "start") {
+                setNavigationStart(label);
+                if (name === "Your location") {
+                    setNavigationOrigin(null);
+                } else if (building) {
+                    setNavigationOrigin(polygonCentroid(building.polygon));
+                }
+            } else {
+                setNavigationDestination(label);
+                if (building) {
+                    setNavigationDestinationCoord(polygonCentroid(building.polygon));
+                }
+            }
+            resetRouteState();
+        },
+        [allBuildings, formatBuildingLabel, resetRouteState]
+    );
+
     const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
         setTapMarkerCoordinate(null);
+        setRouteSummary(null);
+        setAllModeRoutes({});
+        setModeDurations({});
+        setIsRouteLoading(false);
         setRoutePolyline([]);
         setRouteRegion(null);
-        setAllModeRoutes({});
         setNavigationSteps([]);
     }, []);
 
@@ -452,6 +528,7 @@ export function useNavigationBetweenBuildings({
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
+        handleSearchSelect,
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,

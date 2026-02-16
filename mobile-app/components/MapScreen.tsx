@@ -154,6 +154,7 @@ export default function MapScreen() {
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
+        handleSearchSelect,
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,
@@ -393,6 +394,7 @@ export default function MapScreen() {
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
                 onActiveFieldChange={setNavigationActiveField}
+                onBuildingSelect={handleSearchSelect}
                 modeDurations={modeDurations}
                 tripSummary={routeSummary}
                 isLoading={isRouteLoading}
