@@ -1,6 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import type { NavigationStep } from "../hooks/useNavigationBetweenBuildings";
 import NavigationMenu from "./NavigationMenu";
 import { useSettings } from "../context/settings";
 
@@ -29,12 +30,37 @@ interface NavigationScreenProps {
     isGetDirectionsDisabled?: boolean;
     selectedTransportMode?: TransportMode;
     onTransportModeChange?: (mode: TransportMode) => void;
+    navigationSteps?: NavigationStep[];
 }
 
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
     same_origin_destination: "Origin and destination cannot be the same.",
     missing_coordinates: "Coordinates are missing for the selected name.",
 };
+
+const MANEUVER_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+    "turn-left": "turn-left",
+    "turn-right": "turn-right",
+    "turn-slight-left": "turn-slight-left",
+    "turn-slight-right": "turn-slight-right",
+    "turn-sharp-left": "turn-left",
+    "turn-sharp-right": "turn-right",
+    "uturn-left": "u-turn-left",
+    "uturn-right": "u-turn-right",
+    "merge": "merge",
+    "fork-left": "fork-left",
+    "fork-right": "fork-right",
+    "ramp-left": "turn-slight-left",
+    "ramp-right": "turn-slight-right",
+    "roundabout-left": "roundabout-left",
+    "roundabout-right": "roundabout-right",
+    "straight": "straight",
+};
+
+function getManeuverIcon(maneuver?: string): keyof typeof MaterialIcons.glyphMap {
+    if (!maneuver) return "straight";
+    return MANEUVER_ICONS[maneuver] ?? "straight";
+}
 
 function ModeChip({
     mode,
@@ -82,6 +108,7 @@ export default function NavigationScreen({
     isGetDirectionsDisabled = true,
     selectedTransportMode = 'driving',
     onTransportModeChange,
+    navigationSteps = [],
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
     const isColorBlind = colourBlindMode;
@@ -178,6 +205,34 @@ export default function NavigationScreen({
                         Get Directions
                     </Text>
                 </Pressable>
+
+                {navigationSteps.length > 0 && (
+                    <ScrollView
+                        style={styles.stepsContainer}
+                        testID="navigation-steps-list"
+                        nestedScrollEnabled
+                    >
+                        {navigationSteps.map((step, index) => (
+                            <View key={`step-${step.instruction.slice(0, 30)}-${step.distanceText}`} style={styles.stepRow} testID={`nav-step-${index}`}>
+                                <View style={styles.stepIconCol}>
+                                    <MaterialIcons
+                                        name={getManeuverIcon(step.maneuver)}
+                                        size={20}
+                                        color="#fff"
+                                    />
+                                </View>
+                                <View style={styles.stepContent}>
+                                    <Text style={styles.stepInstruction} numberOfLines={3}>
+                                        {step.instruction}
+                                    </Text>
+                                    <Text style={styles.stepMeta}>
+                                        {step.distanceText}{step.durationText ? ` · ${step.durationText}` : ""}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </ScrollView>
+                )}
             </View>
         </View>
     );
@@ -271,4 +326,34 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     getDirectionsText: { fontSize: 14, fontWeight: "700" },
+    stepsContainer: {
+        marginTop: 14,
+        maxHeight: 220,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: "rgba(255,255,255,0.2)",
+        paddingTop: 10,
+    },
+    stepRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        marginBottom: 12,
+    },
+    stepIconCol: {
+        width: 32,
+        alignItems: "center",
+        paddingTop: 2,
+    },
+    stepContent: {
+        flex: 1,
+    },
+    stepInstruction: {
+        fontSize: 14,
+        color: "#fff",
+        fontWeight: "500",
+    },
+    stepMeta: {
+        fontSize: 12,
+        color: "rgba(255,255,255,0.65)",
+        marginTop: 2,
+    },
 });

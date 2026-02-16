@@ -160,6 +160,7 @@ export default function MapScreen() {
         setSelectedTransportMode,
         routePolyline,
         routeRegion,
+        navigationSteps,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -399,6 +400,7 @@ export default function MapScreen() {
                 isGetDirectionsDisabled={isGetDirectionsDisabled}
                 selectedTransportMode={selectedTransportMode}
                 onTransportModeChange={setSelectedTransportMode}
+                navigationSteps={navigationSteps}
             />
 
             {/* Quick Pick Panel and Location Button */}

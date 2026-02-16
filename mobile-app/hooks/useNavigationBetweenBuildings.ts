@@ -93,12 +93,20 @@ type ModeDurations = {
 
 type TransportMode = 'driving' | 'walking';
 
+export type NavigationStep = {
+    instruction: string;
+    distanceText: string;
+    durationText: string;
+    maneuver?: string;
+};
+
 type ModeRoute = {
     durationText: string;
     durationSec: number;
     distanceText: string;
     viaText: string;
     polyline: LatLng[];
+    steps: NavigationStep[];
 };
 
 type AllModeRoutes = {
@@ -143,6 +151,7 @@ export function useNavigationBetweenBuildings({
     const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
     const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
     const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
+    const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
 
     const hasOrigin = navigationOrigin !== null;
     const hasDestinationLabel = navigationDestination.trim() !== "";
@@ -235,12 +244,22 @@ export function useNavigationBetweenBuildings({
             // Prefer duration_in_traffic for driving (requires departure_time=now)
             const duration = leg.duration_in_traffic ?? leg.duration;
 
+            const steps: NavigationStep[] = (leg.steps ?? []).map(
+                (s: { html_instructions?: string; distance?: { text?: string }; duration?: { text?: string }; maneuver?: string }) => ({
+                    instruction: (s.html_instructions ?? "").replaceAll(/<[^>]*>/g, ""),
+                    distanceText: s.distance?.text ?? "",
+                    durationText: s.duration?.text ?? "",
+                    maneuver: s.maneuver,
+                })
+            );
+
             return {
                 durationText: duration?.text ?? "",
                 durationSec: duration?.value ?? 0,
                 distanceText: leg.distance?.text ?? "",
                 viaText: route.summary || "",
                 polyline,
+                steps,
             };
         };
 
@@ -255,12 +274,13 @@ export function useNavigationBetweenBuildings({
 
                 setAllModeRoutes({ driving, walking });
 
-                // Show polyline for the currently selected mode
+                // Show polyline + steps for the currently selected mode
                 const active = selectedTransportMode === 'driving' ? driving : walking;
                 if (active?.polyline && active.polyline.length > 0) {
                     setRoutePolyline(active.polyline);
                     setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
                 }
+                setNavigationSteps(active?.steps ?? []);
 
                 const primary = driving ?? walking;
                 if (primary) {
@@ -312,7 +332,7 @@ export function useNavigationBetweenBuildings({
             setRoutePolyline(route.polyline);
             setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
 
-            // Update trip summary to match the selected mode
+            // Update trip summary + steps to match the selected mode
             const arrival = new Date(Date.now() + route.durationSec * 1000);
             const arrivalText = arrival.toLocaleTimeString([], {
                 hour: "numeric",
@@ -324,9 +344,11 @@ export function useNavigationBetweenBuildings({
                 durationText: route.durationText,
                 viaText: route.viaText || "Suggested route",
             });
+            setNavigationSteps(route.steps);
         } else {
             setRoutePolyline([]);
             setRouteRegion(null);
+            setNavigationSteps([]);
         }
     }, [selectedTransportMode, allModeRoutes, isNavigationOpen]);
 
@@ -413,6 +435,7 @@ export function useNavigationBetweenBuildings({
         setRoutePolyline([]);
         setRouteRegion(null);
         setAllModeRoutes({});
+        setNavigationSteps([]);
     }, []);
 
 
@@ -435,5 +458,6 @@ export function useNavigationBetweenBuildings({
         setSelectedTransportMode,
         routePolyline,
         routeRegion,
+        navigationSteps,
     };
 }
