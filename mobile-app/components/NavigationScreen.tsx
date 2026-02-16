@@ -6,6 +6,8 @@ import { useSettings } from "../context/settings";
 
 export type DirectionsErrorType = "same_origin_destination" | "missing_coordinates" | null;
 
+type TransportMode = 'driving' | 'walking';
+
 interface NavigationScreenProps {
     visible: boolean;
     startLabel: string;
@@ -14,7 +16,6 @@ interface NavigationScreenProps {
     onActiveFieldChange?: (field: "start" | "destination" | null) => void;
     modeDurations?: {
         driving?: string;
-        transit?: string;
         walking?: string;
     };
     tripSummary?: {
@@ -26,12 +27,46 @@ interface NavigationScreenProps {
     isLoading?: boolean;
     directionsError?: DirectionsErrorType;
     isGetDirectionsDisabled?: boolean;
+    selectedTransportMode?: TransportMode;
+    onTransportModeChange?: (mode: TransportMode) => void;
 }
 
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
     same_origin_destination: "Origin and destination cannot be the same.",
     missing_coordinates: "Coordinates are missing for the selected name.",
 };
+
+function ModeChip({
+    mode,
+    icon,
+    label,
+    isSelected,
+    chipColor,
+    chipMutedColor,
+    onPress,
+}: Readonly<{
+    mode: TransportMode;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    label: string;
+    isSelected: boolean;
+    chipColor: string;
+    chipMutedColor: string;
+    onPress: (mode: TransportMode) => void;
+}>) {
+    return (
+        <Pressable
+            onPress={() => onPress(mode)}
+            style={
+                isSelected
+                    ? [styles.modeChip, { backgroundColor: chipColor }]
+                    : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
+            }
+        >
+            <MaterialIcons name={icon} size={18} color="#fff" />
+            <Text style={styles.modeText}>{label}</Text>
+        </Pressable>
+    );
+}
 
 export default function NavigationScreen({
     visible,
@@ -44,6 +79,8 @@ export default function NavigationScreen({
     isLoading,
     directionsError = null,
     isGetDirectionsDisabled = true,
+    selectedTransportMode = 'driving',
+    onTransportModeChange,
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
     const isColorBlind = colourBlindMode;
@@ -74,23 +111,26 @@ export default function NavigationScreen({
             <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>
                 <View style={styles.bottomHeader}>
                     <View style={styles.tripModeRow}>
-                        <View style={[styles.modeChip, { backgroundColor: chipColor }]}>
-                            <MaterialIcons name="directions-car" size={18} color="#fff" />
-                            <Text style={styles.modeText}>
-                                {modeDurations?.driving ?? "--"}
-                            </Text>
-                        </View>
-                        <View style={[styles.modeChipMuted, { backgroundColor: chipMutedColor }]}>
-                            <MaterialIcons name="directions-bus" size={18} color="#fff" />
-                            <Text style={styles.modeText}>
-                                {modeDurations?.transit ?? "--"}
-                            </Text>
-                        </View>
-                        <View style={[styles.modeChipMuted, { backgroundColor: chipMutedColor }]}>
-                            <MaterialIcons name="directions-walk" size={18} color="#fff" />
-                            <Text style={styles.modeText}>
-                                {modeDurations?.walking ?? "--"}
-                            </Text>
+                        <ModeChip
+                            mode="driving"
+                            icon="directions-car"
+                            label={modeDurations?.driving ?? "--"}
+                            isSelected={selectedTransportMode === 'driving'}
+                            chipColor={chipColor}
+                            chipMutedColor={chipMutedColor}
+                            onPress={onTransportModeChange ?? (() => {})}
+                        />
+                        <ModeChip
+                            mode="walking"
+                            icon="directions-walk"
+                            label={modeDurations?.walking ?? "--"}
+                            isSelected={selectedTransportMode === 'walking'}
+                            chipColor={chipColor}
+                            chipMutedColor={chipMutedColor}
+                            onPress={onTransportModeChange ?? (() => {})}
+                        />
+                        <View style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                            <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
                         </View>
                     </View>
                     <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: closeBg }]}>
@@ -178,6 +218,15 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 16,
+    },
+    modeChipDisabled: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(255,255,255,0.08)",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        opacity: 0.45,
     },
     modeText: { color: "#fff", fontSize: 13, fontWeight: "600" },
     closeButton: {

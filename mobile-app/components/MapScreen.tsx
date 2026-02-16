@@ -6,7 +6,7 @@ import {
     View,
     Text,
 } from "react-native";
-import MapView, { Marker, Polygon } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTheme } from "tamagui";
 import CampusSwitch from "./CampusSwitch";
@@ -156,6 +156,10 @@ export default function MapScreen() {
         handleMapCoordinatePress,
         closeNavigation,
         tapMarkerCoordinate,
+        selectedTransportMode,
+        setSelectedTransportMode,
+        routePolyline,
+        routeRegion,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -196,6 +200,13 @@ export default function MapScreen() {
 
     // Get selected building for info card
     const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+
+    // Auto-zoom camera to fit the route polyline
+    useEffect(() => {
+        if (routeRegion) {
+            mapRef.current?.animateToRegion(routeRegion, 600);
+        }
+    }, [routeRegion]);
 
 
     const menuTop =
@@ -287,6 +298,23 @@ export default function MapScreen() {
                         pinColor={brandRed}
                     />
                 )}
+                {routePolyline.length > 0 && selectedTransportMode === 'driving' && (
+                    <Polyline
+                        key="route-driving"
+                        coordinates={routePolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={5}
+                    />
+                )}
+                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                    <Polyline
+                        key="route-walking"
+                        coordinates={routePolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={5}
+                        lineDashPattern={[10, 6]}
+                    />
+                )}
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
                     const isSelected = building.id === selectedBuildingId;
@@ -369,6 +397,8 @@ export default function MapScreen() {
                 isLoading={isRouteLoading}
                 directionsError={directionsError}
                 isGetDirectionsDisabled={isGetDirectionsDisabled}
+                selectedTransportMode={selectedTransportMode}
+                onTransportModeChange={setSelectedTransportMode}
             />
 
             {/* Quick Pick Panel and Location Button */}
