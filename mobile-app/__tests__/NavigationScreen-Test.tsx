@@ -177,4 +177,96 @@ describe("NavigationScreen", () => {
             expect(() => fireEvent.press(shuttleChip)).not.toThrow();
         });
     });
+
+    describe("navigation steps list", () => {
+        const mockSteps = [
+            {
+                instruction: "Head north on Rue Guy",
+                distanceText: "0.3 km",
+                durationText: "1 min",
+                maneuver: "straight",
+            },
+            {
+                instruction: "Turn left onto Blvd de Maisonneuve",
+                distanceText: "0.5 km",
+                durationText: "2 mins",
+                maneuver: "turn-left",
+            },
+        ];
+
+        it("should not render steps list when navigationSteps is empty", () => {
+            render(
+                <NavigationScreen {...defaultProps} navigationSteps={[]} />
+            );
+            expect(screen.queryByTestId("navigation-steps-list")).toBeNull();
+        });
+
+        it("should not render steps list when navigationSteps is not provided", () => {
+            render(<NavigationScreen {...defaultProps} />);
+            expect(screen.queryByTestId("navigation-steps-list")).toBeNull();
+        });
+
+        it("should render steps list when navigationSteps are provided", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    navigationSteps={mockSteps}
+                />
+            );
+            expect(screen.getByTestId("navigation-steps-list")).toBeTruthy();
+        });
+
+        it("should render correct number of step rows", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    navigationSteps={mockSteps}
+                />
+            );
+            expect(screen.getByTestId("nav-step-0")).toBeTruthy();
+            expect(screen.getByTestId("nav-step-1")).toBeTruthy();
+            expect(screen.queryByTestId("nav-step-2")).toBeNull();
+        });
+
+        it("should display step instruction text", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    navigationSteps={mockSteps}
+                />
+            );
+            expect(screen.getByText("Head north on Rue Guy")).toBeTruthy();
+            expect(
+                screen.getByText("Turn left onto Blvd de Maisonneuve")
+            ).toBeTruthy();
+        });
+
+        it("should display step distance and duration metadata", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    navigationSteps={mockSteps}
+                />
+            );
+            expect(screen.getByText("0.3 km · 1 min")).toBeTruthy();
+            expect(screen.getByText("0.5 km · 2 mins")).toBeTruthy();
+        });
+
+        it("should display distance only when durationText is empty", () => {
+            const stepsNoDuration = [
+                {
+                    instruction: "Arrive at destination",
+                    distanceText: "10 m",
+                    durationText: "",
+                },
+            ];
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    navigationSteps={stepsNoDuration}
+                />
+            );
+            expect(screen.getByText("10 m")).toBeTruthy();
+        });
+    });
 });

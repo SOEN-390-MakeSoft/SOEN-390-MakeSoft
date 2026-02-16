@@ -342,6 +342,35 @@ describe("useNavigationBetweenBuildings", () => {
             // Initially empty
             expect(result.current.modeDurations).toEqual({});
         });
+
+        it("should initialize navigationSteps as empty array", () => {
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+            expect(result.current.navigationSteps).toEqual([]);
+        });
+
+        it("should clear navigationSteps when navigation is closed", () => {
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+
+            act(() => {
+                result.current.openNavigationForBuilding(mockBuildings[0], null);
+            });
+
+            act(() => {
+                result.current.closeNavigation();
+            });
+
+            expect(result.current.navigationSteps).toEqual([]);
+        });
     });
 
     describe("location resolution effect", () => {
@@ -422,6 +451,20 @@ describe("useNavigationBetweenBuildings", () => {
 
     describe("directions fetch effect", () => {
         const MOCK_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
+        const MOCK_STEPS = [
+            {
+                html_instructions: "Head <b>north</b> on Rue Guy",
+                distance: { text: "0.3 km", value: 300 },
+                duration: { text: "1 min", value: 60 },
+                maneuver: "straight",
+            },
+            {
+                html_instructions: "Turn <b>left</b> onto Blvd de Maisonneuve",
+                distance: { text: "0.5 km", value: 500 },
+                duration: { text: "2 mins", value: 120 },
+                maneuver: "turn-left",
+            },
+        ];
         const makeMockDirectionsResponse = (summary = "Route 1") => ({
             status: "OK",
             routes: [
@@ -432,6 +475,7 @@ describe("useNavigationBetweenBuildings", () => {
                         {
                             duration: { text: "10 mins", value: 600 },
                             distance: { text: "5 km", value: 5000 },
+                            steps: MOCK_STEPS,
                         },
                     ],
                 },
@@ -497,6 +541,19 @@ describe("useNavigationBetweenBuildings", () => {
             expect(result.current.routePolyline.length).toBeGreaterThan(0);
             expect(result.current.routeRegion).not.toBeNull();
             expect(result.current.isRouteLoading).toBe(false);
+
+            // Verify navigation steps are extracted
+            expect(result.current.navigationSteps.length).toBe(2);
+            expect(result.current.navigationSteps[0].instruction).toBe(
+                "Head north on Rue Guy"
+            );
+            expect(result.current.navigationSteps[0].distanceText).toBe("0.3 km");
+            expect(result.current.navigationSteps[0].durationText).toBe("1 min");
+            expect(result.current.navigationSteps[0].maneuver).toBe("straight");
+            expect(result.current.navigationSteps[1].instruction).toBe(
+                "Turn left onto Blvd de Maisonneuve"
+            );
+            expect(result.current.navigationSteps[1].maneuver).toBe("turn-left");
         });
 
         it("should handle API returning non-OK status", async () => {
@@ -528,6 +585,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
             expect(result.current.routeSummary).toBeNull();
             expect(result.current.routePolyline).toEqual([]);
+            expect(result.current.navigationSteps).toEqual([]);
         });
 
         it("should handle API response with no legs", async () => {
@@ -619,7 +677,28 @@ describe("useNavigationBetweenBuildings", () => {
 
     describe("mode-switch effect with routes loaded", () => {
         const MOCK_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
-        const makeMockResponse = (durationText: string, durationValue: number) => ({
+        const MOCK_DRIVING_STEPS = [
+            {
+                html_instructions: "Take the <b>highway</b>",
+                distance: { text: "3 km", value: 3000 },
+                duration: { text: "5 mins", value: 300 },
+                maneuver: "merge",
+            },
+        ];
+        const MOCK_WALKING_STEPS = [
+            {
+                html_instructions: "Walk along <b>Rue Sherbrooke</b>",
+                distance: { text: "0.8 km", value: 800 },
+                duration: { text: "10 mins", value: 600 },
+            },
+            {
+                html_instructions: "Turn <b>right</b> onto Rue Guy",
+                distance: { text: "0.2 km", value: 200 },
+                duration: { text: "3 mins", value: 180 },
+                maneuver: "turn-right",
+            },
+        ];
+        const makeMockResponse = (durationText: string, durationValue: number, steps: unknown[] = []) => ({
             status: "OK",
             routes: [
                 {
@@ -629,6 +708,7 @@ describe("useNavigationBetweenBuildings", () => {
                         {
                             duration: { text: durationText, value: durationValue },
                             distance: { text: "5 km", value: 5000 },
+                            steps,
                         },
                     ],
                 },
@@ -658,11 +738,11 @@ describe("useNavigationBetweenBuildings", () => {
                 callCount++;
                 if (url.includes("mode=driving")) {
                     return Promise.resolve({
-                        json: () => Promise.resolve(makeMockResponse("15 mins", 900)),
+                        json: () => Promise.resolve(makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS)),
                     });
                 }
                 return Promise.resolve({
-                    json: () => Promise.resolve(makeMockResponse("45 mins", 2700)),
+                    json: () => Promise.resolve(makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)),
                 });
             });
 
@@ -697,6 +777,69 @@ describe("useNavigationBetweenBuildings", () => {
             // Polyline should still be populated (walking route)
             expect(result.current.routePolyline.length).toBeGreaterThan(0);
             expect(result.current.routeRegion).not.toBeNull();
+
+            // Steps should update to walking steps
+            expect(result.current.navigationSteps.length).toBe(2);
+            expect(result.current.navigationSteps[0].instruction).toBe(
+                "Walk along Rue Sherbrooke"
+            );
+            expect(result.current.navigationSteps[1].maneuver).toBe("turn-right");
+        });
+
+        it("should update steps back to driving when switching mode", async () => {
+            let callCount = 0;
+            global.fetch = jest.fn().mockImplementation((url: string) => {
+                callCount++;
+                if (url.includes("mode=driving")) {
+                    return Promise.resolve({
+                        json: () => Promise.resolve(makeMockResponse("15 mins", 900, MOCK_DRIVING_STEPS)),
+                    });
+                }
+                return Promise.resolve({
+                    json: () => Promise.resolve(makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)),
+                });
+            });
+
+            const { result } = renderHook(() =>
+                useNavigationBetweenBuildings({
+                    buildings: mockBuildings,
+                    onSelectBuilding: jest.fn(),
+                })
+            );
+
+            act(() => {
+                result.current.openNavigationForBuilding(mockBuildings[0], null);
+            });
+
+            await waitFor(() => {
+                expect(callCount).toBe(2);
+            });
+
+            await waitFor(() => {
+                expect(result.current.navigationSteps.length).toBeGreaterThan(0);
+            });
+
+            // Initially driving — steps should be driving steps
+            expect(result.current.navigationSteps.length).toBe(1);
+            expect(result.current.navigationSteps[0].instruction).toBe("Take the highway");
+
+            // Switch to walking
+            act(() => {
+                result.current.setSelectedTransportMode("walking");
+            });
+            await waitFor(() => {
+                expect(result.current.navigationSteps.length).toBe(2);
+            });
+
+            // Switch back to driving
+            act(() => {
+                result.current.setSelectedTransportMode("driving");
+            });
+            await waitFor(() => {
+                expect(result.current.navigationSteps.length).toBe(1);
+            });
+            expect(result.current.navigationSteps[0].instruction).toBe("Take the highway");
+            expect(result.current.navigationSteps[0].maneuver).toBe("merge");
         });
     });
 
