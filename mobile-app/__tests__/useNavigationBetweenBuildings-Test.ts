@@ -72,6 +72,28 @@ describe("useNavigationBetweenBuildings", () => {
         return { mockFetch, getCallCount: () => callCount };
     }
 
+    function renderNavHook(overrides: Record<string, any> = {}) {
+        return renderHook(() =>
+            useNavigationBetweenBuildings({
+                buildings: mockBuildings,
+                onSelectBuilding: jest.fn(),
+                ...overrides,
+            })
+        );
+    }
+
+    function openNavAndSetStart(result: { current: any }, startBuildingId: string) {
+        act(() => {
+            result.current.openNavigationForBuilding(mockBuildings[0], null);
+        });
+        act(() => {
+            result.current.setNavigationActiveField("start");
+        });
+        act(() => {
+            result.current.handleMapBuildingPress(startBuildingId);
+        });
+    }
+
     describe("handleMapCoordinatePress", () => {
         it("should call onSelectBuilding and set tap marker when coordinate is inside a building (happy path)", () => {
             // Arrange
@@ -230,21 +252,8 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should set directionsError to same_origin_destination when origin equals destination", () => {
             // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
-            act(() => {
-                result.current.openNavigationForBuilding(mockBuildings[0], null);
-            });
-            act(() => {
-                result.current.setNavigationActiveField("start");
-            });
-            act(() => {
-                result.current.handleMapBuildingPress("TB");
-            });
+            const { result } = renderNavHook();
+            openNavAndSetStart(result, "TB");
 
             // Assert: start and destination are both TB -> same coords
             expect(result.current.directionsError).toBe("same_origin_destination");
@@ -273,21 +282,8 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should have no directionsError when origin and destination are valid and different", () => {
             // Arrange: set origin (e.g. "Your location" requires async location; use a building for start)
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
-            act(() => {
-                result.current.openNavigationForBuilding(mockBuildings[0], null);
-            });
-            act(() => {
-                result.current.setNavigationActiveField("start");
-            });
-            act(() => {
-                result.current.handleMapBuildingPress("H");
-            });
+            const { result } = renderNavHook();
+            openNavAndSetStart(result, "H");
 
             // Assert: start = Hall (H), destination = Test Building (TB), different coords
             expect(result.current.directionsError).toBeNull();
@@ -415,12 +411,7 @@ describe("useNavigationBetweenBuildings", () => {
                 coords: { latitude: 45.505, longitude: -73.572 },
             });
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open navigation — default start is "Your location"
             act(() => {
@@ -438,12 +429,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
             (Location.getCurrentPositionAsync as jest.Mock).mockClear();
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -464,12 +450,7 @@ describe("useNavigationBetweenBuildings", () => {
                 new Error("Location unavailable")
             );
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
