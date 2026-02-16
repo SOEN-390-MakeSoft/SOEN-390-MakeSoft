@@ -98,12 +98,7 @@ describe("useNavigationBetweenBuildings", () => {
         it("should call onSelectBuilding and set tap marker when coordinate is inside a building (happy path)", () => {
             // Arrange
             const onSelectBuilding = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding,
-                })
-            );
+            const { result } = renderNavHook({ onSelectBuilding });
 
             // Act: tap inside TB polygon
             act(() => {
@@ -123,13 +118,7 @@ describe("useNavigationBetweenBuildings", () => {
         it("should call onBuildingNotFound when coordinate is far from any building (failure case)", () => {
             // Arrange
             const onBuildingNotFound = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                    onBuildingNotFound,
-                })
-            );
+            const { result } = renderNavHook({ onBuildingNotFound });
 
             // Act: tap far from campus
             act(() => {
@@ -146,12 +135,7 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should not call onBuildingNotFound when callback is not provided (edge case)", () => {
             // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Act
             act(() => {
@@ -169,12 +153,7 @@ describe("useNavigationBetweenBuildings", () => {
     describe("tapMarkerCoordinate and closeNavigation", () => {
         it("should clear tap marker when closeNavigation is called", () => {
             // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             act(() => {
                 result.current.handleMapCoordinatePress({
                     latitude: 45.5015,
@@ -197,12 +176,7 @@ describe("useNavigationBetweenBuildings", () => {
         it("should set tap marker when pressing a building by id", () => {
             // Arrange
             const onSelectBuilding = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding,
-                })
-            );
+            const { result } = renderNavHook({ onSelectBuilding });
 
             // Act
             act(() => {
@@ -218,12 +192,7 @@ describe("useNavigationBetweenBuildings", () => {
     describe("validation and error handling", () => {
         it("should have Get Directions disabled when fields are empty (initial state)", () => {
             // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Assert: no origin, no destination label
             expect(result.current.isGetDirectionsDisabled).toBe(true);
@@ -231,12 +200,7 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should have Get Directions disabled when destination has name but no coords", () => {
             // Arrange: open with remote building only (no selected building) -> label set, coord null
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             act(() => {
                 result.current.closeNavigation();
             });
@@ -262,12 +226,7 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should set directionsError to missing_coordinates when destination has name but no coords", () => {
             // Arrange: open navigation with remote building only (no selected building -> no coords)
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             act(() => {
                 result.current.openNavigationForBuilding(null, {
                     name: "Remote Building",
@@ -293,22 +252,12 @@ describe("useNavigationBetweenBuildings", () => {
 
     describe("route polyline and transport mode", () => {
         it("should default selectedTransportMode to 'driving'", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             expect(result.current.selectedTransportMode).toBe("driving");
         });
 
         it("should allow switching transport mode via setSelectedTransportMode", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             act(() => {
                 result.current.setSelectedTransportMode("walking");
             });
@@ -321,32 +270,17 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should initialize routePolyline as empty array", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             expect(result.current.routePolyline).toEqual([]);
         });
 
         it("should initialize routeRegion as null", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             expect(result.current.routeRegion).toBeNull();
         });
 
         it("should clear route polyline and region when navigation is closed", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             // Open navigation
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -362,33 +296,18 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should expose modeDurations with driving and walking keys", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             // Initially empty
             expect(result.current.modeDurations).toEqual({});
         });
 
         it("should initialize navigationSteps as empty array", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
             expect(result.current.navigationSteps).toEqual([]);
         });
 
         it("should clear navigationSteps when navigation is closed", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -504,12 +423,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
             global.fetch = mockFetch;
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open nav and set origin + destination on different buildings
             act(() => {
@@ -560,12 +474,7 @@ describe("useNavigationBetweenBuildings", () => {
                 json: () => Promise.resolve({ status: "ZERO_RESULTS", routes: [] }),
             });
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -596,12 +505,7 @@ describe("useNavigationBetweenBuildings", () => {
                     }),
             });
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -624,12 +528,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
             global.fetch = mockFetch;
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -651,12 +550,7 @@ describe("useNavigationBetweenBuildings", () => {
             const mockFetch = jest.fn();
             global.fetch = mockFetch;
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -722,12 +616,7 @@ describe("useNavigationBetweenBuildings", () => {
                 makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)
             );
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -768,12 +657,7 @@ describe("useNavigationBetweenBuildings", () => {
                 makeMockResponse("45 mins", 2700, MOCK_WALKING_STEPS)
             );
 
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
@@ -813,12 +697,7 @@ describe("useNavigationBetweenBuildings", () => {
 
     describe("handleMapBuildingPress during navigation", () => {
         it("should set destination when navigation is open and destination field is active", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open navigation
             act(() => {
@@ -840,12 +719,7 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should set start when navigation is open and start field is active", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open navigation
             act(() => {
@@ -866,12 +740,7 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should set start when nav is open, no active field, and destination already set", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open navigation (sets destination to TB)
             act(() => {
@@ -892,12 +761,7 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should set destination when nav is open, no active field, and no destination set", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             // Open navigation with null building and null remote => destination label = "Destination"
             // Then manually close and re-open with empty destination
@@ -931,12 +795,7 @@ describe("useNavigationBetweenBuildings", () => {
 
         it("should ignore building press for unknown building id", () => {
             const onSelectBuilding = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding,
-                })
-            );
+            const { result } = renderNavHook({ onSelectBuilding });
 
             act(() => {
                 result.current.handleMapBuildingPress("UNKNOWN");
@@ -949,12 +808,7 @@ describe("useNavigationBetweenBuildings", () => {
 
     describe("openNavigationForBuilding", () => {
         it("should format label from remote building name and code", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(null, {
@@ -968,12 +822,7 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should use building name without code when code is null", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(null, {
@@ -1008,12 +857,7 @@ describe("useNavigationBetweenBuildings", () => {
         });
 
         it("should default destination label to 'Destination' when no names provided", () => {
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = renderNavHook();
 
             act(() => {
                 result.current.openNavigationForBuilding(null, null);
