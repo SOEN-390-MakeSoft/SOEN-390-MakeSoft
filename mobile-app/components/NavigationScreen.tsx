@@ -15,6 +15,7 @@ interface NavigationScreenProps {
     destinationLabel: string;
     onClose: () => void;
     onActiveFieldChange?: (field: "start" | "destination" | null) => void;
+    onBuildingSelect?: (field: "start" | "destination", name: string, code: string | null) => void;
     modeDurations?: {
         driving?: string;
         walking?: string;
@@ -101,6 +102,7 @@ export default function NavigationScreen({
     destinationLabel,
     onClose,
     onActiveFieldChange,
+    onBuildingSelect,
     modeDurations,
     tripSummary,
     isLoading,
@@ -134,6 +136,7 @@ export default function NavigationScreen({
                 startLabel={startLabel}
                 destinationLabel={destinationLabel}
                 onActiveFieldChange={onActiveFieldChange}
+                onBuildingSelect={onBuildingSelect}
             />
 
             <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>
