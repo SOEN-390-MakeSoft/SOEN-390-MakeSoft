@@ -12,6 +12,10 @@ interface NavigationScreenProps {
     destinationLabel: string;
     onClose: () => void;
     onActiveFieldChange?: (field: "start" | "destination" | null) => void;
+    onSelectLocation?: (
+        field: "start" | "destination",
+        selection: { label: string; coordinate: { latitude: number; longitude: number } | null; isUserLocation?: boolean }
+    ) => void;
     activeMode?: "driving" | "transit" | "walking";
     onModeChange?: (mode: "driving" | "transit" | "walking") => void;
     modeDurations?: {
@@ -41,6 +45,7 @@ export default function NavigationScreen({
     destinationLabel,
     onClose,
     onActiveFieldChange,
+    onSelectLocation,
     activeMode = "driving",
     onModeChange,
     modeDurations,
@@ -85,6 +90,7 @@ export default function NavigationScreen({
                 startLabel={startLabel}
                 destinationLabel={destinationLabel}
                 onActiveFieldChange={onActiveFieldChange}
+                onSelectLocation={onSelectLocation}
             />
 
             <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>

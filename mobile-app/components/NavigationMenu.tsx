@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
+import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 import { extractCodeFromName, normalizeLabel } from "../utils/stringUtils";
+import { polygonCentroid, type LatLng } from "../utils/mapUtils";
 import MapMenu from "./MapMenu";
 import { useSettings } from "../context/settings";
 
@@ -13,6 +15,10 @@ interface NavigationMenuProps {
     startLabel?: string;
     destinationLabel?: string;
     onActiveFieldChange?: (field: ActiveField) => void;
+    onSelectLocation?: (
+        field: "start" | "destination",
+        selection: { label: string; coordinate: LatLng | null; isUserLocation?: boolean }
+    ) => void;
 }
 
 type SearchEntry = {
@@ -20,6 +26,8 @@ type SearchEntry = {
     code: string | null;
     address: string | null;
     aliases?: string[];
+    coordinate: LatLng | null;
+    isUserLocation?: boolean;
 };
 
 const buildLabel = (name: string, code: string | null) => {
@@ -31,6 +39,7 @@ export default function NavigationMenu({
     startLabel = "Your location",
     destinationLabel = "",
     onActiveFieldChange,
+    onSelectLocation,
 }: NavigationMenuProps) {
     const { colourBlindMode } = useSettings();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -58,20 +67,34 @@ export default function NavigationMenu({
     }, [activeField, onActiveFieldChange]);
 
     const activeQuery = activeField === "start" ? startQuery : destinationQuery;
+    const sgwCentroids = useMemo(() => {
+        const map = new Map<string, LatLng>();
+        Object.values(BUILDING_POLYGONS).forEach((entry) => {
+            const code = extractCodeFromName(entry.name);
+            if (!code) return;
+            map.set(code.toUpperCase(), polygonCentroid(entry.polygon));
+        });
+        return map;
+    }, []);
+
     const buildingOptions = useMemo<SearchEntry[]>(() => {
         const sgw = BUILDING_ADDRESSES.map((entry) => ({
             name: entry.name,
             code: entry.code,
             address: entry.address,
             aliases: entry.aliases,
+            coordinate: entry.code
+                ? sgwCentroids.get(entry.code.toUpperCase()) ?? null
+                : null,
         }));
         const loyola = Object.values(LOYOLA_BUILDING_POLYGONS).map((entry) => ({
             name: entry.name,
             code: extractCodeFromName(entry.name),
             address: null,
+            coordinate: entry.polygon ? polygonCentroid(entry.polygon) : null,
         }));
         return [...sgw, ...loyola];
-    }, []);
+    }, [sgwCentroids]);
 
     const results = useMemo(() => {
         const query = normalizeLabel(activeQuery);
@@ -93,12 +116,18 @@ export default function NavigationMenu({
     }, [activeQuery, buildingOptions]);
 
     const handleSelect = (entry: SearchEntry) => {
+        if (!activeField) return;
         const label = buildLabel(entry.name, entry.code);
         if (activeField === "start") {
             setStartQuery(label);
         } else if (activeField === "destination") {
             setDestinationQuery(label);
         }
+        onSelectLocation?.(activeField, {
+            label,
+            coordinate: entry.coordinate,
+            isUserLocation: entry.isUserLocation,
+        });
         setActiveField(null);
     };
 
@@ -184,6 +213,8 @@ export default function NavigationMenu({
                                         name: "Your location",
                                         code: null,
                                         address: null,
+                                        coordinate: null,
+                                        isUserLocation: true,
                                     })
                                 }
                             >

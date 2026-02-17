@@ -154,6 +154,7 @@ export default function MapScreen() {
         setNavigationActiveField,
         setActiveMode,
         openNavigationForBuilding,
+        handleNavigationLocationSelect,
         handleMapBuildingPress,
         handleMapCoordinatePress,
         closeNavigation,
@@ -366,6 +367,7 @@ export default function MapScreen() {
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
                 onActiveFieldChange={setNavigationActiveField}
+                onSelectLocation={handleNavigationLocationSelect}
                 activeMode={activeMode}
                 onModeChange={setActiveMode}
                 modeDurations={modeDurations}

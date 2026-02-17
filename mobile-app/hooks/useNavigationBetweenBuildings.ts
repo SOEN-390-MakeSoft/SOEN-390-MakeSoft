@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import * as Location from "expo-location";
 import {
     polygonCentroid,
@@ -44,12 +45,107 @@ type ModeDurations = {
     walking?: string;
 };
 
+type RouteApiResponse = {
+    mode: string;
+    durationSeconds: number;
+    distanceMeters: number;
+    eta?: string;
+    summary?: string;
+    polyline?: string | null;
+};
+
 interface UseNavigationBetweenBuildingsParams {
     buildings: Building[];
     onSelectBuilding: (buildingId: string) => void;
     /** Called when user taps the map and the tap is far from any campus building */
     onBuildingNotFound?: () => void;
 }
+
+const ROUTE_MODES: RouteMode[] = ["driving", "walking", "transit"];
+
+const normalizeMode = (value: string): RouteMode | null => {
+    switch (value.toLowerCase()) {
+        case "driving":
+        case "car":
+            return "driving";
+        case "walking":
+        case "walk":
+            return "walking";
+        case "transit":
+        case "shuttle":
+            return "transit";
+        default:
+            return null;
+    }
+};
+
+const formatDuration = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return "--";
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remaining = minutes % 60;
+    return remaining === 0 ? `${hours} h` : `${hours} h ${remaining} min`;
+};
+
+const formatDistance = (meters: number) => {
+    if (!Number.isFinite(meters) || meters <= 0) return "--";
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+};
+
+const getBackendBaseUrl = () => {
+    const explicit =
+        process.env.EXPO_PUBLIC_API_BASE_URL ||
+        process.env.EXPO_PUBLIC_BACKEND_URL ||
+        process.env.EXPO_PUBLIC_API_URL;
+    if (explicit) return explicit.replace(/\/$/, "");
+
+    const extra = Constants.expoConfig?.extra as { PC_IP?: string } | undefined;
+    const manifestExtra = (Constants as { manifest?: { extra?: { PC_IP?: string } } }).manifest
+        ?.extra;
+    const pcIp =
+        process.env.EXPO_PUBLIC_PC_IP ||
+        extra?.PC_IP ||
+        manifestExtra?.PC_IP;
+    if (!pcIp) return null;
+    return `http://${pcIp}:8080`;
+};
+
+const fetchRoutesFromBackend = async (
+    origin: LatLng,
+    destination: LatLng
+): Promise<Record<RouteMode, RouteInfo | null> | null> => {
+    const baseUrl = getBackendBaseUrl();
+    if (!baseUrl) return null;
+
+    const modeParam = encodeURIComponent(ROUTE_MODES.join(","));
+    const url = `${baseUrl}/api/routes?originLat=${origin.latitude}&originLng=${origin.longitude}&destLat=${destination.latitude}&destLng=${destination.longitude}&mode=${modeParam}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = (await response.json()) as RouteApiResponse[];
+    if (!Array.isArray(data)) return null;
+
+    const result: Record<RouteMode, RouteInfo | null> = {
+        driving: null,
+        walking: null,
+        transit: null,
+    };
+
+    data.forEach((route) => {
+        const mode = normalizeMode(route.mode);
+        if (!mode) return;
+        result[mode] = {
+            durationText: formatDuration(route.durationSeconds),
+            durationSec: route.durationSeconds,
+            distanceText: formatDistance(route.distanceMeters),
+            viaText: route.summary ?? "Suggested route",
+        };
+    });
+
+    const hasAny = Object.values(result).some((value) => value !== null);
+    return hasAny ? result : null;
+};
 
 export function useNavigationBetweenBuildings({
     buildings,
@@ -148,12 +244,11 @@ export function useNavigationBetweenBuildings({
         if (!navigationOrigin || !navigationDestinationCoord) return;
         if (sameOriginDestination || missingCoordinates) return;
 
-        const key = getDirectionsKey();
-        if (!key) return;
-
         let cancelled = false;
 
         const fetchDirections = async (mode: RouteMode): Promise<RouteInfo | null> => {
+            const key = getDirectionsKey();
+            if (!key) return null;
             const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
             const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
             const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}&key=${key}`;
@@ -176,17 +271,30 @@ export function useNavigationBetweenBuildings({
             setModeDurations({});
             setRouteDetails({ driving: null, transit: null, walking: null });
             try {
-                const [driving, transit, walking] = await Promise.all([
-                    fetchDirections("driving"),
-                    fetchDirections("transit"),
-                    fetchDirections("walking"),
-                ]);
+                let routes: Record<RouteMode, RouteInfo | null> | null = null;
+                try {
+                    routes = await fetchRoutesFromBackend(
+                        navigationOrigin,
+                        navigationDestinationCoord
+                    );
+                } catch {
+                    routes = null;
+                }
                 if (cancelled) return;
-                setRouteDetails({ driving, transit, walking });
+                if (!routes) {
+                    const [driving, transit, walking] = await Promise.all([
+                        fetchDirections("driving"),
+                        fetchDirections("transit"),
+                        fetchDirections("walking"),
+                    ]);
+                    if (cancelled) return;
+                    routes = { driving, transit, walking };
+                }
+                setRouteDetails(routes);
                 setModeDurations({
-                    driving: driving?.durationText,
-                    transit: transit?.durationText,
-                    walking: walking?.durationText,
+                    driving: routes.driving?.durationText,
+                    transit: routes.transit?.durationText,
+                    walking: routes.walking?.durationText,
                 });
             } finally {
                 if (!cancelled) setIsRouteLoading(false);
@@ -245,6 +353,31 @@ export function useNavigationBetweenBuildings({
             setIsNavigationOpen(true);
         },
         [clearRouteState, formatBuildingLabel]
+    );
+
+    const handleNavigationLocationSelect = useCallback(
+        (
+            field: "start" | "destination",
+            selection: {
+                label: string;
+                coordinate: LatLng | null;
+                isUserLocation?: boolean;
+            }
+        ) => {
+            if (field === "start") {
+                setNavigationStart(selection.label);
+                if (selection.isUserLocation || selection.label === "Your location") {
+                    setNavigationOrigin(null);
+                } else {
+                    setNavigationOrigin(selection.coordinate);
+                }
+            } else {
+                setNavigationDestination(selection.label);
+                setNavigationDestinationCoord(selection.coordinate);
+            }
+            clearRouteState();
+        },
+        [clearRouteState]
     );
 
     const handleMapBuildingPress = useCallback(
@@ -328,6 +461,7 @@ export function useNavigationBetweenBuildings({
         setNavigationActiveField,
         setActiveMode,
         openNavigationForBuilding,
+        handleNavigationLocationSelect,
         handleMapBuildingPress,
         handleMapCoordinatePress,
         closeNavigation,
