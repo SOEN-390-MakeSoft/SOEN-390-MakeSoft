@@ -202,6 +202,22 @@ describe('MapScreen', () => {
     (Platform as any).OS = originalOS;
   });
 
+  describe('Map tap listener', () => {
+    it('shows "Building not found" toast when map is tapped far from any campus building', () => {
+      const { getByTestId, getByText } = renderWithProviders(<MapScreen />);
+      const map = getByTestId('campus-map');
+
+      fireEvent.press(map, {
+        nativeEvent: {
+          coordinate: { latitude: 45.6, longitude: -73.4 },
+        },
+      } as any);
+
+      expect(getByTestId('building-not-found-toast')).toBeTruthy();
+      expect(getByText('Building not found')).toBeTruthy();
+    });
+  });
+
   it('animates map when switching campuses', () => {
     const { getByText } = renderWithProviders(<MapScreen />);
     const loyolaText = getByText('Loyola');
@@ -484,18 +500,18 @@ describe('MapScreen', () => {
       const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
       const searchInput = getByPlaceholderText('Search');
 
-      // Verify search input is present and editable is set to false (disabled)
+      // Verify search input is present and editable is true (enabled)
       expect(searchInput).toBeTruthy();
-      expect(searchInput.props.editable).toBe(false);
+      expect(searchInput.props.editable).toBe(true);
     });
 
-    it('should keep search unfocused when input is disabled', () => {
+    it('should allow search focus when input is enabled', () => {
       const { getByPlaceholderText } = renderWithProviders(<MapScreen />);
       const searchInput = getByPlaceholderText('Search');
 
       fireEvent(searchInput, 'focus');
 
-      expect(mockSetIsSearchFocused).not.toHaveBeenCalled();
+      expect(mockSetIsSearchFocused).toHaveBeenCalledWith(true);
     });
 
     it('should clear search when switching campuses', () => {
