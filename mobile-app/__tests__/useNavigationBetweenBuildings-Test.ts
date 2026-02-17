@@ -9,44 +9,62 @@ type Building = {
     polygon: readonly LatLng[];
 };
 
-const mockBuildings: Building[] = [
-    {
-        id: "TB",
-        name: "Test Building",
-        code: "TB",
-        polygon: [
-            { latitude: 45.502, longitude: -73.568 },
-            { latitude: 45.502, longitude: -73.566 },
-            { latitude: 45.501, longitude: -73.566 },
-            { latitude: 45.501, longitude: -73.568 },
-        ],
-    },
-    {
-        id: "H",
-        name: "Hall",
-        code: "H",
-        polygon: [
-            { latitude: 45.497, longitude: -73.579 },
-            { latitude: 45.497, longitude: -73.578 },
-            { latitude: 45.496, longitude: -73.578 },
-            { latitude: 45.496, longitude: -73.579 },
-        ],
-    },
-];
+const rectangleFromAnchor = (anchor: LatLng, height: number, width: number): readonly LatLng[] => {
+    const north = anchor.latitude;
+    const west = anchor.longitude;
+    const south = north - height;
+    const east = west + width;
+
+    return [
+        { latitude: north, longitude: west },
+        { latitude: north, longitude: east },
+        { latitude: south, longitude: east },
+        { latitude: south, longitude: west },
+    ];
+};
+
+const createTestBuilding = (id: string, name: string, anchor: LatLng): Building => ({
+    id,
+    name,
+    code: id,
+    polygon: rectangleFromAnchor(anchor, 0.001, 0.002),
+});
+
+const NORTH_BUILDING = createTestBuilding("A1", "Alpha Hall", {
+    latitude: 45.502,
+    longitude: -73.568,
+});
+
+const SOUTH_BUILDING = createTestBuilding("B2", "Beta Hall", {
+    latitude: 45.497,
+    longitude: -73.579,
+});
+
+const mockBuildings: Building[] = [NORTH_BUILDING, SOUTH_BUILDING];
+
+type HookArgs = {
+    buildings: Building[];
+    onSelectBuilding: (id: string) => void;
+    onBuildingNotFound?: () => void;
+};
+
+const setup = (overrides?: Partial<HookArgs>) => {
+    const args: HookArgs = {
+        buildings: mockBuildings,
+        onSelectBuilding: jest.fn(),
+        ...overrides,
+    };
+
+    const hook = renderHook(() => useNavigationBetweenBuildings(args));
+    return { ...hook, args };
+};
 
 describe("useNavigationBetweenBuildings", () => {
     describe("handleMapCoordinatePress", () => {
         it("should call onSelectBuilding and set tap marker when coordinate is inside a building (happy path)", () => {
-            // Arrange
             const onSelectBuilding = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding,
-                })
-            );
+            const { result } = setup({ onSelectBuilding });
 
-            // Act: tap inside TB polygon
             act(() => {
                 result.current.handleMapCoordinatePress({
                     latitude: 45.5015,
@@ -54,25 +72,16 @@ describe("useNavigationBetweenBuildings", () => {
                 });
             });
 
-            // Assert
-            expect(onSelectBuilding).toHaveBeenCalledWith("TB");
+            expect(onSelectBuilding).toHaveBeenCalledWith("A1");
             expect(result.current.tapMarkerCoordinate).not.toBeNull();
             expect(result.current.tapMarkerCoordinate?.latitude).toBeCloseTo(45.5015);
             expect(result.current.tapMarkerCoordinate?.longitude).toBeCloseTo(-73.567);
         });
 
         it("should call onBuildingNotFound when coordinate is far from any building (failure case)", () => {
-            // Arrange
             const onBuildingNotFound = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                    onBuildingNotFound,
-                })
-            );
+            const { result } = setup({ onBuildingNotFound });
 
-            // Act: tap far from campus
             act(() => {
                 result.current.handleMapCoordinatePress({
                     latitude: 45.6,
@@ -80,21 +89,13 @@ describe("useNavigationBetweenBuildings", () => {
                 });
             });
 
-            // Assert
             expect(onBuildingNotFound).toHaveBeenCalled();
             expect(result.current.tapMarkerCoordinate).toBeNull();
         });
 
         it("should not call onBuildingNotFound when callback is not provided (edge case)", () => {
-            // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
 
-            // Act
             act(() => {
                 result.current.handleMapCoordinatePress({
                     latitude: 45.6,
@@ -102,20 +103,14 @@ describe("useNavigationBetweenBuildings", () => {
                 });
             });
 
-            // Assert: no throw, tap marker cleared
             expect(result.current.tapMarkerCoordinate).toBeNull();
         });
     });
 
     describe("tapMarkerCoordinate and closeNavigation", () => {
         it("should clear tap marker when closeNavigation is called", () => {
-            // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
+
             act(() => {
                 result.current.handleMapCoordinatePress({
                     latitude: 45.5015,
@@ -124,60 +119,37 @@ describe("useNavigationBetweenBuildings", () => {
             });
             expect(result.current.tapMarkerCoordinate).not.toBeNull();
 
-            // Act
             act(() => {
                 result.current.closeNavigation();
             });
 
-            // Assert
             expect(result.current.tapMarkerCoordinate).toBeNull();
         });
     });
 
     describe("handleMapBuildingPress", () => {
         it("should set tap marker when pressing a building by id", () => {
-            // Arrange
             const onSelectBuilding = jest.fn();
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding,
-                })
-            );
+            const { result } = setup({ onSelectBuilding });
 
-            // Act
             act(() => {
-                result.current.handleMapBuildingPress("TB");
+                result.current.handleMapBuildingPress("A1");
             });
 
-            // Assert
-            expect(onSelectBuilding).toHaveBeenCalledWith("TB");
+            expect(onSelectBuilding).toHaveBeenCalledWith("A1");
             expect(result.current.tapMarkerCoordinate).not.toBeNull();
         });
     });
 
     describe("validation and error handling", () => {
         it("should have Get Directions disabled when fields are empty (initial state)", () => {
-            // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
-
-            // Assert: no origin, no destination label
+            const { result } = setup();
             expect(result.current.isGetDirectionsDisabled).toBe(true);
         });
 
         it("should have Get Directions disabled when destination has name but no coords", () => {
-            // Arrange: open with remote building only (no selected building) -> label set, coord null
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
+
             act(() => {
                 result.current.closeNavigation();
             });
@@ -187,18 +159,13 @@ describe("useNavigationBetweenBuildings", () => {
                     code: null,
                 });
             });
-            // Destination label set but no coords -> missing_coordinates, button disabled
+
             expect(result.current.isGetDirectionsDisabled).toBe(true);
         });
 
         it("should set directionsError to same_origin_destination when origin equals destination", () => {
-            // Arrange
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
+
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
             });
@@ -206,22 +173,16 @@ describe("useNavigationBetweenBuildings", () => {
                 result.current.setNavigationActiveField("start");
             });
             act(() => {
-                result.current.handleMapBuildingPress("TB");
+                result.current.handleMapBuildingPress("A1");
             });
 
-            // Assert: start and destination are both TB -> same coords
             expect(result.current.directionsError).toBe("same_origin_destination");
             expect(result.current.isGetDirectionsDisabled).toBe(true);
         });
 
         it("should set directionsError to missing_coordinates when destination has name but no coords", () => {
-            // Arrange: open navigation with remote building only (no selected building -> no coords)
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
+
             act(() => {
                 result.current.openNavigationForBuilding(null, {
                     name: "Remote Building",
@@ -229,19 +190,13 @@ describe("useNavigationBetweenBuildings", () => {
                 });
             });
 
-            // Assert
             expect(result.current.directionsError).toBe("missing_coordinates");
             expect(result.current.isGetDirectionsDisabled).toBe(true);
         });
 
         it("should have no directionsError when origin and destination are valid and different", () => {
-            // Arrange: set origin (e.g. "Your location" requires async location; use a building for start)
-            const { result } = renderHook(() =>
-                useNavigationBetweenBuildings({
-                    buildings: mockBuildings,
-                    onSelectBuilding: jest.fn(),
-                })
-            );
+            const { result } = setup();
+
             act(() => {
                 result.current.openNavigationForBuilding(mockBuildings[0], null);
             });
@@ -249,10 +204,9 @@ describe("useNavigationBetweenBuildings", () => {
                 result.current.setNavigationActiveField("start");
             });
             act(() => {
-                result.current.handleMapBuildingPress("H");
+                result.current.handleMapBuildingPress("B2");
             });
 
-            // Assert: start = Hall (H), destination = Test Building (TB), different coords
             expect(result.current.directionsError).toBeNull();
             expect(result.current.isGetDirectionsDisabled).toBe(false);
         });
