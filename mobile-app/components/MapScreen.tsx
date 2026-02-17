@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     campusToggleNavigation: {
-        marginTop: 80,
+        marginTop: Platform.OS === "ios" ? 56 : 80,
     },
     toast: {
         position: "absolute",

@@ -233,7 +233,7 @@ describe("useNavigationBetweenBuildings", () => {
         it("should set directionsError to same_origin_destination when origin equals destination", () => {
             // Arrange
             const { result } = renderNavHook();
-            openNavAndSetStart(result, "TB");
+            openNavAndSetStart(result, "A1");
 
             expect(result.current.directionsError).toBe("same_origin_destination");
             expect(result.current.isGetDirectionsDisabled).toBe(true);
@@ -256,7 +256,7 @@ describe("useNavigationBetweenBuildings", () => {
         it("should have no directionsError when origin and destination are valid and different", () => {
             // Arrange: set origin (e.g. "Your location" requires async location; use a building for start)
             const { result } = renderNavHook();
-            openNavAndSetStart(result, "H");
+            openNavAndSetStart(result, "B2");
 
             // Assert: start = Hall (H), destination = Test Building (TB), different coords
             expect(result.current.directionsError).toBeNull();
@@ -725,11 +725,11 @@ describe("useNavigationBetweenBuildings", () => {
 
             // Press a different building
             act(() => {
-                result.current.handleMapBuildingPress("H");
+                result.current.handleMapBuildingPress("B2");
             });
 
-            // Destination should be updated to Hall
-            expect(result.current.navigationDestination).toBe("Hall (H)");
+            // Destination should be updated to Beta Hall
+            expect(result.current.navigationDestination).toBe("Beta Hall (B2)");
         });
 
         it("should set start when navigation is open and start field is active", () => {
@@ -750,7 +750,7 @@ describe("useNavigationBetweenBuildings", () => {
                 result.current.handleMapBuildingPress("B2");
             });
 
-            expect(result.current.navigationStart).toBe("Hall (H)");
+            expect(result.current.navigationStart).toBe("Beta Hall (B2)");
         });
 
         it("should set start when nav is open, no active field, and destination already set", () => {
@@ -768,10 +768,10 @@ describe("useNavigationBetweenBuildings", () => {
 
             // Press Hall — since destination is already set, it should assign start
             act(() => {
-                result.current.handleMapBuildingPress("H");
+                result.current.handleMapBuildingPress("B2");
             });
 
-            expect(result.current.navigationStart).toBe("Hall (H)");
+            expect(result.current.navigationStart).toBe("Beta Hall (B2)");
         });
 
         it("should set destination when nav is open, no active field, and no destination set", () => {
@@ -800,11 +800,11 @@ describe("useNavigationBetweenBuildings", () => {
 
             // Press TB — since destination is empty string, it should assign destination
             act(() => {
-                result.current.handleMapBuildingPress("TB");
+                result.current.handleMapBuildingPress("B2");
             });
 
             // When destination is empty, the else branch sets destination
-            expect(result.current.navigationDestination).toBe("Test Building (TB)");
+            expect(result.current.navigationDestination).toBe("Beta Hall (B2)");
         });
 
         it("should ignore building press for unknown building id", () => {

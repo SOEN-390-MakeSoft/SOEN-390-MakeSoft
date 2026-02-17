@@ -86,7 +86,7 @@ function ModeChip({
             testID={`mode-chip-${mode}`}
             style={
                 isSelected
-                    ? [styles.modeChip, { backgroundColor: chipColor }]
+                    ? [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }]
                     : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
             }
         >
@@ -123,8 +123,8 @@ export default function NavigationScreen({
     else tripTitleText = "Select start and destination";
 
     const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
-    const chipColor = isColorBlind ? "#6c7a85" : "#f6dce0";
-    const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.15)";
+    const chipColor = isColorBlind ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.30)";
+    const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.14)";
     const closeBg = isColorBlind ? "#e6eaee" : "#f6dce0";
     const closeIcon = isColorBlind ? "#4b5862" : "#7f1f2a";
     const previewBg = isColorBlind ? "#e6eaee" : "#f6dce0";
@@ -273,6 +273,33 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+    },
+    tripModeRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 8,
+        flexWrap: "nowrap",
+        paddingRight: 40,
+    },
+    modeChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    modeChipSelected: {
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.75)",
+    },
+    modeChipMuted: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
     },
     segmentedControl: {
         flexDirection: "row",
