@@ -289,8 +289,10 @@ export default function MapScreen() {
                 showsCompass={false}
                 showsMyLocationButton={false}
                 onPress={(e) => {
-                    const { coordinate } = e.nativeEvent;
-                    handleMapCoordinatePress(coordinate);
+                    const coordinate = e.nativeEvent?.coordinate;
+                    if (coordinate?.latitude != null && coordinate?.longitude != null) {
+                        handleMapCoordinatePress(coordinate);
+                    }
                 }}
             >
                 {tapMarkerCoordinate && (
