@@ -89,6 +89,15 @@ type RouteSummary = {
     viaText: string;
 };
 
+type RouteMode = "driving" | "transit" | "walking";
+
+type RouteInfo = {
+    durationText: string;
+    durationSec: number;
+    distanceText: string;
+    viaText: string;
+};
+
 type ModeDurations = {
     driving?: string;
     walking?: string;
@@ -144,8 +153,14 @@ export function useNavigationBetweenBuildings({
         null
     );
     const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+    const [routeDetails, setRouteDetails] = useState<Record<RouteMode, RouteInfo | null>>({
+        driving: null,
+        transit: null,
+        walking: null,
+    });
     const [modeDurations, setModeDurations] = useState<ModeDurations>({});
     const [isRouteLoading, setIsRouteLoading] = useState(false);
+    const [activeMode, setActiveMode] = useState<RouteMode>("driving");
     const [navigationActiveField, setNavigationActiveField] = useState<
         "start" | "destination" | null
     >(null);
@@ -192,6 +207,12 @@ export function useNavigationBetweenBuildings({
         !hasDestinationLabel ||
         sameOriginDestination ||
         missingCoordinates;
+
+    const clearRouteState = useCallback(() => {
+        setRouteSummary(null);
+        setModeDurations({});
+        setRouteDetails({ driving: null, transit: null, walking: null });
+    }, []);
 
     const formatBuildingLabel = useCallback((name: string, code: string | null) => {
         if (!code) return name;
@@ -252,9 +273,13 @@ export function useNavigationBetweenBuildings({
 
         let cancelled = false;
 
+<<<<<<< HEAD
         const fetchDirections = async (
             mode: "driving" | "walking"
         ): Promise<ModeRoute | null> => {
+=======
+        const fetchDirections = async (mode: RouteMode): Promise<RouteInfo | null> => {
+>>>>>>> origin/feature/ES-2
             const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
             const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
             const trafficParam = mode === "driving" ? "&departure_time=now" : "";
@@ -294,12 +319,15 @@ export function useNavigationBetweenBuildings({
 
         const load = async () => {
             setIsRouteLoading(true);
+            setModeDurations({});
+            setRouteDetails({ driving: null, transit: null, walking: null });
             try {
                 const [driving, walking] = await Promise.all([
                     fetchDirections("driving"),
                     fetchDirections("walking"),
                 ]);
                 if (cancelled) return;
+<<<<<<< HEAD
 
                 setAllModeRoutes({ driving, walking });
 
@@ -325,6 +353,9 @@ export function useNavigationBetweenBuildings({
                         viaText: primary.viaText || "Suggested route",
                     });
                 }
+=======
+                setRouteDetails({ driving, transit, walking });
+>>>>>>> origin/feature/ES-2
                 setModeDurations({
                     driving: driving?.durationText,
                     walking: walking?.durationText,
@@ -347,6 +378,7 @@ export function useNavigationBetweenBuildings({
         missingCoordinates,
     ]);
 
+<<<<<<< HEAD
     // When the user switches transport mode, update the displayed polyline
     useEffect(() => {
         if (!isNavigationOpen) {
@@ -395,6 +427,31 @@ export function useNavigationBetweenBuildings({
         setAllModeRoutes({});
         setIsRouteLoading(true);
     }, []);
+=======
+    useEffect(() => {
+        if (!isNavigationOpen) return;
+        const fallback =
+            routeDetails[activeMode] ??
+            routeDetails.driving ??
+            routeDetails.transit ??
+            routeDetails.walking;
+        if (!fallback) {
+            setRouteSummary(null);
+            return;
+        }
+        const arrival = new Date(Date.now() + fallback.durationSec * 1000);
+        const arrivalText = arrival.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+        });
+        setRouteSummary({
+            arrivalText,
+            distanceText: fallback.distanceText,
+            durationText: fallback.durationText,
+            viaText: fallback.viaText || "Suggested route",
+        });
+    }, [activeMode, isNavigationOpen, routeDetails]);
+>>>>>>> origin/feature/ES-2
 
     const openNavigationForBuilding = useCallback(
         (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
@@ -403,13 +460,21 @@ export function useNavigationBetweenBuildings({
             const destinationCode =
                 remoteBuilding?.code ?? selectedBuilding?.code ?? null;
             setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
+            setActiveMode("driving");
             if (selectedBuilding) {
                 setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
             }
+<<<<<<< HEAD
             resetRouteState();
             setIsNavigationOpen(true);
         },
         [formatBuildingLabel, resetRouteState]
+=======
+            clearRouteState();
+            setIsNavigationOpen(true);
+        },
+        [clearRouteState, formatBuildingLabel]
+>>>>>>> origin/feature/ES-2
     );
 
     const handleMapBuildingPress = useCallback(
@@ -426,27 +491,44 @@ export function useNavigationBetweenBuildings({
             if (navigationActiveField === "start") {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
+<<<<<<< HEAD
                 resetRouteState();
+=======
+                clearRouteState();
+>>>>>>> origin/feature/ES-2
                 return;
             }
             if (navigationActiveField === "destination") {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
+<<<<<<< HEAD
                 resetRouteState();
+=======
+                clearRouteState();
+>>>>>>> origin/feature/ES-2
                 return;
             }
             if (navigationDestination) {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
+<<<<<<< HEAD
                 resetRouteState();
             } else {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
                 resetRouteState();
+=======
+                clearRouteState();
+            } else {
+                setNavigationDestination(label);
+                setNavigationDestinationCoord(centroid);
+                clearRouteState();
+>>>>>>> origin/feature/ES-2
             }
         },
         [
             buildings,
+            clearRouteState,
             formatBuildingLabel,
             isNavigationOpen,
             navigationActiveField,
@@ -520,11 +602,13 @@ export function useNavigationBetweenBuildings({
         navigationStart,
         navigationDestination,
         routeSummary,
+        activeMode,
         modeDurations,
         isRouteLoading,
         directionsError,
         isGetDirectionsDisabled,
         setNavigationActiveField,
+        setActiveMode,
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,

@@ -146,11 +146,13 @@ export default function MapScreen() {
         navigationStart,
         navigationDestination,
         routeSummary,
+        activeMode,
         modeDurations,
         isRouteLoading,
         directionsError,
         isGetDirectionsDisabled,
         setNavigationActiveField,
+        setActiveMode,
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
@@ -396,7 +398,12 @@ export default function MapScreen() {
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
                 onActiveFieldChange={setNavigationActiveField}
+<<<<<<< HEAD
                 onBuildingSelect={handleSearchSelect}
+=======
+                activeMode={activeMode}
+                onModeChange={setActiveMode}
+>>>>>>> origin/feature/ES-2
                 modeDurations={modeDurations}
                 tripSummary={routeSummary}
                 isLoading={isRouteLoading}
