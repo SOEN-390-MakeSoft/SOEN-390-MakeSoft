@@ -29,6 +29,12 @@ fi
 
 echo "Java and Maven are available. Preparing to run backend."
 
+# Force Java 17 (project requirement)
+export JAVA_HOME="$(/usr/libexec/java_home -v 17 2>/dev/null || /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home)"
+export PATH="$JAVA_HOME/bin:$PATH"
+echo "Using Java from: $JAVA_HOME"
+java -version
+
 cd "$(dirname "$0")/.." || exit 1
 cd backend-api || exit 1
 
