@@ -123,12 +123,24 @@ export default function NavigationScreen({
     else tripTitleText = "Select start and destination";
 
     const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
-    const chipColor = isColorBlind ? "#6c7a85" : "#9a2d3a";
+    const chipColor = isColorBlind ? "#6c7a85" : "#f6dce0";
     const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.15)";
     const closeBg = isColorBlind ? "#e6eaee" : "#f6dce0";
     const closeIcon = isColorBlind ? "#4b5862" : "#7f1f2a";
     const previewBg = isColorBlind ? "#e6eaee" : "#f6dce0";
     const previewTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";
+    const segmentTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";
+
+    const modes: Array<{
+        key: "walking" | "driving" | "transit";
+        label: string;
+        icon: keyof typeof MaterialIcons.glyphMap;
+        duration?: string;
+    }> = [
+        { key: "walking", label: "Walk", icon: "directions-walk", duration: modeDurations?.walking },
+        { key: "driving", label: "Car", icon: "directions-car", duration: modeDurations?.driving },
+        { key: "transit", label: "Shuttle", icon: "directions-bus", duration: modeDurations?.transit },
+    ];
 
     return (
         <View style={styles.overlay} pointerEvents="box-none">
@@ -164,7 +176,10 @@ export default function NavigationScreen({
                             <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
                         </View>
                     </View>
-                    <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: closeBg }]}>
+                    <Pressable
+                        onPress={onClose}
+                        style={[styles.closeButton, { backgroundColor: closeBg }]}
+                    >
                         <MaterialIcons name="close" size={18} color={closeIcon} />
                     </Pressable>
                 </View>
@@ -259,24 +274,30 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "space-between",
     },
-    tripModeRow: { flexDirection: "row", columnGap: 10 },
-    modeChip: {
+    segmentedControl: {
         flexDirection: "row",
         alignItems: "center",
-        columnGap: 6,
-        backgroundColor: "#9a2d3a",
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: 18,
+        padding: 4,
+        flex: 1,
+        marginRight: 12,
+        columnGap: 4,
     },
-    modeChipMuted: {
+    segment: {
+        flex: 1,
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "center",
         columnGap: 6,
-        backgroundColor: "rgba(255,255,255,0.15)",
-        paddingHorizontal: 10,
         paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: 14,
+    },
+    segmentActive: {
+        shadowColor: "#000",
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
     },
     modeChipDisabled: {
         flexDirection: "row",

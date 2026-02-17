@@ -89,6 +89,15 @@ type RouteSummary = {
     viaText: string;
 };
 
+type RouteMode = "driving" | "transit" | "walking";
+
+type RouteInfo = {
+    durationText: string;
+    durationSec: number;
+    distanceText: string;
+    viaText: string;
+};
+
 type ModeDurations = {
     driving?: string;
     walking?: string;
@@ -144,8 +153,14 @@ export function useNavigationBetweenBuildings({
         null
     );
     const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+    const [routeDetails, setRouteDetails] = useState<Record<RouteMode, RouteInfo | null>>({
+        driving: null,
+        transit: null,
+        walking: null,
+    });
     const [modeDurations, setModeDurations] = useState<ModeDurations>({});
     const [isRouteLoading, setIsRouteLoading] = useState(false);
+    const [activeMode, setActiveMode] = useState<RouteMode>("driving");
     const [navigationActiveField, setNavigationActiveField] = useState<
         "start" | "destination" | null
     >(null);
@@ -192,6 +207,12 @@ export function useNavigationBetweenBuildings({
         !hasDestinationLabel ||
         sameOriginDestination ||
         missingCoordinates;
+
+    const clearRouteState = useCallback(() => {
+        setRouteSummary(null);
+        setModeDurations({});
+        setRouteDetails({ driving: null, transit: null, walking: null });
+    }, []);
 
     const formatBuildingLabel = useCallback((name: string, code: string | null) => {
         if (!code) return name;
@@ -294,6 +315,8 @@ export function useNavigationBetweenBuildings({
 
         const load = async () => {
             setIsRouteLoading(true);
+            setModeDurations({});
+            setRouteDetails({ driving: null, transit: null, walking: null });
             try {
                 const [driving, walking] = await Promise.all([
                     fetchDirections("driving"),
@@ -403,6 +426,7 @@ export function useNavigationBetweenBuildings({
             const destinationCode =
                 remoteBuilding?.code ?? selectedBuilding?.code ?? null;
             setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
+            setActiveMode("driving");
             if (selectedBuilding) {
                 setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
             }
@@ -447,6 +471,7 @@ export function useNavigationBetweenBuildings({
         },
         [
             buildings,
+            clearRouteState,
             formatBuildingLabel,
             isNavigationOpen,
             navigationActiveField,
@@ -520,11 +545,13 @@ export function useNavigationBetweenBuildings({
         navigationStart,
         navigationDestination,
         routeSummary,
+        activeMode,
         modeDurations,
         isRouteLoading,
         directionsError,
         isGetDirectionsDisabled,
         setNavigationActiveField,
+        setActiveMode,
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
