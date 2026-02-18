@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import * as Location from "expo-location";
 import {
@@ -7,8 +7,68 @@ import {
     coordsEqual,
     type LatLng,
 } from "../utils/mapUtils";
+import { normalizeLabel, extractCodeFromName } from "../utils/stringUtils";
+import { BUILDING_POLYGONS } from "../data/buildingPolygons";
+import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
 
 const MAX_TAP_DISTANCE_METERS = 80;
+
+/** Decode a Google-encoded polyline string into an array of LatLng. */
+function decodePolyline(encoded: string): LatLng[] {
+    const points: LatLng[] = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+    while (index < encoded.length) {
+        let b: number;
+        let shift = 0;
+        let result = 0;
+        do {
+            b = (encoded.codePointAt(index++) ?? 0) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        lat += result & 1 ? ~(result >> 1) : result >> 1;
+
+        shift = 0;
+        result = 0;
+        do {
+            b = (encoded.codePointAt(index++) ?? 0) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        lng += result & 1 ? ~(result >> 1) : result >> 1;
+
+        points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+    }
+    return points;
+}
+
+function calculateBounds(coords: LatLng[]) {
+    let minLat = coords[0].latitude;
+    let maxLat = coords[0].latitude;
+    let minLng = coords[0].longitude;
+    let maxLng = coords[0].longitude;
+    for (const c of coords) {
+        if (c.latitude < minLat) minLat = c.latitude;
+        if (c.latitude > maxLat) maxLat = c.latitude;
+        if (c.longitude < minLng) minLng = c.longitude;
+        if (c.longitude > maxLng) maxLng = c.longitude;
+    }
+    return { minLat, maxLat, minLng, maxLng };
+}
+
+function boundsToRegion(bounds: ReturnType<typeof calculateBounds>): MapRegion {
+    const PADDING = 1.4;
+    const latDelta = (bounds.maxLat - bounds.minLat) * PADDING || 0.005;
+    const lngDelta = (bounds.maxLng - bounds.minLng) * PADDING || 0.005;
+    return {
+        latitude: (bounds.minLat + bounds.maxLat) / 2,
+        longitude: (bounds.minLng + bounds.maxLng) / 2,
+        latitudeDelta: latDelta,
+        longitudeDelta: lngDelta,
+    };
+}
 
 type Building = {
     id: string;
@@ -40,8 +100,37 @@ type RouteInfo = {
 
 type ModeDurations = {
     driving?: string;
-    transit?: string;
     walking?: string;
+};
+
+type TransportMode = 'driving' | 'walking';
+
+export type NavigationStep = {
+    instruction: string;
+    distanceText: string;
+    durationText: string;
+    maneuver?: string;
+};
+
+type ModeRoute = {
+    durationText: string;
+    durationSec: number;
+    distanceText: string;
+    viaText: string;
+    polyline: LatLng[];
+    steps: NavigationStep[];
+};
+
+type AllModeRoutes = {
+    driving?: ModeRoute | null;
+    walking?: ModeRoute | null;
+};
+
+type MapRegion = {
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
 };
 
 interface UseNavigationBetweenBuildingsParams {
@@ -76,6 +165,28 @@ export function useNavigationBetweenBuildings({
         "start" | "destination" | null
     >(null);
     const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
+    const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});
+    const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
+    const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
+    const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
+    const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
+
+    // Combined building list across both campuses for search/coordinate resolution
+    const allBuildings = useMemo<Building[]>(() => {
+        const fromPolygons = (polygons: Record<string, { name: string; polygon: readonly LatLng[] }>) =>
+            Object.entries(polygons)
+                .filter(([, r]) => r.polygon.length > 0)
+                .map(([id, r]) => ({
+                    id,
+                    name: r.name,
+                    code: extractCodeFromName(r.name),
+                    polygon: r.polygon,
+                }));
+        return [
+            ...fromPolygons(BUILDING_POLYGONS as Record<string, { name: string; polygon: readonly LatLng[] }>),
+            ...fromPolygons(LOYOLA_BUILDING_POLYGONS as Record<string, { name: string; polygon: readonly LatLng[] }>),
+        ];
+    }, []);
 
     const hasOrigin = navigationOrigin !== null;
     const hasDestinationLabel = navigationDestination.trim() !== "";
@@ -145,29 +256,60 @@ export function useNavigationBetweenBuildings({
 
     useEffect(() => {
         if (!isNavigationOpen) return;
-        if (!navigationOrigin || !navigationDestinationCoord) return;
-        if (sameOriginDestination || missingCoordinates) return;
+        if (!navigationOrigin || !navigationDestinationCoord) {
+            setIsRouteLoading(false);
+            return;
+        }
+        if (sameOriginDestination || missingCoordinates) {
+            setIsRouteLoading(false);
+            return;
+        }
 
         const key = getDirectionsKey();
-        if (!key) return;
+        if (!key) {
+            setIsRouteLoading(false);
+            return;
+        }
 
         let cancelled = false;
 
-        const fetchDirections = async (mode: RouteMode): Promise<RouteInfo | null> => {
+        const fetchDirections = async (
+            mode: "driving" | "walking"
+        ): Promise<ModeRoute | null> => {
             const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
             const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
-            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}&key=${key}`;
+            const trafficParam = mode === "driving" ? "&departure_time=now" : "";
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}${trafficParam}&key=${key}`;
             const response = await fetch(url);
             const data = await response.json();
             if (data.status !== "OK" || !data.routes?.length) return null;
             const route = data.routes[0];
             const leg = route.legs?.[0];
             if (!leg) return null;
+
+            const polyline: LatLng[] = route.overview_polyline?.points
+                ? decodePolyline(route.overview_polyline.points)
+                : [];
+
+            // Prefer duration_in_traffic for driving (requires departure_time=now)
+            const duration = leg.duration_in_traffic ?? leg.duration;
+
+            const steps: NavigationStep[] = (leg.steps ?? []).map(
+                (s: { html_instructions?: string; distance?: { text?: string }; duration?: { text?: string }; maneuver?: string }) => ({
+                    instruction: (s.html_instructions ?? "").replaceAll(/<[^>]*>/g, ""),
+                    distanceText: s.distance?.text ?? "",
+                    durationText: s.duration?.text ?? "",
+                    maneuver: s.maneuver,
+                })
+            );
+
             return {
-                durationText: leg.duration?.text ?? "",
-                durationSec: leg.duration?.value ?? 0,
+                durationText: duration?.text ?? "",
+                durationSec: duration?.value ?? 0,
                 distanceText: leg.distance?.text ?? "",
                 viaText: route.summary || "",
+                polyline,
+                steps,
             };
         };
 
@@ -176,16 +318,38 @@ export function useNavigationBetweenBuildings({
             setModeDurations({});
             setRouteDetails({ driving: null, transit: null, walking: null });
             try {
-                const [driving, transit, walking] = await Promise.all([
+                const [driving, walking] = await Promise.all([
                     fetchDirections("driving"),
-                    fetchDirections("transit"),
                     fetchDirections("walking"),
                 ]);
                 if (cancelled) return;
-                setRouteDetails({ driving, transit, walking });
+
+                setAllModeRoutes({ driving, walking });
+
+                // Show polyline + steps for the currently selected mode
+                const active = selectedTransportMode === 'driving' ? driving : walking;
+                if (active?.polyline && active.polyline.length > 0) {
+                    setRoutePolyline(active.polyline);
+                    setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
+                }
+                setNavigationSteps(active?.steps ?? []);
+
+                const primary = driving ?? walking;
+                if (primary) {
+                    const arrival = new Date(Date.now() + primary.durationSec * 1000);
+                    const arrivalText = arrival.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                    });
+                    setRouteSummary({
+                        arrivalText,
+                        distanceText: primary.distanceText,
+                        durationText: primary.durationText,
+                        viaText: primary.viaText || "Suggested route",
+                    });
+                }
                 setModeDurations({
                     driving: driving?.durationText,
-                    transit: transit?.durationText,
                     walking: walking?.durationText,
                 });
             } finally {
@@ -206,29 +370,54 @@ export function useNavigationBetweenBuildings({
         missingCoordinates,
     ]);
 
+    // When the user switches transport mode, update the displayed polyline
     useEffect(() => {
-        if (!isNavigationOpen) return;
-        const fallback =
-            routeDetails[activeMode] ??
-            routeDetails.driving ??
-            routeDetails.transit ??
-            routeDetails.walking;
-        if (!fallback) {
-            setRouteSummary(null);
+        if (!isNavigationOpen) {
+            setRoutePolyline([]);
+            setRouteRegion(null);
             return;
         }
-        const arrival = new Date(Date.now() + fallback.durationSec * 1000);
-        const arrivalText = arrival.toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-        });
-        setRouteSummary({
-            arrivalText,
-            distanceText: fallback.distanceText,
-            durationText: fallback.durationText,
-            viaText: fallback.viaText || "Suggested route",
-        });
-    }, [activeMode, isNavigationOpen, routeDetails]);
+        const route = selectedTransportMode === 'driving'
+            ? allModeRoutes.driving
+            : allModeRoutes.walking;
+        if (route?.polyline && route.polyline.length > 0) {
+            setRoutePolyline(route.polyline);
+            setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
+
+            // Update trip summary + steps to match the selected mode
+            const arrival = new Date(Date.now() + route.durationSec * 1000);
+            const arrivalText = arrival.toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+            });
+            setRouteSummary({
+                arrivalText,
+                distanceText: route.distanceText,
+                durationText: route.durationText,
+                viaText: route.viaText || "Suggested route",
+            });
+            setNavigationSteps(route.steps);
+        } else if (allModeRoutes.driving || allModeRoutes.walking) {
+            // Only clear when we genuinely have route data but the selected
+            // mode is unavailable.  When allModeRoutes is empty (a new fetch
+            // is in-flight after an endpoint change) we keep the previous
+            // polyline visible as a placeholder.
+            setRoutePolyline([]);
+            setRouteRegion(null);
+            setNavigationSteps([]);
+        }
+    }, [selectedTransportMode, allModeRoutes, isNavigationOpen]);
+
+    /** Clear stale trip text and invalidate cached routes so the next fetch
+     *  overwrites everything.  We set isRouteLoading immediately so the UI
+     *  shows "Loading route..." instead of "Select start and destination".
+     *  Old polyline, region, steps and modeDurations stay visible as
+     *  placeholders while the new route loads. */
+    const resetRouteState = useCallback(() => {
+        setRouteSummary(null);
+        setAllModeRoutes({});
+        setIsRouteLoading(true);
+    }, []);
 
     const openNavigationForBuilding = useCallback(
         (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
@@ -241,10 +430,10 @@ export function useNavigationBetweenBuildings({
             if (selectedBuilding) {
                 setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
             }
-            clearRouteState();
+            resetRouteState();
             setIsNavigationOpen(true);
         },
-        [clearRouteState, formatBuildingLabel]
+        [formatBuildingLabel, resetRouteState]
     );
 
     const handleMapBuildingPress = useCallback(
@@ -261,23 +450,23 @@ export function useNavigationBetweenBuildings({
             if (navigationActiveField === "start") {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
-                clearRouteState();
+                resetRouteState();
                 return;
             }
             if (navigationActiveField === "destination") {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
-                clearRouteState();
+                resetRouteState();
                 return;
             }
             if (navigationDestination) {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
-                clearRouteState();
+                resetRouteState();
             } else {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
-                clearRouteState();
+                resetRouteState();
             }
         },
         [
@@ -288,6 +477,7 @@ export function useNavigationBetweenBuildings({
             navigationActiveField,
             navigationDestination,
             onSelectBuilding,
+            resetRouteState,
         ]
     );
 
@@ -308,10 +498,45 @@ export function useNavigationBetweenBuildings({
         [buildings, handleMapBuildingPress, onBuildingNotFound]
     );
 
+    const handleSearchSelect = useCallback(
+        (field: "start" | "destination", name: string, code: string | null) => {
+            const label = formatBuildingLabel(name, code);
+            // Search across ALL campus buildings so cross-campus selections
+            // always resolve coordinates correctly.
+            const building = allBuildings.find((b) => {
+                if (code && b.code?.toUpperCase() === code.toUpperCase()) return true;
+                return normalizeLabel(b.name).includes(normalizeLabel(name));
+            });
+
+            if (field === "start") {
+                setNavigationStart(label);
+                if (name === "Your location") {
+                    setNavigationOrigin(null);
+                } else if (building) {
+                    setNavigationOrigin(polygonCentroid(building.polygon));
+                }
+            } else {
+                setNavigationDestination(label);
+                if (building) {
+                    setNavigationDestinationCoord(polygonCentroid(building.polygon));
+                }
+            }
+            resetRouteState();
+        },
+        [allBuildings, formatBuildingLabel, resetRouteState]
+    );
+
     const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
         setTapMarkerCoordinate(null);
+        setRouteSummary(null);
+        setAllModeRoutes({});
+        setModeDurations({});
+        setIsRouteLoading(false);
+        setRoutePolyline([]);
+        setRouteRegion(null);
+        setNavigationSteps([]);
     }, []);
 
 
@@ -330,7 +555,13 @@ export function useNavigationBetweenBuildings({
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
+        handleSearchSelect,
         closeNavigation,
         tapMarkerCoordinate,
+        selectedTransportMode,
+        setSelectedTransportMode,
+        routePolyline,
+        routeRegion,
+        navigationSteps,
     };
 }

@@ -1,10 +1,13 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import type { NavigationStep } from "../hooks/useNavigationBetweenBuildings";
 import NavigationMenu from "./NavigationMenu";
 import { useSettings } from "../context/settings";
 
 export type DirectionsErrorType = "same_origin_destination" | "missing_coordinates" | null;
+
+type TransportMode = 'driving' | 'walking';
 
 interface NavigationScreenProps {
     visible: boolean;
@@ -12,11 +15,9 @@ interface NavigationScreenProps {
     destinationLabel: string;
     onClose: () => void;
     onActiveFieldChange?: (field: "start" | "destination" | null) => void;
-    activeMode?: "driving" | "transit" | "walking";
-    onModeChange?: (mode: "driving" | "transit" | "walking") => void;
+    onBuildingSelect?: (field: "start" | "destination", name: string, code: string | null) => void;
     modeDurations?: {
         driving?: string;
-        transit?: string;
         walking?: string;
     };
     tripSummary?: {
@@ -28,6 +29,9 @@ interface NavigationScreenProps {
     isLoading?: boolean;
     directionsError?: DirectionsErrorType;
     isGetDirectionsDisabled?: boolean;
+    selectedTransportMode?: TransportMode;
+    onTransportModeChange?: (mode: TransportMode) => void;
+    navigationSteps?: NavigationStep[];
 }
 
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
@@ -35,19 +39,78 @@ const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string
     missing_coordinates: "Coordinates are missing for the selected name.",
 };
 
+const MANEUVER_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+    "turn-left": "turn-left",
+    "turn-right": "turn-right",
+    "turn-slight-left": "turn-slight-left",
+    "turn-slight-right": "turn-slight-right",
+    "turn-sharp-left": "turn-left",
+    "turn-sharp-right": "turn-right",
+    "uturn-left": "u-turn-left",
+    "uturn-right": "u-turn-right",
+    "merge": "merge",
+    "fork-left": "fork-left",
+    "fork-right": "fork-right",
+    "ramp-left": "turn-slight-left",
+    "ramp-right": "turn-slight-right",
+    "roundabout-left": "roundabout-left",
+    "roundabout-right": "roundabout-right",
+    "straight": "straight",
+};
+
+function getManeuverIcon(maneuver?: string): keyof typeof MaterialIcons.glyphMap {
+    if (!maneuver) return "straight";
+    return MANEUVER_ICONS[maneuver] ?? "straight";
+}
+
+function ModeChip({
+    mode,
+    icon,
+    label,
+    isSelected,
+    chipColor,
+    chipMutedColor,
+    onPress,
+}: Readonly<{
+    mode: TransportMode;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    label: string;
+    isSelected: boolean;
+    chipColor: string;
+    chipMutedColor: string;
+    onPress: (mode: TransportMode) => void;
+}>) {
+    return (
+        <Pressable
+            onPress={() => onPress(mode)}
+            testID={`mode-chip-${mode}`}
+            style={
+                isSelected
+                    ? [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }]
+                    : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
+            }
+        >
+            <MaterialIcons name={icon} size={18} color="#fff" />
+            <Text style={styles.modeText}>{label}</Text>
+        </Pressable>
+    );
+}
+
 export default function NavigationScreen({
     visible,
     startLabel,
     destinationLabel,
     onClose,
     onActiveFieldChange,
-    activeMode = "driving",
-    onModeChange,
+    onBuildingSelect,
     modeDurations,
     tripSummary,
     isLoading,
     directionsError = null,
     isGetDirectionsDisabled = true,
+    selectedTransportMode = 'driving',
+    onTransportModeChange,
+    navigationSteps = [],
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
     const isColorBlind = colourBlindMode;
@@ -60,8 +123,8 @@ export default function NavigationScreen({
     else tripTitleText = "Select start and destination";
 
     const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
-    const chipColor = isColorBlind ? "#6c7a85" : "#f6dce0";
-    const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.15)";
+    const chipColor = isColorBlind ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.30)";
+    const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.14)";
     const closeBg = isColorBlind ? "#e6eaee" : "#f6dce0";
     const closeIcon = isColorBlind ? "#4b5862" : "#7f1f2a";
     const previewBg = isColorBlind ? "#e6eaee" : "#f6dce0";
@@ -85,54 +148,33 @@ export default function NavigationScreen({
                 startLabel={startLabel}
                 destinationLabel={destinationLabel}
                 onActiveFieldChange={onActiveFieldChange}
+                onBuildingSelect={onBuildingSelect}
             />
 
             <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>
                 <View style={styles.bottomHeader}>
-                    <View style={[styles.segmentedControl, { backgroundColor: chipMutedColor }]}>
-                        {modes.map((mode) => {
-                            const isActive = activeMode === mode.key;
-                            return (
-                                <Pressable
-                                    key={mode.key}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected: isActive }}
-                                    accessibilityLabel={`Select ${mode.label} mode`}
-                                    onPress={() => onModeChange?.(mode.key)}
-                                    style={[
-                                        styles.segment,
-                                        isActive && [
-                                            styles.segmentActive,
-                                            { backgroundColor: chipColor },
-                                        ],
-                                    ]}
-                                >
-                                    <MaterialIcons
-                                        name={mode.icon}
-                                        size={16}
-                                        color={isActive ? segmentTextColor : "#fff"}
-                                    />
-                                    <View style={styles.segmentTextWrap}>
-                                        <Text
-                                            style={[
-                                                styles.segmentText,
-                                                isActive && { color: segmentTextColor },
-                                            ]}
-                                        >
-                                            {mode.label}
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.segmentMeta,
-                                                isActive && { color: segmentTextColor },
-                                            ]}
-                                        >
-                                            {mode.duration ?? "--"}
-                                        </Text>
-                                    </View>
-                                </Pressable>
-                            );
-                        })}
+                    <View style={styles.tripModeRow}>
+                        <ModeChip
+                            mode="driving"
+                            icon="directions-car"
+                            label={modeDurations?.driving ?? "--"}
+                            isSelected={selectedTransportMode === 'driving'}
+                            chipColor={chipColor}
+                            chipMutedColor={chipMutedColor}
+                            onPress={onTransportModeChange ?? (() => {})}
+                        />
+                        <ModeChip
+                            mode="walking"
+                            icon="directions-walk"
+                            label={modeDurations?.walking ?? "--"}
+                            isSelected={selectedTransportMode === 'walking'}
+                            chipColor={chipColor}
+                            chipMutedColor={chipMutedColor}
+                            onPress={onTransportModeChange ?? (() => {})}
+                        />
+                        <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                            <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+                        </View>
                     </View>
                     <Pressable
                         onPress={onClose}
@@ -181,6 +223,34 @@ export default function NavigationScreen({
                         Get Directions
                     </Text>
                 </Pressable>
+
+                {navigationSteps.length > 0 && (
+                    <ScrollView
+                        style={styles.stepsContainer}
+                        testID="navigation-steps-list"
+                        nestedScrollEnabled
+                    >
+                        {navigationSteps.map((step, index) => (
+                            <View key={`step-${step.instruction.slice(0, 30)}-${step.distanceText}`} style={styles.stepRow} testID={`nav-step-${index}`}>
+                                <View style={styles.stepIconCol}>
+                                    <MaterialIcons
+                                        name={getManeuverIcon(step.maneuver)}
+                                        size={20}
+                                        color="#fff"
+                                    />
+                                </View>
+                                <View style={styles.stepContent}>
+                                    <Text style={styles.stepInstruction} numberOfLines={3}>
+                                        {step.instruction}
+                                    </Text>
+                                    <Text style={styles.stepMeta}>
+                                        {step.distanceText}{step.durationText ? ` · ${step.durationText}` : ""}
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </ScrollView>
+                )}
             </View>
         </View>
     );
@@ -203,6 +273,33 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+    },
+    tripModeRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 8,
+        flexWrap: "nowrap",
+        paddingRight: 40,
+    },
+    modeChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    modeChipSelected: {
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.75)",
+    },
+    modeChipMuted: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
     },
     segmentedControl: {
         flexDirection: "row",
@@ -229,9 +326,16 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         elevation: 2,
     },
-    segmentTextWrap: { alignItems: "center" },
-    segmentText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-    segmentMeta: { color: "#fff", fontSize: 11, fontWeight: "600" },
+    modeChipDisabled: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(255,255,255,0.08)",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        opacity: 0.45,
+    },
+    modeText: { color: "#fff", fontSize: 13, fontWeight: "600" },
     closeButton: {
         width: 32,
         height: 32,
@@ -273,4 +377,34 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     getDirectionsText: { fontSize: 14, fontWeight: "700" },
+    stepsContainer: {
+        marginTop: 14,
+        maxHeight: 220,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: "rgba(255,255,255,0.2)",
+        paddingTop: 10,
+    },
+    stepRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        marginBottom: 12,
+    },
+    stepIconCol: {
+        width: 32,
+        alignItems: "center",
+        paddingTop: 2,
+    },
+    stepContent: {
+        flex: 1,
+    },
+    stepInstruction: {
+        fontSize: 14,
+        color: "#fff",
+        fontWeight: "500",
+    },
+    stepMeta: {
+        fontSize: 12,
+        color: "rgba(255,255,255,0.65)",
+        marginTop: 2,
+    },
 });

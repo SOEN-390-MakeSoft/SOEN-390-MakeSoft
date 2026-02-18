@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { BUILDING_ADDRESSES } from "../data/building-addresses";
@@ -13,6 +13,7 @@ interface NavigationMenuProps {
     startLabel?: string;
     destinationLabel?: string;
     onActiveFieldChange?: (field: ActiveField) => void;
+    onBuildingSelect?: (field: "start" | "destination", name: string, code: string | null) => void;
 }
 
 type SearchEntry = {
@@ -31,10 +32,13 @@ export default function NavigationMenu({
     startLabel = "Your location",
     destinationLabel = "",
     onActiveFieldChange,
+    onBuildingSelect,
 }: NavigationMenuProps) {
     const { colourBlindMode } = useSettings();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [activeField, setActiveField] = useState<ActiveField>(null);
+    const activeFieldRef = useRef<ActiveField>(null);
+    const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [startQuery, setStartQuery] = useState(startLabel);
     const [destinationQuery, setDestinationQuery] = useState(destinationLabel);
     const isColorBlind = colourBlindMode;
@@ -56,6 +60,23 @@ export default function NavigationMenu({
     useEffect(() => {
         onActiveFieldChange?.(activeField);
     }, [activeField, onActiveFieldChange]);
+
+    const activateField = useCallback((field: ActiveField) => {
+        if (blurTimer.current) {
+            clearTimeout(blurTimer.current);
+            blurTimer.current = null;
+        }
+        activeFieldRef.current = field;
+        setActiveField(field);
+    }, []);
+
+    const deactivateField = useCallback(() => {
+        blurTimer.current = setTimeout(() => {
+            blurTimer.current = null;
+            activeFieldRef.current = null;
+            setActiveField(null);
+        }, 400);
+    }, []);
 
     const activeQuery = activeField === "start" ? startQuery : destinationQuery;
     const buildingOptions = useMemo<SearchEntry[]>(() => {
@@ -92,13 +113,20 @@ export default function NavigationMenu({
         }).slice(0, 6);
     }, [activeQuery, buildingOptions]);
 
-    const handleSelect = (entry: SearchEntry) => {
-        const label = buildLabel(entry.name, entry.code);
-        if (activeField === "start") {
-            setStartQuery(label);
-        } else if (activeField === "destination") {
-            setDestinationQuery(label);
+    const handleSelect = (field: "start" | "destination", entry: SearchEntry) => {
+        if (blurTimer.current) {
+            clearTimeout(blurTimer.current);
+            blurTimer.current = null;
         }
+        const label = buildLabel(entry.name, entry.code);
+        if (field === "start") {
+            setStartQuery(label);
+            onBuildingSelect?.("start", entry.name, entry.code);
+        } else {
+            setDestinationQuery(label);
+            onBuildingSelect?.("destination", entry.name, entry.code);
+        }
+        activeFieldRef.current = null;
         setActiveField(null);
     };
 
@@ -117,8 +145,8 @@ export default function NavigationMenu({
                 <TextInput
                     value={value}
                     onChangeText={setValue}
-                    onFocus={() => setActiveField(field)}
-                    onBlur={() => setActiveField(null)}
+                    onFocus={() => activateField(field)}
+                    onBlur={deactivateField}
                     placeholder={placeholder}
                     placeholderTextColor="#6b6b6b"
                     style={styles.routeInput}
@@ -180,7 +208,7 @@ export default function NavigationMenu({
                                     results.length > 0 && styles.resultDivider,
                                 ]}
                                 onPress={() =>
-                                    handleSelect({
+                                    handleSelect("start", {
                                         name: "Your location",
                                         code: null,
                                         address: null,
@@ -204,7 +232,7 @@ export default function NavigationMenu({
                                         styles.resultItem,
                                         index < results.length - 1 && styles.resultDivider,
                                     ]}
-                                    onPress={() => handleSelect(entry)}
+                                    onPress={() => handleSelect(activeField, entry)}
                                 >
                                     <Text style={styles.resultTitle} numberOfLines={1}>
                                         {label}

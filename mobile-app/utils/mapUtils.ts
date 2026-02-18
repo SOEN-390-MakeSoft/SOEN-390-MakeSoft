@@ -13,12 +13,18 @@ const DEFAULT_REGION = {
  * @returns Center coordinate of the polygon
  */
 export function polygonCentroid(points: readonly LatLng[]): LatLng {
-    if (points.length === 0) return DEFAULT_REGION;
-    const sum = points.reduce(
+    if (!points || points.length === 0) return DEFAULT_REGION;
+
+    const validPoints = points.filter(
+        (p) => p && p.latitude != null && p.longitude != null
+    );
+    if (validPoints.length === 0) return DEFAULT_REGION;
+
+    const sum = validPoints.reduce(
         (acc, p) => ({ latitude: acc.latitude + p.latitude, longitude: acc.longitude + p.longitude }),
         { latitude: 0, longitude: 0 }
     );
-    return { latitude: sum.latitude / points.length, longitude: sum.longitude / points.length };
+    return { latitude: sum.latitude / validPoints.length, longitude: sum.longitude / validPoints.length };
 }
 
 /**
@@ -38,14 +44,22 @@ export function formatAddress(record: { housenumber?: string; street?: string })
  * @returns true if point is inside the polygon
  */
 export function pointInPolygon(point: LatLng, polygon: readonly LatLng[]): boolean {
+    if (!point || point.latitude == null || point.longitude == null) return false;
+    if (!polygon || polygon.length === 0) return false;
+
     const { latitude: y, longitude: x } = point;
     let inside = false;
     const n = polygon.length;
     for (let i = 0, j = n - 1; i < n; j = i++) {
-        const xi = polygon[i].longitude;
-        const yi = polygon[i].latitude;
-        const xj = polygon[j].longitude;
-        const yj = polygon[j].latitude;
+        const pi = polygon[i];
+        const pj = polygon[j];
+        if (!pi || !pj || pi.latitude == null || pi.longitude == null || pj.latitude == null || pj.longitude == null) {
+            continue;
+        }
+        const xi = pi.longitude;
+        const yi = pi.latitude;
+        const xj = pj.longitude;
+        const yj = pj.latitude;
         const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
         if (intersect) inside = !inside;
     }
@@ -102,12 +116,22 @@ export function findBuildingAtOrNearCoordinate(
     buildings: readonly BuildingWithPolygon[],
     maxDistanceMeters: number
 ): BuildingWithPolygon | null {
-    const inside = buildings.find((b) => pointInPolygon(point, b.polygon));
+    if (!point || point.latitude == null || point.longitude == null) return null;
+    if (!buildings || buildings.length === 0) return null;
+
+    // Filter buildings with valid polygons
+    const validBuildings = buildings.filter(
+        (b) => b.polygon && b.polygon.length > 0 && b.polygon.every(
+            (p) => p && p.latitude != null && p.longitude != null
+        )
+    );
+
+    const inside = validBuildings.find((b) => pointInPolygon(point, b.polygon));
     if (inside) return inside;
 
     let closest: BuildingWithPolygon | null = null;
     let minDist = maxDistanceMeters;
-    for (const building of buildings) {
+    for (const building of validBuildings) {
         const centroid = polygonCentroid(building.polygon);
         const d = distanceMeters(point, centroid);
         if (d < minDist) {

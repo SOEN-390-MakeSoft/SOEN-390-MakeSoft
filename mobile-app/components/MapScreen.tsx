@@ -6,7 +6,7 @@ import {
     View,
     Text,
 } from "react-native";
-import MapView, { Marker, Polygon } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useTheme } from "tamagui";
 import CampusSwitch from "./CampusSwitch";
@@ -156,8 +156,14 @@ export default function MapScreen() {
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
+        handleSearchSelect,
         closeNavigation,
         tapMarkerCoordinate,
+        selectedTransportMode,
+        setSelectedTransportMode,
+        routePolyline,
+        routeRegion,
+        navigationSteps,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -198,6 +204,13 @@ export default function MapScreen() {
 
     // Get selected building for info card
     const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+
+    // Auto-zoom camera to fit the route polyline
+    useEffect(() => {
+        if (routeRegion) {
+            mapRef.current?.animateToRegion(routeRegion, 600);
+        }
+    }, [routeRegion]);
 
 
     const menuTop =
@@ -278,8 +291,10 @@ export default function MapScreen() {
                 showsCompass={false}
                 showsMyLocationButton={false}
                 onPress={(e) => {
-                    const { coordinate } = e.nativeEvent;
-                    handleMapCoordinatePress(coordinate);
+                    const coordinate = e.nativeEvent?.coordinate;
+                    if (coordinate?.latitude != null && coordinate?.longitude != null) {
+                        handleMapCoordinatePress(coordinate);
+                    }
                 }}
             >
                 {tapMarkerCoordinate && (
@@ -287,6 +302,23 @@ export default function MapScreen() {
                         coordinate={tapMarkerCoordinate}
                         testID="map-tap-marker"
                         pinColor={brandRed}
+                    />
+                )}
+                {routePolyline.length > 0 && selectedTransportMode === 'driving' && (
+                    <Polyline
+                        key="route-driving"
+                        coordinates={routePolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={5}
+                    />
+                )}
+                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                    <Polyline
+                        key="route-walking"
+                        coordinates={routePolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={5}
+                        lineDashPattern={[10, 6]}
                     />
                 )}
                 {buildings.map((building) => {
@@ -366,13 +398,15 @@ export default function MapScreen() {
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
                 onActiveFieldChange={setNavigationActiveField}
-                activeMode={activeMode}
-                onModeChange={setActiveMode}
+                onBuildingSelect={handleSearchSelect}
                 modeDurations={modeDurations}
                 tripSummary={routeSummary}
                 isLoading={isRouteLoading}
                 directionsError={directionsError}
                 isGetDirectionsDisabled={isGetDirectionsDisabled}
+                selectedTransportMode={selectedTransportMode}
+                onTransportModeChange={setSelectedTransportMode}
+                navigationSteps={navigationSteps}
             />
 
             {/* Quick Pick Panel and Location Button */}
@@ -421,7 +455,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     campusToggleNavigation: {
-        marginTop: 80,
+        marginTop: Platform.OS === "ios" ? 56 : 80,
     },
     toast: {
         position: "absolute",
