@@ -255,7 +255,7 @@ export default function NavigationScreen({
                         {hasSteps && (
                             <View testID="navigation-steps-list" style={styles.stepsList}>
                                 {navigationSteps.map((step, index) => (
-                                    <View key={index} testID={`nav-step-${index}`} style={styles.stepRow}>
+                                    <View key={step.instruction} testID={`nav-step-${index}`} style={styles.stepRow}>
                                         <Text style={styles.stepInstruction}>{step.instruction}</Text>
                                         <Text style={styles.stepMeta}>
                                             {step.durationText
