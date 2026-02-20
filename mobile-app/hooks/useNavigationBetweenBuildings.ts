@@ -110,6 +110,7 @@ export type NavigationStep = {
     distanceText: string;
     durationText: string;
     maneuver?: string;
+    focusCoordinate?: LatLng;
 };
 
 type ModeRoute = {
@@ -295,12 +296,35 @@ export function useNavigationBetweenBuildings({
             const duration = leg.duration_in_traffic ?? leg.duration;
 
             const steps: NavigationStep[] = (leg.steps ?? []).map(
-                (s: { html_instructions?: string; distance?: { text?: string }; duration?: { text?: string }; maneuver?: string }) => ({
-                    instruction: (s.html_instructions ?? "").replaceAll(/<[^>]*>/g, ""),
-                    distanceText: s.distance?.text ?? "",
-                    durationText: s.duration?.text ?? "",
-                    maneuver: s.maneuver,
-                })
+                (s: {
+                    html_instructions?: string;
+                    distance?: { text?: string };
+                    duration?: { text?: string };
+                    maneuver?: string;
+                    start_location?: { lat?: number; lng?: number };
+                    end_location?: { lat?: number; lng?: number };
+                }) => {
+                    let focusCoordinate: LatLng | undefined;
+                    if (s.end_location?.lat != null && s.end_location?.lng != null) {
+                        focusCoordinate = {
+                            latitude: s.end_location.lat,
+                            longitude: s.end_location.lng,
+                        };
+                    } else if (s.start_location?.lat != null && s.start_location?.lng != null) {
+                        focusCoordinate = {
+                            latitude: s.start_location.lat,
+                            longitude: s.start_location.lng,
+                        };
+                    }
+
+                    return {
+                        instruction: (s.html_instructions ?? "").replaceAll(/<[^>]*>/g, ""),
+                        distanceText: s.distance?.text ?? "",
+                        durationText: s.duration?.text ?? "",
+                        maneuver: s.maneuver,
+                        focusCoordinate,
+                    };
+                }
             );
 
             return {

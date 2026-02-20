@@ -6,13 +6,19 @@ interface DirectionButtonProps {
     onPress?: () => void;
     disabled?: boolean;
     label?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    iconColor?: string;
 }
 
 export default function DirectionButton({
     onPress,
     disabled = false,
     label = "Directions",
-}: DirectionButtonProps) {
+    backgroundColor = "#b21b2c",
+    textColor = "#fff",
+    iconColor = "#fff",
+}: Readonly<DirectionButtonProps>) {
     return (
         <Pressable
             accessibilityRole="button"
@@ -21,12 +27,13 @@ export default function DirectionButton({
             disabled={disabled}
             style={({ pressed }) => [
                 styles.button,
+                { backgroundColor },
                 pressed && styles.buttonPressed,
                 disabled && styles.buttonDisabled,
             ]}
         >
-            <MaterialIcons name="assistant-direction" size={18} color="#fff" />
-            <Text style={styles.text}>{label}</Text>
+            <MaterialIcons name="assistant-direction" size={18} color={iconColor} />
+            <Text style={[styles.text, { color: textColor }]}>{label}</Text>
         </Pressable>
     );
 }
@@ -37,7 +44,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         columnGap: 8,
-        backgroundColor: "#b21b2c",
         paddingHorizontal: 18,
         paddingVertical: 9,
         borderRadius: 20,
@@ -45,5 +51,5 @@ const styles = StyleSheet.create({
     },
     buttonPressed: { opacity: 0.9 },
     buttonDisabled: { opacity: 0.5 },
-    text: { color: "#fff", fontSize: 15, fontWeight: "600" },
+    text: { fontSize: 15, fontWeight: "600" },
 });
