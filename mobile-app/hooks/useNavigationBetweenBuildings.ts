@@ -303,10 +303,16 @@ export function useNavigationBetweenBuildings({
             const route = data.routes[0];
             const leg = route.legs?.[0];
             if (!leg) return null;            
-            const polyline: LatLng[] = (leg.steps ?? []).flatMap(
+            const stepPolyline: LatLng[] = (leg.steps ?? []).flatMap(
                 (s: { polyline?: { points?: string } }) =>
                     s.polyline?.points ? decodePolyline(s.polyline.points) : []
             );
+            const overviewPolyline =
+                route.overview_polyline?.points
+                    ? decodePolyline(route.overview_polyline.points)
+                    : [];
+            const polyline: LatLng[] =
+                stepPolyline.length > 0 ? stepPolyline : overviewPolyline;
 
             // Prefer duration_in_traffic for driving (requires departure_time=now)
             const duration = leg.duration_in_traffic ?? leg.duration;
@@ -509,18 +515,25 @@ export function useNavigationBetweenBuildings({
                 setNavigationDestinationPolygon(building.polygon);
                 resetRouteState();
                 return;
-            }            // No active field — always set/update the destination
-            // (if a route is already showing, tapping a building updates the destination, not the start)
+            }
+            // No active field: if destination is already chosen, populate start.
+            // Otherwise set destination.
+            if (navigationDestination.trim() !== "") {
+                setNavigationStart(label);
+                setNavigationOrigin(centroid);
+                resetRouteState();
+                return;
+            }
             setNavigationDestination(label);
             setNavigationDestinationCoord(centroid);
             setNavigationDestinationPolygon(building.polygon);
             resetRouteState();
         },        [
             buildings,
-            clearRouteState,
             formatBuildingLabel,
             isNavigationOpen,
             navigationActiveField,
+            navigationDestination,
             onSelectBuilding,
             resetRouteState,
         ]
