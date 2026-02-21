@@ -28,7 +28,7 @@ interface SearchBarProps {
     searchResults: SearchResult[];
     onSelectResult: (result: SearchResult) => void;
     onOpenMenu: () => void;
-    inputRef: React.RefObject<TextInput>;
+    inputRef: React.RefObject<TextInput | null>;
     brandColor: string;
     logoSource: ImageSourcePropType;
 }

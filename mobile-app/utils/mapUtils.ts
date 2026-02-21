@@ -138,6 +138,52 @@ export function findBuildingAtOrNearCoordinate(
             minDist = d;
             closest = building;
         }
+    }    return closest;
+}
+
+// Bounding boxes for each Concordia campus
+const SGW_BOUNDS = { minLat: 45.494, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
+const LOYOLA_BOUNDS = { minLat: 45.454, maxLat: 45.464, minLng: -73.647, maxLng: -73.633 };
+
+function inBounds(point: LatLng, bounds: typeof SGW_BOUNDS): boolean {
+    return (
+        point.latitude >= bounds.minLat &&
+        point.latitude <= bounds.maxLat &&
+        point.longitude >= bounds.minLng &&
+        point.longitude <= bounds.maxLng
+    );
+}
+
+/**
+ * Returns true when origin and destination are on different Concordia campuses
+ * (one is at SGW and the other is at Loyola).
+ */
+export function isCrossCampusRoute(origin: LatLng, destination: LatLng): boolean {
+    const originSGW = inBounds(origin, SGW_BOUNDS);
+    const originLoyola = inBounds(origin, LOYOLA_BOUNDS);
+    const destSGW = inBounds(destination, SGW_BOUNDS);
+    const destLoyola = inBounds(destination, LOYOLA_BOUNDS);
+    return (originSGW && destLoyola) || (originLoyola && destSGW);
+}
+
+/**
+ * Returns the vertex of a polygon that is closest to the given reference point.
+ * Useful for snapping a navigation destination to the building edge (near the
+ * street) instead of routing all the way to the interior centroid.
+ */
+export function nearestPolygonVertex(
+    reference: LatLng,
+    polygon: readonly LatLng[]
+): LatLng {
+    if (!polygon || polygon.length === 0) return reference;
+    let nearest = polygon[0];
+    let minDist = distanceMeters(reference, polygon[0]);
+    for (const vertex of polygon) {
+        const d = distanceMeters(reference, vertex);
+        if (d < minDist) {
+            minDist = d;
+            nearest = vertex;
+        }
     }
-    return closest;
+    return nearest;
 }

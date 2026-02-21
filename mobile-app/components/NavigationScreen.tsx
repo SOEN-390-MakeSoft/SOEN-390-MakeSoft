@@ -7,7 +7,7 @@ import { useSettings } from "../context/settings";
 
 export type DirectionsErrorType = "same_origin_destination" | "missing_coordinates" | null;
 
-type TransportMode = 'driving' | 'walking';
+type TransportMode = 'driving' | 'walking' | 'shuttle';
 
 interface NavigationScreenProps {
     visible: boolean;
@@ -19,6 +19,7 @@ interface NavigationScreenProps {
     modeDurations?: {
         driving?: string;
         walking?: string;
+        shuttle?: string;
     };
     tripSummary?: {
         arrivalText: string;
@@ -32,6 +33,7 @@ interface NavigationScreenProps {
     selectedTransportMode?: TransportMode;
     onTransportModeChange?: (mode: TransportMode) => void;
     navigationSteps?: NavigationStep[];
+    isCrossCampus?: boolean;
 }
 
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
@@ -111,6 +113,7 @@ export default function NavigationScreen({
     selectedTransportMode = 'driving',
     onTransportModeChange,
     navigationSteps = [],
+    isCrossCampus = false,
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
     const isColorBlind = colourBlindMode;
@@ -129,17 +132,16 @@ export default function NavigationScreen({
     const closeIcon = isColorBlind ? "#4b5862" : "#7f1f2a";
     const previewBg = isColorBlind ? "#e6eaee" : "#f6dce0";
     const previewTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";
-    const segmentTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";
-
+    const segmentTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";    
     const modes: Array<{
-        key: "walking" | "driving" | "transit";
+        key: "walking" | "driving" | "shuttle";
         label: string;
         icon: keyof typeof MaterialIcons.glyphMap;
         duration?: string;
     }> = [
         { key: "walking", label: "Walk", icon: "directions-walk", duration: modeDurations?.walking },
         { key: "driving", label: "Car", icon: "directions-car", duration: modeDurations?.driving },
-        { key: "transit", label: "Shuttle", icon: "directions-bus", duration: modeDurations?.transit },
+        { key: "shuttle", label: "Shuttle", icon: "directions-bus", duration: modeDurations?.shuttle },
     ];
 
     return (
@@ -162,7 +164,7 @@ export default function NavigationScreen({
                             chipColor={chipColor}
                             chipMutedColor={chipMutedColor}
                             onPress={onTransportModeChange ?? (() => {})}
-                        />
+                        />                        
                         <ModeChip
                             mode="walking"
                             icon="directions-walk"
@@ -172,9 +174,21 @@ export default function NavigationScreen({
                             chipMutedColor={chipMutedColor}
                             onPress={onTransportModeChange ?? (() => {})}
                         />
-                        <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
-                            <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
-                        </View>
+                        {isCrossCampus ? (
+                            <ModeChip
+                                mode="shuttle"
+                                icon="directions-bus"
+                                label={modeDurations?.shuttle ?? "--"}
+                                isSelected={selectedTransportMode === 'shuttle'}
+                                chipColor={chipColor}
+                                chipMutedColor={chipMutedColor}
+                                onPress={onTransportModeChange ?? (() => {})}
+                            />
+                        ) : (
+                            <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                                <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+                            </View>
+                        )}
                     </View>
                     <Pressable
                         onPress={onClose}
@@ -224,23 +238,23 @@ export default function NavigationScreen({
                     </Text>
                 </Pressable>
 
-                {navigationSteps.length > 0 && (
+                {navigationSteps.length > 0 && (                    
                     <ScrollView
                         style={styles.stepsContainer}
                         testID="navigation-steps-list"
                         nestedScrollEnabled
-                    >
+                    >                        
                         {navigationSteps.map((step, index) => (
-                            <View key={`step-${step.instruction.slice(0, 30)}-${step.distanceText}`} style={styles.stepRow} testID={`nav-step-${index}`}>
+                            <View key={`step-${step.instruction.slice(0, 30)}-${step.distanceText}`} style={[styles.stepRow, step.isShuttleLeg && styles.shuttleStepRow]} testID={`nav-step-${index}`}>
                                 <View style={styles.stepIconCol}>
                                     <MaterialIcons
-                                        name={getManeuverIcon(step.maneuver)}
-                                        size={20}
+                                        name={step.isShuttleLeg ? "directions-bus" : getManeuverIcon(step.maneuver)}
+                                        size={step.isShuttleLeg ? 24 : 20}
                                         color="#fff"
                                     />
                                 </View>
                                 <View style={styles.stepContent}>
-                                    <Text style={styles.stepInstruction} numberOfLines={3}>
+                                    <Text style={step.isShuttleLeg ? styles.shuttleStepInstruction : styles.stepInstruction} numberOfLines={4}>
                                         {step.instruction}
                                     </Text>
                                     <Text style={styles.stepMeta}>
@@ -401,10 +415,22 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#fff",
         fontWeight: "500",
-    },
+    },    
     stepMeta: {
         fontSize: 12,
         color: "rgba(255,255,255,0.65)",
         marginTop: 2,
+    },
+    shuttleStepRow: {
+        backgroundColor: "rgba(255,255,255,0.12)",
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        marginBottom: 12,
+    },
+    shuttleStepInstruction: {
+        fontSize: 14,
+        color: "#fff",
+        fontWeight: "700",
     },
 });

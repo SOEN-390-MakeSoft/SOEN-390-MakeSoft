@@ -158,12 +158,13 @@ export default function MapScreen() {
         handleMapCoordinatePress,
         handleSearchSelect,
         closeNavigation,
-        tapMarkerCoordinate,
+        tapMarkerCoordinate,        
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
         routeRegion,
         navigationSteps,
+        isCrossCampus,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -311,14 +312,20 @@ export default function MapScreen() {
                         strokeColor="#4A89F3"
                         strokeWidth={5}
                     />
-                )}
-                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                )}                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
                     <Polyline
                         key="route-walking"
                         coordinates={routePolyline}
                         strokeColor="#4A89F3"
                         strokeWidth={5}
                         lineDashPattern={[10, 6]}
+                    />
+                )}                {routePolyline.length > 0 && selectedTransportMode === 'shuttle' && (
+                    <Polyline
+                        key="route-shuttle"
+                        coordinates={routePolyline}
+                        strokeColor="#8e2334"
+                        strokeWidth={5}
                     />
                 )}
                 {buildings.map((building) => {
@@ -390,8 +397,7 @@ export default function MapScreen() {
                     openNavigationForBuilding(selectedBuilding, remoteBuilding);
                     handleCloseCard();
                 }}
-            />
-
+            />            
             <NavigationScreen
                 visible={isNavigationOpen}
                 startLabel={navigationStart}
@@ -407,6 +413,7 @@ export default function MapScreen() {
                 selectedTransportMode={selectedTransportMode}
                 onTransportModeChange={setSelectedTransportMode}
                 navigationSteps={navigationSteps}
+                isCrossCampus={isCrossCampus}
             />
 
             {/* Quick Pick Panel and Location Button */}

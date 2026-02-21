@@ -10,6 +10,13 @@ type Building = {
     polygon: readonly { latitude: number; longitude: number }[];
 };
 
+type SearchResult = {
+    id: string;
+    name: string;
+    address: string | null;
+    code: string | null;
+};
+
 /**
  * Hook to manage search functionality including query, focus state, and results
  */
@@ -19,7 +26,7 @@ export function useSearch(buildings: Building[], onSelectResult: (building: Buil
     const searchInputRef = useRef<TextInput>(null);
 
     // Memoized search results filtering
-    const searchResults = useMemo(() => {
+    const searchResults = useMemo<SearchResult[]>(() => {
         const query = normalizeLabel(searchQuery);
         if (!query) return [];
         return buildings
@@ -42,16 +49,16 @@ export function useSearch(buildings: Building[], onSelectResult: (building: Buil
     const handleSearchSubmit = () => {
         if (searchResults.length === 0) return;
         handleSelectSearchResult(searchResults[0]);
-    };
-
+    };    
     /**
      * Handles selection of a search result
      */
-    const handleSelectSearchResult = (building: Building) => {
-        setSearchQuery(building.name);
+    const handleSelectSearchResult = (result: SearchResult) => {
+        setSearchQuery(result.name);
         setIsSearchFocused(false);
         searchInputRef.current?.blur();
-        onSelectResult(building);
+        const building = buildings.find((b) => b.id === result.id);
+        if (building) onSelectResult(building);
     };
 
     return {
