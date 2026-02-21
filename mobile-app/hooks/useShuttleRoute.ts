@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import {
+    getTodaySchedule,
     getNextDeparture,
     timeToMinutes,
     minutesToTime,
@@ -8,12 +9,12 @@ import {
     type ShuttleStop,
 } from "../data/shuttleSchedule";
 import type { LatLng } from "../utils/mapUtils";
-import { isCrossCampusRoute, nearestPolygonVertex } from "../utils/mapUtils";
+import { isCrossCampusRoute, nearestPolygonVertex, getCampusFromCoordinate } from "../utils/mapUtils";
 
-// Fixed shuttle stop coordinates — on the street at the official stop locations
-// SGW:    1455 De Maisonneuve Blvd W, east side of Hall Building
+// Fixed shuttle hub coordinates (street-facing pickup/dropoff).
+// SGW hub:    Hall Building stop (1455 De Maisonneuve Blvd W)
 export const SHUTTLE_STOP_SGW: LatLng = { latitude: 45.4972, longitude: -73.5791 };
-// Loyola: 7200 Sherbrooke St W, south-east corner of campus on Sherbrooke
+// Loyola hub: Chapel-side stop (7200 Sherbrooke St W vicinity)
 export const SHUTTLE_STOP_LOYOLA: LatLng = { latitude: 45.4576, longitude: -73.6387 };
 
 export type ShuttleNavigationStep = {
@@ -24,14 +25,21 @@ export type ShuttleNavigationStep = {
     isShuttleLeg?: boolean;
 };
 
+export type ShuttleRouteSegment = {
+    kind: "walking" | "shuttle";
+    polyline: LatLng[];
+};
+
 export type ShuttleRouteResult = {
     steps: ShuttleNavigationStep[];
+    segments: ShuttleRouteSegment[];
     departureStop: ShuttleStop;
     departureTime: string;   // "HH:MM" 24h
     arrivalTime: string;     // "HH:MM" 24h
     departureTimeFormatted: string;  // "H:MM AM/PM"
     arrivalTimeFormatted: string;    // "H:MM AM/PM"
     durationText: string;
+    durationSec: number;
     distanceText: string;
     polyline: LatLng[];
 } | null;
@@ -154,12 +162,9 @@ export async function buildShuttleRoute(
     if (!key) return null;
 
     // Determine which campus the user is departing from
-    const SGW_BOUNDS = { minLat: 45.494, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
-    const originIsAtSGW =
-        origin.latitude >= SGW_BOUNDS.minLat &&
-        origin.latitude <= SGW_BOUNDS.maxLat &&
-        origin.longitude >= SGW_BOUNDS.minLng &&
-        origin.longitude <= SGW_BOUNDS.maxLng;
+    const originCampus = getCampusFromCoordinate(origin);
+    if (!originCampus) return null;
+    const originIsAtSGW = originCampus === "SGW";
 
     const departureStop: ShuttleStop = originIsAtSGW ? "SGW" : "Loyola";
     const pickupCoord = originIsAtSGW ? SHUTTLE_STOP_SGW : SHUTTLE_STOP_LOYOLA;
@@ -176,12 +181,6 @@ export async function buildShuttleRoute(
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const nextBus = getNextDeparture(departureStop, currentMinutes);
-    if (!nextBus) return null;
-
-    const departureMinutes = timeToMinutes(nextBus.time);    const arrivalAtDropoffMinutes = departureMinutes + SHUTTLE_RIDE_MINUTES;
-    const arrivalTime = minutesToTime(arrivalAtDropoffMinutes);
-
     // Fetch all three legs in parallel
     const [walkToStop, shuttleDrivePolyline, walkFromStop] = await Promise.all([
         fetchWalkingLeg(origin, pickupCoord, key),
@@ -189,16 +188,36 @@ export async function buildShuttleRoute(
         fetchWalkingLeg(dropoffCoord, walkDestination, key),
     ]);
 
+    const walkToStopMin = Math.round((walkToStop?.durationSec ?? 0) / 60);
+    const walkFromStopMin = Math.round((walkFromStop?.durationSec ?? 0) / 60);
+
+    const departuresFromStop = getTodaySchedule()
+        .filter((d) => d.from === departureStop)
+        .map((d) => timeToMinutes(d.time));
+    if (departuresFromStop.length === 0) return null;
+    const firstDepartureMinutes = Math.min(...departuresFromStop);
+    const isBeforeServiceStart = currentMinutes < firstDepartureMinutes;
+
+    // Select the next departure after the user reaches the shuttle stop.
+    const earliestBoardingMinutes = currentMinutes + walkToStopMin;
+    const nextBus = getNextDeparture(departureStop, earliestBoardingMinutes);
+    if (!nextBus) return null;
+
+    const departureMinutes = timeToMinutes(nextBus.time);
+    const arrivalAtDropoffMinutes = departureMinutes + SHUTTLE_RIDE_MINUTES;
+    const arrivalTime = minutesToTime(arrivalAtDropoffMinutes);
+
     const stopName = departureStop === "SGW"
-        ? "SGW shuttle stop (Hall Building)"
-        : "Loyola shuttle stop";
+        ? "SGW shuttle hub (Hall Building)"
+        : "Loyola shuttle hub (Chapel)";
     const dropoffName = departureStop === "SGW"
-        ? "Loyola shuttle stop"
-        : "SGW shuttle stop (Hall Building)";
+        ? "Loyola shuttle hub (Chapel)"
+        : "SGW shuttle hub (Hall Building)";
+    const shuttleFromLabel = departureStop === "SGW" ? "Hall Building" : "Chapel";
 
     const steps: ShuttleNavigationStep[] = [];
 
-    // Walk to shuttle stop steps
+    // Segment 1: walk to departure hub
     if (walkToStop && walkToStop.steps.length > 0) {
         steps.push({
             instruction: `Walk to the ${stopName}`,
@@ -209,16 +228,16 @@ export async function buildShuttleRoute(
         steps.push(...walkToStop.steps);
     }
 
-    // Shuttle leg step
+    // Segment 2: shuttle ride between hubs (fixed duration)
     steps.push({
-        instruction: `Take the Concordia Shuttle Bus departing at ${formatTime(nextBus.time)} from ${stopName} — arrives ${dropoffName} at ${formatTime(arrivalTime)}`,
+        instruction: `Take the Shuttle from ${shuttleFromLabel} at ${formatTime(nextBus.time)} — arrives ${dropoffName} at ${formatTime(arrivalTime)}`,
         distanceText: "~17 km",
         durationText: `${SHUTTLE_RIDE_MINUTES} min`,
         maneuver: "directions-bus",
         isShuttleLeg: true,
     });
 
-    // Walk from shuttle stop to destination steps
+    // Segment 3: walk from arrival hub to final destination
     if (walkFromStop && walkFromStop.steps.length > 0) {
         steps.push({
             instruction: `Walk from the ${dropoffName} to your destination`,
@@ -233,6 +252,11 @@ export async function buildShuttleRoute(
         ...shuttleDrivePolyline,
         ...(walkFromStop?.polyline ?? []),
     ];
+    const segments: ShuttleRouteSegment[] = [
+        { kind: "walking", polyline: walkToStop?.polyline ?? [] },
+        { kind: "shuttle", polyline: shuttleDrivePolyline },
+        { kind: "walking", polyline: walkFromStop?.polyline ?? [] },
+    ].filter((segment) => segment.polyline.length > 0);
 
     // Total walk distance text
     const totalDistanceText =
@@ -240,26 +264,31 @@ export async function buildShuttleRoute(
             ? `${walkToStop.distanceText} + shuttle + ${walkFromStop.distanceText}`
             : "Shuttle route";
 
-    // Total duration: walk to stop + wait for bus + ride + walk from stop
-    const walkToStopMin = Math.round((walkToStop?.durationSec ?? 0) / 60);
-    const waitMin = Math.max(0, departureMinutes - currentMinutes);
-    const walkFromStopMin = Math.round((walkFromStop?.durationSec ?? 0) / 60);
-    const totalMin = walkToStopMin + waitMin + SHUTTLE_RIDE_MINUTES + walkFromStopMin;
+    // Total duration shown in UI.
+    // If the user checks routes before shuttle service starts (e.g. 2:30 AM),
+    // do not inflate the displayed duration with overnight idle wait.
+    const waitMin = Math.max(0, departureMinutes - earliestBoardingMinutes);
+    const displayedWaitMin = isBeforeServiceStart ? 0 : waitMin;
+    const totalMin = walkToStopMin + displayedWaitMin + SHUTTLE_RIDE_MINUTES + walkFromStopMin;
     const durationText = `${totalMin} min`;
 
-    // Final arrival time including all legs
-    const finalArrivalMinutes = currentMinutes + totalMin;
+    // Final scheduled arrival time for the selected shuttle departure.
+    const finalArrivalMinutes = departureMinutes + SHUTTLE_RIDE_MINUTES + walkFromStopMin;
     const finalArrivalTime = minutesToTime(finalArrivalMinutes);
 
     return {
         steps,
+        segments,
         departureStop,
         departureTime: nextBus.time,
         arrivalTime: finalArrivalTime,
         departureTimeFormatted: formatTime(nextBus.time),
         arrivalTimeFormatted: formatTime(finalArrivalTime),
         durationText,
+        durationSec: totalMin * 60,
         distanceText: totalDistanceText,
         polyline: fullPolyline,
     };
 }
+
+

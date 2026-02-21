@@ -162,6 +162,7 @@ export default function MapScreen() {
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
+        routeSegments,
         routeRegion,
         navigationSteps,
         isCrossCampus,
@@ -312,7 +313,8 @@ export default function MapScreen() {
                         strokeColor="#4A89F3"
                         strokeWidth={5}
                     />
-                )}                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                )}
+                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
                     <Polyline
                         key="route-walking"
                         coordinates={routePolyline}
@@ -320,11 +322,22 @@ export default function MapScreen() {
                         strokeWidth={5}
                         lineDashPattern={[10, 6]}
                     />
-                )}                {routePolyline.length > 0 && selectedTransportMode === 'shuttle' && (
+                )}
+                {selectedTransportMode === 'shuttle' && routeSegments.length > 0 && routeSegments.map((segment, index) => (
+                    <Polyline
+                        key={`route-shuttle-segment-${segment.kind}-${index}`}
+                        testID={`route-shuttle-segment-${segment.kind}-${index}`}
+                        coordinates={segment.polyline}
+                        strokeColor={segment.kind === "walking" ? "#4A89F3" : brandRed}
+                        strokeWidth={5}
+                        lineDashPattern={segment.kind === "walking" ? [10, 6] : undefined}
+                    />
+                ))}
+                {routePolyline.length > 0 && selectedTransportMode === 'shuttle' && routeSegments.length === 0 && (
                     <Polyline
                         key="route-shuttle"
                         coordinates={routePolyline}
-                        strokeColor="#8e2334"
+                        strokeColor={brandRed}
                         strokeWidth={5}
                     />
                 )}

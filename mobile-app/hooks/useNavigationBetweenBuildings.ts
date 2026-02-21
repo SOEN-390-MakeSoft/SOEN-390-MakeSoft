@@ -122,8 +122,15 @@ type ModeRoute = {
     durationSec: number;
     distanceText: string;
     viaText: string;
+    arrivalText?: string;
+    segments?: RouteSegment[];
     polyline: LatLng[];
     steps: NavigationStep[];
+};
+
+type RouteSegment = {
+    kind: "walking" | "shuttle";
+    polyline: LatLng[];
 };
 
 type AllModeRoutes = {
@@ -172,6 +179,7 @@ export function useNavigationBetweenBuildings({
     const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});    
     const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
     const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
+    const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
     const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
     const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
     const [isCrossCampus, setIsCrossCampus] = useState(false);
@@ -345,9 +353,11 @@ export function useNavigationBetweenBuildings({
                     if (sr && !cancelled) {
                         shuttleRoute = {
                             durationText: sr.durationText,
-                            durationSec: 0,
+                            durationSec: sr.durationSec,
                             distanceText: sr.distanceText,
+                            arrivalText: sr.arrivalTimeFormatted,
                             viaText: `Shuttle — departs ${sr.departureTimeFormatted}`,
+                            segments: sr.segments,
                             polyline: sr.polyline,
                             steps: sr.steps,
                         };
@@ -366,6 +376,7 @@ export function useNavigationBetweenBuildings({
                     setRoutePolyline(active.polyline);
                     setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
                 }
+                setRouteSegments(active?.segments ?? []);
                 setNavigationSteps(active?.steps ?? []);
 
                 const primary = driving ?? walking;
@@ -408,6 +419,7 @@ export function useNavigationBetweenBuildings({
     useEffect(() => {
         if (!isNavigationOpen) {
             setRoutePolyline([]);
+            setRouteSegments([]);
             setRouteRegion(null);
             return;
         }
@@ -418,6 +430,7 @@ export function useNavigationBetweenBuildings({
         if (route?.polyline && route.polyline.length > 0) {
             setRoutePolyline(route.polyline);
             setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
+            setRouteSegments(route.segments ?? []);
 
             // Update trip summary + steps to match the selected mode
             const arrival = new Date(Date.now() + route.durationSec * 1000);
@@ -426,7 +439,7 @@ export function useNavigationBetweenBuildings({
                 minute: "2-digit",
             });
             setRouteSummary({
-                arrivalText,
+                arrivalText: route.arrivalText ?? arrivalText,
                 distanceText: route.distanceText,
                 durationText: route.durationText,
                 viaText: route.viaText || "Suggested route",
@@ -438,6 +451,7 @@ export function useNavigationBetweenBuildings({
             // is in-flight after an endpoint change) we keep the previous
             // polyline visible as a placeholder.
             setRoutePolyline([]);
+            setRouteSegments([]);
             setRouteRegion(null);
             setNavigationSteps([]);
         }
@@ -565,6 +579,7 @@ export function useNavigationBetweenBuildings({
         setModeDurations({});
         setIsRouteLoading(false);
         setRoutePolyline([]);
+        setRouteSegments([]);
         setRouteRegion(null);
         setNavigationSteps([]);
         setIsCrossCampus(false);
@@ -593,8 +608,10 @@ export function useNavigationBetweenBuildings({
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
+        routeSegments,
         routeRegion,
         navigationSteps,
         isCrossCampus,
     };
 }
+

@@ -1,4 +1,5 @@
 export type LatLng = { latitude: number; longitude: number };
+export type CampusName = "SGW" | "Loyola";
 
 const DEFAULT_REGION = {
     latitude: 45.4973,
@@ -141,8 +142,9 @@ export function findBuildingAtOrNearCoordinate(
     }    return closest;
 }
 
-// Bounding boxes for each Concordia campus
-const SGW_BOUNDS = { minLat: 45.494, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
+// Bounding boxes for each Concordia campus.
+// SGW minLat includes the southern SGW outlier building used in our dataset.
+const SGW_BOUNDS = { minLat: 45.492, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
 const LOYOLA_BOUNDS = { minLat: 45.454, maxLat: 45.464, minLng: -73.647, maxLng: -73.633 };
 
 function inBounds(point: LatLng, bounds: typeof SGW_BOUNDS): boolean {
@@ -159,11 +161,21 @@ function inBounds(point: LatLng, bounds: typeof SGW_BOUNDS): boolean {
  * (one is at SGW and the other is at Loyola).
  */
 export function isCrossCampusRoute(origin: LatLng, destination: LatLng): boolean {
-    const originSGW = inBounds(origin, SGW_BOUNDS);
-    const originLoyola = inBounds(origin, LOYOLA_BOUNDS);
-    const destSGW = inBounds(destination, SGW_BOUNDS);
-    const destLoyola = inBounds(destination, LOYOLA_BOUNDS);
-    return (originSGW && destLoyola) || (originLoyola && destSGW);
+    const originCampus = getCampusFromCoordinate(origin);
+    const destinationCampus = getCampusFromCoordinate(destination);
+    return (
+        (originCampus === "SGW" && destinationCampus === "Loyola") ||
+        (originCampus === "Loyola" && destinationCampus === "SGW")
+    );
+}
+
+/**
+ * Resolves a coordinate to SGW/Loyola campus bounds.
+ */
+export function getCampusFromCoordinate(point: LatLng): CampusName | null {
+    if (inBounds(point, SGW_BOUNDS)) return "SGW";
+    if (inBounds(point, LOYOLA_BOUNDS)) return "Loyola";
+    return null;
 }
 
 /**

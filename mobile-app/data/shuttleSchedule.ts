@@ -1,9 +1,9 @@
 // Concordia University Shuttle Bus Schedule
 // Source: https://www.concordia.ca/about/shuttle.html
-// Shuttle stops:
-//   SGW  – 1455 De Maisonneuve Blvd W (near Hall Building main entrance)
-//   Loyola – 7141 Sherbrooke St W (near the central Loyola campus stop)
-// Ride duration: ~30 minutes between campuses
+// Shuttle hubs:
+//   SGW    - 1455 De Maisonneuve Blvd W (Hall Building main entrance)
+//   Loyola - 7141 Sherbrooke St W (Chapel-side campus stop)
+// Ride duration: fixed 20 minutes between campuses (initial implementation)
 
 export type ShuttleStop = "SGW" | "Loyola";
 
@@ -100,8 +100,8 @@ export function formatTime(time: string): string {
     return `${displayHour}:${String(m ?? 0).padStart(2, "0")} ${period}`;
 }
 
-/** Shuttle ride duration in minutes (SGW ↔ Loyola). */
-export const SHUTTLE_RIDE_MINUTES = 30;
+/** Shuttle ride duration in minutes (SGW <-> Loyola). */
+export const SHUTTLE_RIDE_MINUTES = 20;
 
 /**
  * Finds the next shuttle departure from a given stop at or after the given
@@ -116,3 +116,4 @@ export function getNextDeparture(
     const next = departures.find((d) => timeToMinutes(d.time) >= currentMinutes);
     return next ?? null;
 }
+
