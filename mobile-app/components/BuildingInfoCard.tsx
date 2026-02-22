@@ -7,6 +7,7 @@ import {
     View,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useTheme } from "tamagui";
 import { BuildingResponse } from "../services/api";
 import { getFeatureColor, getMetroColor } from "../utils/colorUtils";
 import DirectionButton from "./DirectionButton";
@@ -41,7 +42,9 @@ export default function BuildingInfoCard({
     onClose,
     isColorBlind,
     onDirections,
-}: BuildingInfoCardProps) {
+}: Readonly<BuildingInfoCardProps>) {
+    const theme = useTheme();
+
     if (!selectedBuilding) return null;
 
     const displayName = remoteBuilding?.name ?? selectedBuilding?.name ?? "";
@@ -56,6 +59,13 @@ export default function BuildingInfoCard({
     const elevatorColor = getFeatureColor(elevatorValue);
     const accessColor = getFeatureColor(accessibilityValue);
     const metroColor = getMetroColor(metroValue);
+    const brandRed = theme.cred?.val ?? "#b21b2c";
+    const colourBlindPrimary = theme.colourBlind2?.val ?? brandRed;
+    const colourBlindSecondary = theme.colourBlind1?.val ?? "#B3D4FF";
+    const accentColor = isColorBlind ? colourBlindPrimary : brandRed;
+    const directionTextColor = isColorBlind ? colourBlindPrimary : "#fff";
+    const directionButtonColor = isColorBlind ? colourBlindSecondary : brandRed;
+
     return (
         <View style={styles.infoOverlay} pointerEvents="box-none">
             <Pressable style={styles.infoBackdrop} onPress={onClose} />
@@ -67,7 +77,7 @@ export default function BuildingInfoCard({
                         accessibilityLabel="Close building details"
                         style={styles.infoClose}
                     >
-                        <MaterialIcons name="close" size={21} color="#b21b2c" />
+                        <MaterialIcons name="close" size={21} color={accentColor} />
                     </Pressable>
 
                     <Text style={styles.infoTitle} numberOfLines={2}>
@@ -78,7 +88,7 @@ export default function BuildingInfoCard({
                     </Text>
 
                     <View style={styles.infoFooterRow}>
-                        <Text style={styles.infoMetaText}>
+                        <Text style={[styles.infoMetaText, { color: accentColor }] }>
                             {displayCampus} - {displayCode}
                         </Text>
                         <View style={styles.featureRow}>
@@ -106,11 +116,17 @@ export default function BuildingInfoCard({
                         </View>
                     </View>
 
-                    <DirectionButton onPress={onDirections} disabled={!onDirections} />
+                    <DirectionButton
+                        onPress={onDirections}
+                        disabled={!onDirections}
+                        backgroundColor={directionButtonColor}
+                        textColor={directionTextColor}
+                        iconColor={directionTextColor}
+                    />
 
                     {isLoading && (
                         <View style={styles.loadingRow}>
-                            <ActivityIndicator size="small" color="#b21b2c" />
+                            <ActivityIndicator size="small" color={accentColor} />
                             <Text style={styles.loadingText}>Loading details...</Text>
                         </View>
                     )}
@@ -166,7 +182,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         marginTop: 8,
     },
-    infoMetaText: { fontSize: 16, fontWeight: "700", color: "#b21b2c" },
+    infoMetaText: { fontSize: 16, fontWeight: "700" },
     loadingRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
     loadingText: { fontSize: 16, color: "#6b6b6b", marginLeft: 8 },
     featureRow: { flexDirection: "row", columnGap: 6 },

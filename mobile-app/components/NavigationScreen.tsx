@@ -1,5 +1,5 @@
-import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { NavigationStep, ShuttleInfo } from "../hooks/useNavigationBetweenBuildings";
 import NavigationMenu from "./NavigationMenu";
@@ -40,36 +40,13 @@ interface NavigationScreenProps {
     shuttleInfo?: ShuttleInfo | null;
     /** Whether today is a weekend (shuttle not available) */
     isWeekend?: boolean;
+    onOpenPreview?: () => void;
 }
 
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
     same_origin_destination: "Origin and destination cannot be the same.",
     missing_coordinates: "Coordinates are missing for the selected name.",
 };
-
-const MANEUVER_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-    "turn-left": "turn-left",
-    "turn-right": "turn-right",
-    "turn-slight-left": "turn-slight-left",
-    "turn-slight-right": "turn-slight-right",
-    "turn-sharp-left": "turn-left",
-    "turn-sharp-right": "turn-right",
-    "uturn-left": "u-turn-left",
-    "uturn-right": "u-turn-right",
-    "merge": "merge",
-    "fork-left": "fork-left",
-    "fork-right": "fork-right",
-    "ramp-left": "turn-slight-left",
-    "ramp-right": "turn-slight-right",
-    "roundabout-left": "roundabout-left",
-    "roundabout-right": "roundabout-right",
-    "straight": "straight",
-};
-
-function getManeuverIcon(maneuver?: string): keyof typeof MaterialIcons.glyphMap {
-    if (!maneuver) return "straight";
-    return MANEUVER_ICONS[maneuver] ?? "straight";
-}
 
 function ModeChip({
     mode,
@@ -116,23 +93,45 @@ export default function NavigationScreen({
     isLoading,
     directionsError = null,
     isGetDirectionsDisabled = true,
-    selectedTransportMode = 'driving',
+    selectedTransportMode = "driving",
     onTransportModeChange,
     navigationSteps = [],
     isShuttleRoute = false,
     isShuttleLoading = false,
     shuttleInfo = null,
     isWeekend = false,
+    onOpenPreview,
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
-    const isColorBlind = colourBlindMode;
-    if (!visible) return null;
+    const [isMinimized, setIsMinimized] = useState(false);
+    const isMinimizedRef = React.useRef(false);
 
-    let tripTitleText: string;
-    if (tripSummary)
+    const hasSteps = navigationSteps.length > 0;
+    const isPreviewButtonDisabled = isGetDirectionsDisabled || !hasSteps;
+
+    useEffect(() => {
+        isMinimizedRef.current = isMinimized;
+    }, [isMinimized]);
+
+    let tripTitleText = "Select start and destination";
+    if (isLoading) {
+        tripTitleText = "Loading route...";
+    }
+    if (tripSummary) {
         tripTitleText = `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`;
-    else if (isLoading) tripTitleText = "Loading route...";
-    else tripTitleText = "Select start and destination";
+    }
+
+    const bottomCardColor = colourBlindMode ? "#9aa7b2" : "#8e2334";
+    const chipColor = colourBlindMode ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.30)";
+    const chipMutedColor = colourBlindMode ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.14)";
+    const closeBg = colourBlindMode ? "#e6eaee" : "#f6dce0";
+    const closeIcon = colourBlindMode ? "#4b5862" : "#7f1f2a";
+    const previewBg = colourBlindMode ? "#e6eaee" : "#f6dce0";
+    const previewTextColor = colourBlindMode ? "#4b5862" : "#7f1f2a";
+
+    const handleToggleMinimized = () => {
+        setIsMinimized((prev) => !prev);
+    };
 
     const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
     const chipColor = isColorBlind ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.30)";
@@ -152,6 +151,34 @@ export default function NavigationScreen({
         { key: "driving", label: "Car", icon: "directions-car", duration: modeDurations?.driving },
         { key: "shuttle", label: "Shuttle", icon: "directions-bus", duration: undefined },
     ];
+    const handleOpenPreview = () => {
+        if (isPreviewButtonDisabled) return;
+        setIsMinimized(false);
+        onOpenPreview?.();
+    };
+
+    const handlePanRelease = (_: unknown, dy: number) => {
+        const currentlyMinimized = isMinimizedRef.current;
+        const nextMinimized = currentlyMinimized
+            ? dy >= -DRAG_THRESHOLD
+            : dy > DRAG_THRESHOLD;
+        setIsMinimized(nextMinimized);
+    };
+
+    const handlePanResponder = React.useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) =>
+                Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+            onPanResponderRelease: (_, gestureState) => {
+                handlePanRelease(_, gestureState.dy);
+            },
+            onPanResponderTerminate: (_, gestureState) => {
+                handlePanRelease(_, gestureState.dy);
+            },
+        })
+    ).current;
+
+    if (!visible) return null;
 
     return (
         <View style={styles.overlay} pointerEvents="box-none">
@@ -162,14 +189,30 @@ export default function NavigationScreen({
                 onBuildingSelect={onBuildingSelect}
             />
 
-            <View style={[styles.bottomCard, { backgroundColor: bottomCardColor }]}>
+            <View
+                style={[
+                    styles.bottomCard,
+                    isMinimized && styles.bottomCardMinimized,
+                    { backgroundColor: bottomCardColor },
+                ]}
+            >
+                <Pressable
+                    onPress={handleToggleMinimized}
+                    style={styles.minimizeHandleTouch}
+                    {...handlePanResponder.panHandlers}
+                    accessibilityRole="button"
+                    accessibilityLabel={isMinimized ? "Expand menu" : "Minimize menu"}
+                    testID="menu-minimize-toggle"
+                >
+                    <View style={styles.minimizeHandleBar} />
+                </Pressable>
                 <View style={styles.bottomHeader}>
                     <View style={styles.tripModeRow}>
                         <ModeChip
                             mode="driving"
                             icon="directions-car"
                             label={modeDurations?.driving ?? "--"}
-                            isSelected={selectedTransportMode === 'driving'}
+                            isSelected={selectedTransportMode === "driving"}
                             chipColor={chipColor}
                             chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
                         />
@@ -177,7 +220,7 @@ export default function NavigationScreen({
                             mode="walking"
                             icon="directions-walk"
                             label={modeDurations?.walking ?? "--"}
-                            isSelected={selectedTransportMode === 'walking'}
+                            isSelected={selectedTransportMode === "walking"}
                             chipColor={chipColor}
                             chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
                         />
@@ -291,29 +334,65 @@ export default function NavigationScreen({
                 </Pressable>
                 {navigationSteps.length > 0 ? (
                     <ScrollView
-                        style={styles.stepsContainer}
-                        testID="navigation-steps-list"
+                        style={styles.scrollableContent}
+                        showsVerticalScrollIndicator
                         nestedScrollEnabled
                     >
-                        {navigationSteps.map((step, index) => (
-                            <View key={`step-${step.instruction.slice(0, 30)}-${step.distanceText}`} style={styles.stepRow} testID={`nav-step-${index}`}>
-                                <View style={styles.stepIconCol}>
-                                    <MaterialIcons
-                                        name={getManeuverIcon(step.maneuver)}
-                                        size={20}
-                                        color="#fff"
-                                    />
-                                </View>
-                                <View style={styles.stepContent}>
-                                    <Text style={styles.stepInstruction} numberOfLines={3}>
-                                        {step.instruction}
-                                    </Text>
-                                    <Text style={styles.stepMeta}>
-                                        {step.distanceText}{step.durationText ? ` · ${step.durationText}` : ""}
-                                    </Text>
-                                </View>
+                        <Text style={styles.tripTitle} numberOfLines={2}>
+                            {tripTitleText}
+                        </Text>
+                        {tripSummary && (
+                            <Text style={styles.tripMeta} numberOfLines={1}>
+                                {tripSummary.distanceText} - {tripSummary.durationText}
+                            </Text>
+                        )}
+                        {directionsError && (
+                            <Text style={styles.errorText} testID="directions-error">
+                                {DIRECTIONS_ERROR_MESSAGES[directionsError]}
+                            </Text>
+                        )}
+                        <Pressable
+                            style={[
+                                styles.getDirectionsButton,
+                                { backgroundColor: previewBg },
+                                isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
+                            ]}
+                            disabled={isPreviewButtonDisabled}
+                            onPress={handleOpenPreview}
+                            accessibilityRole="button"
+                            accessibilityLabel="Preview route"
+                            testID="get-directions-button"
+                        >
+                            <MaterialIcons
+                                name="arrow-forward"
+                                size={16}
+                                color={isPreviewButtonDisabled ? "#9b9b9b" : previewTextColor}
+                            />
+                            <Text
+                                style={[
+                                    styles.getDirectionsText,
+                                    {
+                                        color: isPreviewButtonDisabled ? "#9b9b9b" : previewTextColor,
+                                    },
+                                ]}
+                            >
+                                Preview
+                            </Text>
+                        </Pressable>
+                        {hasSteps && (
+                            <View testID="navigation-steps-list" style={styles.stepsList}>
+                                {navigationSteps.map((step, index) => (
+                                    <View key={step.instruction} testID={`nav-step-${index}`} style={styles.stepRow}>
+                                        <Text style={styles.stepInstruction}>{step.instruction}</Text>
+                                        <Text style={styles.stepMeta}>
+                                            {step.durationText
+                                                ? `${step.distanceText} · ${step.durationText}`
+                                                : step.distanceText}
+                                        </Text>
+                                    </View>
+                                ))}
                             </View>
-                        ))}
+                        )}
                     </ScrollView>
                 ) : null}
             </View>
@@ -333,6 +412,22 @@ const styles = StyleSheet.create({
         paddingBottom: 22,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
+    },
+    bottomCardMinimized: {
+        paddingBottom: 10,
+    },
+    scrollableContent: {
+        maxHeight: 350,
+    },
+    minimizeHandleTouch: {
+        alignSelf: "center",
+        paddingBottom: 8,
+    },
+    minimizeHandleBar: {
+        width: 44,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: "rgba(255,255,255,0.55)",
     },
     bottomHeader: {
         flexDirection: "row",
@@ -365,31 +460,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 16,
-    },
-    segmentedControl: {
-        flexDirection: "row",
-        alignItems: "center",
-        borderRadius: 18,
-        padding: 4,
-        flex: 1,
-        marginRight: 12,
-        columnGap: 4,
-    },
-    segment: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        columnGap: 6,
-        paddingVertical: 6,
-        borderRadius: 14,
-    },
-    segmentActive: {
-        shadowColor: "#000",
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
     },
     modeChipDisabled: {
         flexDirection: "row",
@@ -442,34 +512,22 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     getDirectionsText: { fontSize: 14, fontWeight: "700" },
-    stepsContainer: {
-        marginTop: 14,
-        maxHeight: 220,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: "rgba(255,255,255,0.2)",
-        paddingTop: 10,
+    stepsList: {
+        marginTop: 12,
     },
     stepRow: {
-        flexDirection: "row",
-        alignItems: "flex-start",
-        marginBottom: 12,
-    },
-    stepIconCol: {
-        width: 32,
-        alignItems: "center",
-        paddingTop: 2,
-    },
-    stepContent: {
-        flex: 1,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+        borderTopColor: "rgba(255,255,255,0.2)",
     },
     stepInstruction: {
         fontSize: 14,
         color: "#fff",
-        fontWeight: "500",
-    },    
+        fontWeight: "600",
+    },
     stepMeta: {
         fontSize: 12,
-        color: "rgba(255,255,255,0.65)",
+        color: "rgba(255,255,255,0.75)",
         marginTop: 2,
     },
     shuttleUnavailableText: {

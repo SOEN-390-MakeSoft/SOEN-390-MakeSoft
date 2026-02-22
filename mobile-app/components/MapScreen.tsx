@@ -14,6 +14,7 @@ import BuildingInfoCard from "./BuildingInfoCard";
 import QuickPickPanel from "./QuickPickPanel";
 import MapMenu from "./MapMenu";
 import NavigationScreen from "./NavigationScreen";
+import RoutePreviewScreen from "./RoutePreviewScreen";
 import SearchBar from "./SearchBar";
 import { useSettings } from "../context/settings";
 import { useNavigationBetweenBuildings } from "../hooks/useNavigationBetweenBuildings";
@@ -134,6 +135,8 @@ export default function MapScreen() {
         handleCloseCard,
     } = useSelectedBuilding(buildings, mapRef);
     const [buildingNotFoundToast, setBuildingNotFoundToast] = useState(false);
+    const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
+    const [previewStepIndex, setPreviewStepIndex] = useState(0);
     const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
     useEffect(() => {
         if (!buildingNotFoundToast) return;
@@ -146,13 +149,11 @@ export default function MapScreen() {
         navigationStart,
         navigationDestination,
         routeSummary,
-        activeMode,
         modeDurations,
         isRouteLoading,
         directionsError,        
         isGetDirectionsDisabled,
         setNavigationActiveField,
-        setActiveMode,
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
@@ -228,6 +229,8 @@ export default function MapScreen() {
 
     const isColorBlind = colourBlindMode;
     const brandRed = theme?.cred?.get?.() ?? "#b21b2c";
+    const colourBlindAccent = theme?.colourBlind2?.get?.() ?? "#1F4E8C";
+    const routeColor = isColorBlind ? colourBlindAccent : brandRed;
     const defaultColor = theme?.cred?.get?.() ?? POLYGON_STROKE;
     let polygonFillBase = POLYGON_FILL;
     let polygonStrokeBase = POLYGON_STROKE;
@@ -283,6 +286,57 @@ export default function MapScreen() {
         searchInputRef.current?.blur();
     };
 
+    const handlePreviewStepChange = useCallback(
+        (step: { focusCoordinate?: { latitude: number; longitude: number } }, index: number) => {
+            const coordinate = step.focusCoordinate;
+            if (!coordinate) return;
+            mapRef.current?.animateToRegion(
+                {
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude,
+                    latitudeDelta: 0.003,
+                    longitudeDelta: 0.003,
+                },
+                450
+            );
+        },
+        []
+    );
+
+    const handleOpenRoutePreview = useCallback(() => {
+        if (navigationSteps.length === 0) return;
+        setPreviewStepIndex(0);
+        setIsRoutePreviewOpen(true);
+        const firstStep = navigationSteps[0];
+        if (firstStep) {
+            handlePreviewStepChange(firstStep, 0);
+        }
+    }, [handlePreviewStepChange, navigationSteps]);
+
+    const handleCloseRoutePreview = useCallback(() => {
+        setIsRoutePreviewOpen(false);
+    }, []);
+
+    const handleSelectPreviewStep = useCallback(
+        (index: number) => {
+            if (navigationSteps.length === 0) return;
+            const safeIndex = Math.min(Math.max(index, 0), navigationSteps.length - 1);
+            setPreviewStepIndex(safeIndex);
+            const step = navigationSteps[safeIndex];
+            if (step) {
+                handlePreviewStepChange(step, safeIndex);
+            }
+        },
+        [handlePreviewStepChange, navigationSteps]
+    );
+
+    useEffect(() => {
+        if (!isNavigationOpen) {
+            setIsRoutePreviewOpen(false);
+            setPreviewStepIndex(0);
+        }
+    }, [isNavigationOpen]);
+
     return (
         <View style={styles.container} testID="map-screen">
             <MapView
@@ -319,7 +373,7 @@ export default function MapScreen() {
                     <Polyline
                         key="route-walking"
                         coordinates={routePolyline}
-                        strokeColor="#4A89F3"
+                        strokeColor={routeColor}
                         strokeWidth={5}
                         lineDashPattern={[10, 6]}
                     />
@@ -361,37 +415,39 @@ export default function MapScreen() {
             </MapView>
 
             {/* Top Controls: Search, Menu, Brand Badge */}
-            <View
-                style={[
-                    styles.topControls,
-                    { top: menuTop, paddingHorizontal: menuLeft },
-                ]}
-                pointerEvents="box-none"
-            >
-                <SearchBar
-                    searchQuery={searchQuery}
-                    onChangeText={setSearchQuery}
-                    onSubmit={handleSearchSubmit}
-                    onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
-                    isSearchFocused={isSearchFocused}
-                    isSearchDisabled={isSearchDisabled}
-                    searchResults={searchResults}
-                    onSelectResult={handleSelectSearchResult}
-                    onOpenMenu={() => setIsMenuOpen(true)}
-                    inputRef={searchInputRef}
-                    brandColor={brandRed}
-                    logoSource={require("../assets/images/Concordia_icon.png")}
-                />
-                <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
-                    <CampusSwitch
-                        selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
-                        onCampusChange={(campus) =>
-                            handleCampusChange(campus === "SGW" ? "sgw" : "loyola")
-                        }
+            {!isRoutePreviewOpen && (
+                <View
+                    style={[
+                        styles.topControls,
+                        { top: menuTop, paddingHorizontal: menuLeft },
+                    ]}
+                    pointerEvents="box-none"
+                >
+                    <SearchBar
+                        searchQuery={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onSubmit={handleSearchSubmit}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
+                        isSearchFocused={isSearchFocused}
+                        isSearchDisabled={isSearchDisabled}
+                        searchResults={searchResults}
+                        onSelectResult={handleSelectSearchResult}
+                        onOpenMenu={() => setIsMenuOpen(true)}
+                        inputRef={searchInputRef}
+                        brandColor={brandRed}
+                        logoSource={require("../assets/images/Concordia_icon.png")}
                     />
+                    <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
+                        <CampusSwitch
+                            selectedCampus={activeCampus === "sgw" ? "SGW" : "Loyola"}
+                            onCampusChange={(campus) =>
+                                handleCampusChange(campus === "SGW" ? "sgw" : "loyola")
+                            }
+                        />
+                    </View>
                 </View>
-            </View>
+            )}
 
             {/* Building Info Card */}
             <BuildingInfoCard
@@ -407,7 +463,7 @@ export default function MapScreen() {
                 }}
             />
             <NavigationScreen
-                visible={isNavigationOpen}
+                visible={isNavigationOpen && !isRoutePreviewOpen}
                 startLabel={navigationStart}
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
@@ -425,6 +481,15 @@ export default function MapScreen() {
                 isShuttleLoading={isShuttleLoading}
                 shuttleInfo={shuttleInfo}
                 isWeekend={isWeekend}
+                onOpenPreview={handleOpenRoutePreview}
+            />
+
+            <RoutePreviewScreen
+                visible={isRoutePreviewOpen}
+                steps={navigationSteps}
+                selectedStepIndex={previewStepIndex}
+                onSelectStep={handleSelectPreviewStep}
+                onClose={handleCloseRoutePreview}
             />
             {/* Quick Pick Panel and Location Button */}
             {(!isMenuOpen && !isNavigationOpen) ? (
@@ -444,7 +509,7 @@ export default function MapScreen() {
                 />
             ) : null}
 
-            <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+            {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
 
             {buildingNotFoundToast ? (
                 <View style={styles.toast} testID="building-not-found-toast">

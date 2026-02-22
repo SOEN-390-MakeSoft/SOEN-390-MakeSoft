@@ -53,6 +53,14 @@ describe("NavigationScreen", () => {
                 <NavigationScreen
                     {...defaultProps}
                     isGetDirectionsDisabled={false}
+                    navigationSteps={[
+                        {
+                            instruction: "Head north",
+                            distanceText: "0.3 km",
+                            durationText: "1 min",
+                            maneuver: "straight",
+                        },
+                    ]}
                 />
             );
 
