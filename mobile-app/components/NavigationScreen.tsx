@@ -279,9 +279,8 @@ export default function NavigationScreen({
                         </Text>
                     </View>
                 ) : null}
-                {(selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute) ? (
+                {(selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute) ? (                    
                     <Text style={styles.shuttleWeekendText} testID="shuttle-weekend-notice">
-                  
                         Shuttle service is not available on weekends.
                     </Text>
                 ) : null}

@@ -30,24 +30,30 @@ describe("NavigationScreen", () => {
         startLabel: "Your location",
         destinationLabel: "Hall (H)",
         onClose: jest.fn(),
-    };
-
-    describe("Get Directions button", () => {
-        it("should disable Get Directions button when isGetDirectionsDisabled is true", () => {
+    };    describe("Preview button", () => {
+        it("should disable Preview button when isGetDirectionsDisabled is true", () => {
             // Arrange
             render(
                 <NavigationScreen
                     {...defaultProps}
                     isGetDirectionsDisabled={true}
+                    navigationSteps={[
+                        {
+                            instruction: "Head north",
+                            distanceText: "0.3 km",
+                            durationText: "1 min",
+                            maneuver: "straight",
+                        },
+                    ]}
                 />
             );
 
             // Assert
-            const button = screen.getByTestId("get-directions-button");
+            const button = screen.getByTestId("preview-route-button");
             expect(button.props.accessibilityState?.disabled).toBe(true);
         });
 
-        it("should enable Get Directions button when isGetDirectionsDisabled is false", () => {
+        it("should enable Preview button when isGetDirectionsDisabled is false", () => {
             // Arrange
             render(
                 <NavigationScreen
@@ -65,7 +71,7 @@ describe("NavigationScreen", () => {
             );
 
             // Assert
-            const button = screen.getByTestId("get-directions-button");
+            const button = screen.getByTestId("preview-route-button");
             expect(button.props.accessibilityState?.disabled).toBe(false);
         });
     });
