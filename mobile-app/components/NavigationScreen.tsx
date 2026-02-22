@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { NavigationStep } from "../hooks/useNavigationBetweenBuildings";
 import NavigationMenu from "./NavigationMenu";
@@ -210,7 +210,11 @@ export default function NavigationScreen({
                     </Pressable>
                 </View>
                 {!isMinimized && (
-                    <>
+                    <ScrollView
+                        style={styles.scrollableContent}
+                        showsVerticalScrollIndicator
+                        nestedScrollEnabled
+                    >
                         <Text style={styles.tripTitle} numberOfLines={2}>
                             {tripTitleText}
                         </Text>
@@ -266,7 +270,7 @@ export default function NavigationScreen({
                                 ))}
                             </View>
                         )}
-                    </>
+                    </ScrollView>
                 )}
             </View>
         </View>
@@ -288,6 +292,9 @@ const styles = StyleSheet.create({
     },
     bottomCardMinimized: {
         paddingBottom: 10,
+    },
+    scrollableContent: {
+        maxHeight: 350,
     },
     minimizeHandleTouch: {
         alignSelf: "center",
