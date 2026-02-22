@@ -160,14 +160,14 @@ export default function MapScreen() {
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,
-        setSelectedTransportMode,
-        routePolyline,
+        setSelectedTransportMode,        routePolyline,
         routeRegion,
         navigationSteps,
         isShuttleRoute,
         isShuttleLoading,
         shuttleInfo,
         isWeekend,
+        routeSegments,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -323,34 +323,18 @@ export default function MapScreen() {
                         strokeWidth={5}
                         lineDashPattern={[10, 6]}
                     />
-                )}
-                {/* Shuttle mode: walk-to-hub segment (dashed blue) */}
-                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.walkToHubPolyline.length > 0 && (
-                    <Polyline
-                        key="shuttle-walk-to-hub"
-                        coordinates={shuttleInfo.walkToHubPolyline}
-                        strokeColor="#4A89F3"
-                        strokeWidth={4}
-                        lineDashPattern={[10, 6]}                    />
-                )}
-                {/* Shuttle mode: shuttle segment (solid Concordia red, road-following driving route) */}
-                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.shuttleSegmentPolyline.length > 0 && (
-                    <Polyline
-                        key="shuttle-segment"
-                        coordinates={shuttleInfo.shuttleSegmentPolyline}
-                        strokeColor="rgba(178, 27, 44, 0.9)"
-                        strokeWidth={5}
-                    />
-                )}
-                {/* Shuttle mode: walk-from-hub segment (dashed blue) */}
-                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.walkFromHubPolyline.length > 0 && (
-                    <Polyline
-                        key="shuttle-walk-from-hub"
-                        coordinates={shuttleInfo.walkFromHubPolyline}
-                        strokeColor="#4A89F3"
-                        strokeWidth={4}
-                        lineDashPattern={[10, 6]}
-                    />
+                )}                {/* Shuttle mode: render each segment with appropriate style */}
+                {selectedTransportMode === 'shuttle' && routeSegments.map((seg, i) =>
+                    seg.polyline.length > 0 ? (
+                        <Polyline
+                            key={`shuttle-seg-${i}`}
+                            testID={`route-shuttle-segment-${seg.kind}-${i}`}
+                            coordinates={seg.polyline}
+                            strokeColor={seg.kind === 'shuttle' ? (brandRed ?? "rgba(178, 27, 44, 0.9)") : "#4A89F3"}
+                            strokeWidth={seg.kind === 'shuttle' ? 5 : 4}
+                            {...(seg.kind !== 'shuttle' ? { lineDashPattern: [10, 6] } : {})}
+                        />
+                    ) : null
                 )}
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);

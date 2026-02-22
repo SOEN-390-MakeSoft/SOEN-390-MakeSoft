@@ -632,10 +632,15 @@ export function useNavigationBetweenBuildings({
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
                 resetRouteState();
-                return;
-            }            // Default: always update destination when no active field is set
-            setNavigationDestination(label);
-            setNavigationDestinationCoord(centroid);
+                return;            }
+            // Default: if destination is already set, assign start; otherwise assign destination
+            if (navigationDestination.trim() !== "") {
+                setNavigationStart(label);
+                setNavigationOrigin(centroid);
+            } else {
+                setNavigationDestination(label);
+                setNavigationDestinationCoord(centroid);
+            }
             resetRouteState();
         },
         [
@@ -730,10 +735,16 @@ export function useNavigationBetweenBuildings({
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
-        routeRegion,
-        navigationSteps,        // Shuttle
+        routeRegion,        navigationSteps,        // Shuttle
         isShuttleRoute,
         isShuttleLoading,
         shuttleInfo,        isWeekend: isWeekend(),
+        routeSegments: shuttleInfo
+            ? [
+                  { kind: "walking" as const, polyline: shuttleInfo.walkToHubPolyline },
+                  { kind: "shuttle" as const, polyline: shuttleInfo.shuttleSegmentPolyline },
+                  { kind: "walking" as const, polyline: shuttleInfo.walkFromHubPolyline },
+              ]
+            : [],
     };
 }
