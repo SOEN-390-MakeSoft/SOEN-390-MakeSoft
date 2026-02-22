@@ -132,25 +132,7 @@ export default function NavigationScreen({
     const handleToggleMinimized = () => {
         setIsMinimized((prev) => !prev);
     };
-
-    const bottomCardColor = isColorBlind ? "#9aa7b2" : "#8e2334";
-    const chipColor = isColorBlind ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.30)";
-    const chipMutedColor = isColorBlind ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.14)";
-    const closeBg = isColorBlind ? "#e6eaee" : "#f6dce0";
-    const closeIcon = isColorBlind ? "#4b5862" : "#7f1f2a";
-    const previewBg = isColorBlind ? "#e6eaee" : "#f6dce0";
-    const previewTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";
-    const segmentTextColor = isColorBlind ? "#4b5862" : "#7f1f2a";    
-    const modes: Array<{
-        key: "walking" | "driving" | "shuttle";
-        label: string;
-        icon: keyof typeof MaterialIcons.glyphMap;
-        duration?: string;
-    }> = [
-        { key: "walking", label: "Walk", icon: "directions-walk", duration: modeDurations?.walking },
-        { key: "driving", label: "Car", icon: "directions-car", duration: modeDurations?.driving },
-        { key: "shuttle", label: "Shuttle", icon: "directions-bus", duration: undefined },
-    ];
+    
     const handleOpenPreview = () => {
         if (isPreviewButtonDisabled) return;
         setIsMinimized(false);
