@@ -1,18 +1,16 @@
+import * as Location from "expo-location";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
-import * as Location from "expo-location";
-import {
-    polygonCentroid,
-    findBuildingAtOrNearCoordinate,
-    coordsEqual,
-    isCrossCampusRoute,
-    nearestPolygonVertex,
-    type LatLng,
-} from "../utils/mapUtils";
-import { buildShuttleRoute } from "./useShuttleRoute";
-import { normalizeLabel, extractCodeFromName } from "../utils/stringUtils";
 import { BUILDING_POLYGONS } from "../data/buildingPolygons";
 import { LOYOLA_BUILDING_POLYGONS } from "../data/buildingPolygonsLoyola";
+import { getNextShuttles } from "../services/api";
+import {
+    coordsEqual,
+    findBuildingAtOrNearCoordinate,
+    polygonCentroid,
+    type LatLng,
+} from "../utils/mapUtils";
+import { extractCodeFromName, normalizeLabel } from "../utils/stringUtils";
 
 const MAX_TAP_DISTANCE_METERS = 80;
 
@@ -104,17 +102,15 @@ type RouteInfo = {
 type ModeDurations = {
     driving?: string;
     walking?: string;
-    shuttle?: string;
 };
 
-export type TransportMode = 'driving' | 'walking' | 'shuttle';
+type TransportMode = 'driving' | 'walking' | 'shuttle';
 
 export type NavigationStep = {
     instruction: string;
     distanceText: string;
     durationText: string;
     maneuver?: string;
-    isShuttleLeg?: boolean;
 };
 
 type ModeRoute = {
@@ -122,21 +118,13 @@ type ModeRoute = {
     durationSec: number;
     distanceText: string;
     viaText: string;
-    arrivalText?: string;
-    segments?: RouteSegment[];
     polyline: LatLng[];
     steps: NavigationStep[];
-};
-
-type RouteSegment = {
-    kind: "walking" | "shuttle";
-    polyline: LatLng[];
 };
 
 type AllModeRoutes = {
     driving?: ModeRoute | null;
     walking?: ModeRoute | null;
-    shuttle?: ModeRoute | null;
 };
 
 type MapRegion = {
@@ -144,6 +132,57 @@ type MapRegion = {
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
+};
+
+// SGW shuttle hub: Hall Building (1455 De Maisonneuve Blvd W)
+const SHUTTLE_HUB_SGW: LatLng = { latitude: 45.4972, longitude: -73.5789 };
+// Loyola shuttle hub: Vanier Library area (7141 Sherbrooke St W)
+const SHUTTLE_HUB_LOY: LatLng = { latitude: 45.4584, longitude: -73.6387 };
+
+/** Returns true when the origin is on SGW campus and the destination is on Loyola campus (or vice versa). */
+function isCrossCampusRoute(origin: LatLng | null, destination: LatLng | null): boolean {
+    if (!origin || !destination) return false;
+    const SGW_BOUNDS = { minLat: 45.491, maxLat: 45.502, minLng: -73.582, maxLng: -73.570 };
+    const LOY_BOUNDS = { minLat: 45.455, maxLat: 45.462, minLng: -73.648, maxLng: -73.633 };
+    const inSgw = (p: LatLng) =>
+        p.latitude >= SGW_BOUNDS.minLat && p.latitude <= SGW_BOUNDS.maxLat &&
+        p.longitude >= SGW_BOUNDS.minLng && p.longitude <= SGW_BOUNDS.maxLng;
+    const inLoy = (p: LatLng) =>
+        p.latitude >= LOY_BOUNDS.minLat && p.latitude <= LOY_BOUNDS.maxLat &&
+        p.longitude >= LOY_BOUNDS.minLng && p.longitude <= LOY_BOUNDS.maxLng;
+    return (inSgw(origin) && inLoy(destination)) || (inLoy(origin) && inSgw(destination));
+}
+
+/** Returns the departure campus key ('SGW' | 'LOY') based on which campus the origin is on. */
+function getDepartureCampus(origin: LatLng): 'SGW' | 'LOY' {
+    const SGW_BOUNDS = { minLat: 45.491, maxLat: 45.502, minLng: -73.582, maxLng: -73.570 };
+    const inSgw =
+        origin.latitude >= SGW_BOUNDS.minLat && origin.latitude <= SGW_BOUNDS.maxLat &&
+        origin.longitude >= SGW_BOUNDS.minLng && origin.longitude <= SGW_BOUNDS.maxLng;
+    return inSgw ? 'SGW' : 'LOY';
+}
+
+/** Returns true if today is a weekend (Saturday or Sunday). */
+function isWeekend(): boolean {
+    const day = new Date().getDay();
+    return day === 0 || day === 6;
+}
+
+
+
+export type ShuttleInfo = {
+    /** ISO strings for the next (up to 3) departure times; null entries mean no departure. */
+    departureTimes: (string | null)[];
+    /** Fixed shuttle trip duration in minutes (from backend). */
+    tripDurationMin: number;
+    /** Campus the shuttle departs from. */
+    departureCampus: 'SGW' | 'LOY';
+    /** Polyline from current location to the departure hub (walk). */
+    walkToHubPolyline: LatLng[];
+    /** Road-following polyline for the shuttle segment between the two hubs (driving route). */
+    shuttleSegmentPolyline: LatLng[];
+    /** Polyline from the arrival hub to the final destination (walk). */
+    walkFromHubPolyline: LatLng[];
 };
 
 interface UseNavigationBetweenBuildingsParams {
@@ -160,9 +199,11 @@ export function useNavigationBetweenBuildings({
 }: UseNavigationBetweenBuildingsParams) {
     const [isNavigationOpen, setIsNavigationOpen] = useState(false);
     const [navigationStart, setNavigationStart] = useState<string>("Your location");
-    const [navigationDestination, setNavigationDestination] = useState<string>("");    const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
-    const [navigationDestinationCoord, setNavigationDestinationCoord] = useState<LatLng | null>(null);
-    const [navigationDestinationPolygon, setNavigationDestinationPolygon] = useState<readonly LatLng[] | null>(null);
+    const [navigationDestination, setNavigationDestination] = useState<string>("");
+    const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
+    const [navigationDestinationCoord, setNavigationDestinationCoord] = useState<LatLng | null>(
+        null
+    );
     const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
     const [routeDetails, setRouteDetails] = useState<Record<RouteMode, RouteInfo | null>>({
         driving: null,
@@ -176,13 +217,15 @@ export function useNavigationBetweenBuildings({
         "start" | "destination" | null
     >(null);
     const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
-    const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});    
-    const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
-    const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
-    const [routeSegments, setRouteSegments] = useState<RouteSegment[]>([]);
+    const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});
+    const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');    const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
     const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
     const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
-    const [isCrossCampus, setIsCrossCampus] = useState(false);
+
+    // --- Shuttle state ---
+    const [isShuttleRoute, setIsShuttleRoute] = useState(false);
+    const [shuttleInfo, setShuttleInfo] = useState<ShuttleInfo | null>(null);
+    const [isShuttleLoading, setIsShuttleLoading] = useState(false);
 
     // Combined building list across both campuses for search/coordinate resolution
     const allBuildings = useMemo<Building[]>(() => {
@@ -284,17 +327,13 @@ export function useNavigationBetweenBuildings({
             return;
         }
 
-        let cancelled = false;        
+        let cancelled = false;
+
         const fetchDirections = async (
             mode: "driving" | "walking"
         ): Promise<ModeRoute | null> => {
-            // Snap destination to the nearest polygon vertex from the origin side,
-            // so the route ends at the building edge (on the street) not the interior centroid.
-            const snappedDest = navigationDestinationPolygon
-                ? nearestPolygonVertex(navigationOrigin, navigationDestinationPolygon)
-                : navigationDestinationCoord;
             const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
-            const destination = `${snappedDest.latitude},${snappedDest.longitude}`;
+            const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
             const trafficParam = mode === "driving" ? "&departure_time=now" : "";
             const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}${trafficParam}&key=${key}`;
             const response = await fetch(url);
@@ -302,17 +341,11 @@ export function useNavigationBetweenBuildings({
             if (data.status !== "OK" || !data.routes?.length) return null;
             const route = data.routes[0];
             const leg = route.legs?.[0];
-            if (!leg) return null;            
-            const stepPolyline: LatLng[] = (leg.steps ?? []).flatMap(
-                (s: { polyline?: { points?: string } }) =>
-                    s.polyline?.points ? decodePolyline(s.polyline.points) : []
-            );
-            const overviewPolyline =
-                route.overview_polyline?.points
-                    ? decodePolyline(route.overview_polyline.points)
-                    : [];
-            const polyline: LatLng[] =
-                stepPolyline.length > 0 ? stepPolyline : overviewPolyline;
+            if (!leg) return null;
+
+            const polyline: LatLng[] = route.overview_polyline?.points
+                ? decodePolyline(route.overview_polyline.points)
+                : [];
 
             // Prefer duration_in_traffic for driving (requires departure_time=now)
             const duration = leg.duration_in_traffic ?? leg.duration;
@@ -334,55 +367,27 @@ export function useNavigationBetweenBuildings({
                 polyline,
                 steps,
             };
-        };        
+        };
+
         const load = async () => {
             setIsRouteLoading(true);
             setModeDurations({});
             setRouteDetails({ driving: null, transit: null, walking: null });
             try {
-                const crossCampus = isCrossCampusRoute(navigationOrigin, navigationDestinationCoord);
-                setIsCrossCampus(crossCampus);
-
                 const [driving, walking] = await Promise.all([
                     fetchDirections("driving"),
                     fetchDirections("walking"),
                 ]);
                 if (cancelled) return;
 
-                // Fetch shuttle route if cross-campus
-                let shuttleRoute: ModeRoute | null = null;                if (crossCampus) {
-                    const sr = await buildShuttleRoute(
-                        navigationOrigin,
-                        navigationDestinationCoord,
-                        navigationDestinationPolygon ?? undefined
-                    );
-                    if (sr && !cancelled) {
-                        shuttleRoute = {
-                            durationText: sr.durationText,
-                            durationSec: sr.durationSec,
-                            distanceText: sr.distanceText,
-                            arrivalText: sr.arrivalTimeFormatted,
-                            viaText: `Shuttle — departs ${sr.departureTimeFormatted}`,
-                            segments: sr.segments,
-                            polyline: sr.polyline,
-                            steps: sr.steps,
-                        };
-                    }
-                }
-
-                if (cancelled) return;
-                setAllModeRoutes({ driving, walking, shuttle: shuttleRoute });
+                setAllModeRoutes({ driving, walking });
 
                 // Show polyline + steps for the currently selected mode
-                const active =
-                    selectedTransportMode === 'shuttle' ? shuttleRoute
-                    : selectedTransportMode === 'driving' ? driving
-                    : walking;
+                const active = selectedTransportMode === 'driving' ? driving : walking;
                 if (active?.polyline && active.polyline.length > 0) {
                     setRoutePolyline(active.polyline);
                     setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
                 }
-                setRouteSegments(active?.segments ?? []);
                 setNavigationSteps(active?.steps ?? []);
 
                 const primary = driving ?? walking;
@@ -402,7 +407,6 @@ export function useNavigationBetweenBuildings({
                 setModeDurations({
                     driving: driving?.durationText,
                     walking: walking?.durationText,
-                    shuttle: shuttleRoute?.durationText,
                 });
             } finally {
                 if (!cancelled) setIsRouteLoading(false);
@@ -420,23 +424,137 @@ export function useNavigationBetweenBuildings({
         navigationDestinationCoord,
         sameOriginDestination,
         missingCoordinates,
-    ]);    
-    // When the user switches transport mode, update the displayed polyline
+    ]);    // --- Shuttle route fetch ---
+    // Runs whenever origin/destination change and it is a cross-campus route on a weekday.
+    useEffect(() => {        if (!isNavigationOpen) return;
+        if (!navigationOrigin || !navigationDestinationCoord) return;
+        if (sameOriginDestination || missingCoordinates) return;        const crossCampus = isCrossCampusRoute(navigationOrigin, navigationDestinationCoord);
+        setIsShuttleRoute(crossCampus);        // Use real current date for weekend check
+        const effectivelyWeekend = isWeekend();
+
+        if (!crossCampus || effectivelyWeekend) {
+            setShuttleInfo(null);
+            setIsShuttleLoading(false);
+            return;
+        }
+
+        const key = getDirectionsKey();
+        let cancelled = false;
+        setIsShuttleLoading(true);
+
+        const fetchShuttleSegment = async (
+            origin: LatLng,
+            destination: LatLng,
+            mode: "walking" | "driving" = "walking"
+        ): Promise<LatLng[]> => {
+            if (!key) return [];
+            const o = `${origin.latitude},${origin.longitude}`;
+            const d = `${destination.latitude},${destination.longitude}`;
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${o}&destination=${d}&mode=${mode}&key=${key}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.status !== "OK" || !data.routes?.length) return [];
+                const points = data.routes[0].overview_polyline?.points;
+                return points ? decodePolyline(points) : [];
+            } catch {
+                return [];
+            }
+        };        const loadShuttle = async () => {
+            try {
+                const departureCampus = getDepartureCampus(navigationOrigin);
+                const arrivalHub = departureCampus === 'SGW' ? SHUTTLE_HUB_LOY : SHUTTLE_HUB_SGW;
+                const departureHub = departureCampus === 'SGW' ? SHUTTLE_HUB_SGW : SHUTTLE_HUB_LOY;
+
+                // Walking time to the departure hub (to compute offMinutes)
+                let offMinutes = 10; // sensible default
+                if (key) {
+                    const o = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
+                    const d = `${departureHub.latitude},${departureHub.longitude}`;
+                    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${o}&destination=${d}&mode=walking&key=${key}`;
+                    try {
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        if (data.status === "OK" && data.routes?.[0]?.legs?.[0]?.duration?.value) {
+                            offMinutes = Math.round(data.routes[0].legs[0].duration.value / 60);
+                        }
+                    } catch { /* use default */ }
+                }
+
+                const [shuttleResp, walkToHub, shuttleSegment, walkFromHub] = await Promise.all([
+                    getNextShuttles(departureCampus, offMinutes),
+                    fetchShuttleSegment(navigationOrigin, departureHub),
+                    fetchShuttleSegment(departureHub, arrivalHub, "driving"),
+                    fetchShuttleSegment(arrivalHub, navigationDestinationCoord),
+                ]);
+
+                if (cancelled) return;
+
+                setShuttleInfo({
+                    departureTimes: shuttleResp.threeNextShuttles,
+                    tripDurationMin: shuttleResp.tripDuration,
+                    departureCampus,
+                    walkToHubPolyline: walkToHub,
+                    shuttleSegmentPolyline: shuttleSegment,
+                    walkFromHubPolyline: walkFromHub,
+                });
+            } catch {
+                if (!cancelled) setShuttleInfo(null);
+            } finally {
+                if (!cancelled) setIsShuttleLoading(false);
+            }
+        };
+
+        void loadShuttle();
+        return () => { cancelled = true; };
+    }, [
+        isNavigationOpen,
+        navigationOrigin,
+        navigationDestinationCoord,
+        sameOriginDestination,
+        missingCoordinates,
+    ]);    // When the user switches transport mode, update the displayed polyline
     useEffect(() => {
         if (!isNavigationOpen) {
             setRoutePolyline([]);
-            setRouteSegments([]);
             setRouteRegion(null);
             return;
+        }        // Shuttle mode: show walk-to-hub + walk-from-hub polylines; the shuttle
+        // segment itself is rendered separately as a red solid line on the map.
+        if (selectedTransportMode === 'shuttle') {
+            if (shuttleInfo) {
+                const allPoints = [
+                    ...shuttleInfo.walkToHubPolyline,
+                    ...shuttleInfo.shuttleSegmentPolyline,
+                    ...shuttleInfo.walkFromHubPolyline,
+                ];
+                if (allPoints.length > 0) {
+                    setRouteRegion(boundsToRegion(calculateBounds(allPoints)));
+                }
+                setRoutePolyline([]); // individual segments handled by the map
+            }
+            setNavigationSteps([{
+                instruction: "Walk to the Shuttle Hub",
+                distanceText: "",
+                durationText: "",
+            }, {
+                instruction: "Take the Shuttle from Hall Building",
+                distanceText: "",
+                durationText: shuttleInfo ? `~${shuttleInfo.tripDurationMin} min ride` : "",
+            }, {
+                instruction: "Walk to your destination",
+                distanceText: "",
+                durationText: "",
+            }]);
+            return;
         }
-        const route =
-            selectedTransportMode === 'shuttle' ? allModeRoutes.shuttle
-            : selectedTransportMode === 'driving' ? allModeRoutes.driving
+
+        const route = selectedTransportMode === 'driving'
+            ? allModeRoutes.driving
             : allModeRoutes.walking;
         if (route?.polyline && route.polyline.length > 0) {
             setRoutePolyline(route.polyline);
             setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
-            setRouteSegments(route.segments ?? []);
 
             // Update trip summary + steps to match the selected mode
             const arrival = new Date(Date.now() + route.durationSec * 1000);
@@ -445,7 +563,7 @@ export function useNavigationBetweenBuildings({
                 minute: "2-digit",
             });
             setRouteSummary({
-                arrivalText: route.arrivalText ?? arrivalText,
+                arrivalText,
                 distanceText: route.distanceText,
                 durationText: route.durationText,
                 viaText: route.viaText || "Suggested route",
@@ -457,7 +575,6 @@ export function useNavigationBetweenBuildings({
             // is in-flight after an endpoint change) we keep the previous
             // polyline visible as a placeholder.
             setRoutePolyline([]);
-            setRouteSegments([]);
             setRouteRegion(null);
             setNavigationSteps([]);
         }
@@ -467,11 +584,14 @@ export function useNavigationBetweenBuildings({
      *  overwrites everything.  We set isRouteLoading immediately so the UI
      *  shows "Loading route..." instead of "Select start and destination".
      *  Old polyline, region, steps and modeDurations stay visible as
-     *  placeholders while the new route loads. */
+     *  placeholders while the new route loads. */    
     const resetRouteState = useCallback(() => {
         setRouteSummary(null);
         setAllModeRoutes({});
         setIsRouteLoading(true);
+        setShuttleInfo(null);
+        setIsShuttleLoading(false);
+        setIsShuttleRoute(false);
     }, []);
 
     const openNavigationForBuilding = useCallback(
@@ -481,10 +601,9 @@ export function useNavigationBetweenBuildings({
             const destinationCode =
                 remoteBuilding?.code ?? selectedBuilding?.code ?? null;
             setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
-            setActiveMode("driving");            
+            setActiveMode("driving");
             if (selectedBuilding) {
                 setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
-                setNavigationDestinationPolygon(selectedBuilding.polygon);
             }
             resetRouteState();
             setIsNavigationOpen(true);
@@ -493,7 +612,7 @@ export function useNavigationBetweenBuildings({
     );
 
     const handleMapBuildingPress = useCallback(
-        (buildingId: string) => {            
+        (buildingId: string) => {
             const building = buildings.find((b) => b.id === buildingId);
             if (!building) return;
             const centroid = polygonCentroid(building.polygon);
@@ -512,24 +631,22 @@ export function useNavigationBetweenBuildings({
             if (navigationActiveField === "destination") {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
-                setNavigationDestinationPolygon(building.polygon);
                 resetRouteState();
                 return;
             }
-            // No active field: if destination is already chosen, populate start.
-            // Otherwise set destination.
-            if (navigationDestination.trim() !== "") {
+            if (navigationDestination) {
                 setNavigationStart(label);
                 setNavigationOrigin(centroid);
                 resetRouteState();
-                return;
+            } else {
+                setNavigationDestination(label);
+                setNavigationDestinationCoord(centroid);
+                resetRouteState();
             }
-            setNavigationDestination(label);
-            setNavigationDestinationCoord(centroid);
-            setNavigationDestinationPolygon(building.polygon);
-            resetRouteState();
-        },        [
+        },
+        [
             buildings,
+            clearRouteState,
             formatBuildingLabel,
             isNavigationOpen,
             navigationActiveField,
@@ -564,7 +681,8 @@ export function useNavigationBetweenBuildings({
             const building = allBuildings.find((b) => {
                 if (code && b.code?.toUpperCase() === code.toUpperCase()) return true;
                 return normalizeLabel(b.name).includes(normalizeLabel(name));
-            });            
+            });
+
             if (field === "start") {
                 setNavigationStart(label);
                 if (name === "Your location") {
@@ -576,13 +694,12 @@ export function useNavigationBetweenBuildings({
                 setNavigationDestination(label);
                 if (building) {
                     setNavigationDestinationCoord(polygonCentroid(building.polygon));
-                    setNavigationDestinationPolygon(building.polygon);
                 }
             }
             resetRouteState();
         },
         [allBuildings, formatBuildingLabel, resetRouteState]
-    );     
+    );    
     const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
@@ -592,14 +709,12 @@ export function useNavigationBetweenBuildings({
         setModeDurations({});
         setIsRouteLoading(false);
         setRoutePolyline([]);
-        setRouteSegments([]);
         setRouteRegion(null);
         setNavigationSteps([]);
-        setIsCrossCampus(false);
-        setNavigationDestinationPolygon(null);
+        setShuttleInfo(null);
+        setIsShuttleLoading(false);
+        setIsShuttleRoute(false);
     }, []);
-
-
     return {
         isNavigationOpen,
         navigationStart,
@@ -617,14 +732,14 @@ export function useNavigationBetweenBuildings({
         handleMapCoordinatePress,
         handleSearchSelect,
         closeNavigation,
-        tapMarkerCoordinate,        
+        tapMarkerCoordinate,
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
-        routeSegments,
         routeRegion,
-        navigationSteps,
-        isCrossCampus,
+        navigationSteps,        // Shuttle
+        isShuttleRoute,
+        isShuttleLoading,
+        shuttleInfo,        isWeekend: isWeekend(),
     };
 }
-

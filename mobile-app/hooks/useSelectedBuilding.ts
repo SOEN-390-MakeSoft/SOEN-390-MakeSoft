@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef } from "react";
-import { Alert } from "react-native";
+import { useEffect, useState } from "react";
 import MapView from "react-native-maps";
 import { BuildingResponse, getBuildingById } from "../services/api";
 import { polygonCentroid } from "../utils/mapUtils";
