@@ -149,7 +149,7 @@ export default function MapScreen() {
         activeMode,
         modeDurations,
         isRouteLoading,
-        directionsError,
+        directionsError,        
         isGetDirectionsDisabled,
         setNavigationActiveField,
         setActiveMode,
@@ -158,14 +158,16 @@ export default function MapScreen() {
         handleMapCoordinatePress,
         handleSearchSelect,
         closeNavigation,
-        tapMarkerCoordinate,        
+        tapMarkerCoordinate,
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
-        routeSegments,
         routeRegion,
         navigationSteps,
-        isCrossCampus,
+        isShuttleRoute,
+        isShuttleLoading,
+        shuttleInfo,
+        isWeekend,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -313,8 +315,7 @@ export default function MapScreen() {
                         strokeColor="#4A89F3"
                         strokeWidth={5}
                     />
-                )}
-                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                )}                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
                     <Polyline
                         key="route-walking"
                         coordinates={routePolyline}
@@ -323,22 +324,32 @@ export default function MapScreen() {
                         lineDashPattern={[10, 6]}
                     />
                 )}
-                {selectedTransportMode === 'shuttle' && routeSegments.length > 0 && routeSegments.map((segment, index) => (
+                {/* Shuttle mode: walk-to-hub segment (dashed blue) */}
+                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.walkToHubPolyline.length > 0 && (
                     <Polyline
-                        key={`route-shuttle-segment-${segment.kind}-${index}`}
-                        testID={`route-shuttle-segment-${segment.kind}-${index}`}
-                        coordinates={segment.polyline}
-                        strokeColor={segment.kind === "walking" ? "#4A89F3" : brandRed}
-                        strokeWidth={5}
-                        lineDashPattern={segment.kind === "walking" ? [10, 6] : undefined}
+                        key="shuttle-walk-to-hub"
+                        coordinates={shuttleInfo.walkToHubPolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={4}
+                        lineDashPattern={[10, 6]}
                     />
-                ))}
-                {routePolyline.length > 0 && selectedTransportMode === 'shuttle' && routeSegments.length === 0 && (
+                )}                {/* Shuttle mode: shuttle segment (solid Concordia red, road-following driving route) */}
+                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.shuttleSegmentPolyline.length > 0 && (
                     <Polyline
-                        key="route-shuttle"
-                        coordinates={routePolyline}
-                        strokeColor={brandRed}
+                        key="shuttle-segment"
+                        coordinates={shuttleInfo.shuttleSegmentPolyline}
+                        strokeColor="rgba(178, 27, 44, 0.9)"
                         strokeWidth={5}
+                    />
+                )}
+                {/* Shuttle mode: walk-from-hub segment (dashed blue) */}
+                {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.walkFromHubPolyline.length > 0 && (
+                    <Polyline
+                        key="shuttle-walk-from-hub"
+                        coordinates={shuttleInfo.walkFromHubPolyline}
+                        strokeColor="#4A89F3"
+                        strokeWidth={4}
+                        lineDashPattern={[10, 6]}
                     />
                 )}
                 {buildings.map((building) => {
@@ -410,8 +421,7 @@ export default function MapScreen() {
                     openNavigationForBuilding(selectedBuilding, remoteBuilding);
                     handleCloseCard();
                 }}
-            />            
-            <NavigationScreen
+            />            <NavigationScreen
                 visible={isNavigationOpen}
                 startLabel={navigationStart}
                 destinationLabel={navigationDestination}
@@ -426,11 +436,12 @@ export default function MapScreen() {
                 selectedTransportMode={selectedTransportMode}
                 onTransportModeChange={setSelectedTransportMode}
                 navigationSteps={navigationSteps}
-                isCrossCampus={isCrossCampus}
-            />
-
-            {/* Quick Pick Panel and Location Button */}
-            {!isMenuOpen && !isNavigationOpen && (
+                isShuttleRoute={isShuttleRoute}
+                isShuttleLoading={isShuttleLoading}
+                shuttleInfo={shuttleInfo}
+                isWeekend={isWeekend}
+            />            {/* Quick Pick Panel and Location Button */}
+            {(!isMenuOpen && !isNavigationOpen) ? (
                 <QuickPickPanel
                     activeCampus={activeCampus}
                     isColorBlind={isColorBlind}
@@ -445,15 +456,15 @@ export default function MapScreen() {
                     onQuickPick={handleQuickPick}
                     onLocationPress={goToUserLocation}
                 />
-            )}
+            ) : null}
 
             <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-            {buildingNotFoundToast && (
+            {buildingNotFoundToast ? (
                 <View style={styles.toast} testID="building-not-found-toast">
                     <Text style={styles.toastText}>Building not found</Text>
                 </View>
-            )}
+            ) : null}
         </View>
     );
 }

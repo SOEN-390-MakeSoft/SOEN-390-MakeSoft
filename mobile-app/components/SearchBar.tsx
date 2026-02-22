@@ -15,6 +15,7 @@ type SearchResult = {
     name: string;
     address: string | null;
     code: string | null;
+    polygon?: readonly { latitude: number; longitude: number }[];
 };
 
 interface SearchBarProps {

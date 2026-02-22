@@ -168,13 +168,130 @@ describe("NavigationScreen", () => {
             );
             fireEvent.press(screen.getByTestId("mode-chip-driving"));
             expect(onTransportModeChange).toHaveBeenCalledWith("driving");
-        });
-
+        });        
         it("should not throw when shuttle chip is pressed (it is not a Pressable)", () => {
             render(<NavigationScreen {...defaultProps} />);
             const shuttleChip = screen.getByTestId("mode-chip-shuttle-disabled");
             // View does not respond to press, this should not throw
             expect(() => fireEvent.press(shuttleChip)).not.toThrow();
+        });
+
+        it("should render active shuttle chip when isShuttleRoute=true and not weekend", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                />
+            );
+            expect(screen.getByTestId("mode-chip-shuttle")).toBeTruthy();
+            expect(screen.queryByTestId("mode-chip-shuttle-disabled")).toBeNull();
+        });
+
+        it("should render disabled shuttle chip on weekend even for cross-campus route", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={true}
+                />
+            );
+            expect(screen.getByTestId("mode-chip-shuttle-disabled")).toBeTruthy();
+            expect(screen.queryByTestId("mode-chip-shuttle")).toBeNull();
+        });
+
+        it("should call onTransportModeChange with 'shuttle' when shuttle chip is pressed", () => {
+            const onTransportModeChange = jest.fn();
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                    selectedTransportMode="driving"
+                    onTransportModeChange={onTransportModeChange}
+                />
+            );
+            fireEvent.press(screen.getByTestId("mode-chip-shuttle"));
+            expect(onTransportModeChange).toHaveBeenCalledWith("shuttle");
+        });
+    });
+
+    describe("shuttle departures panel", () => {        const shuttleInfo = {
+            departureTimes: ["2026-02-21T10:00:00", "2026-02-21T10:30:00", null],
+            tripDurationMin: 30,
+            departureCampus: "SGW" as const,
+            walkToHubPolyline: [],
+            shuttleSegmentPolyline: [],
+            walkFromHubPolyline: [],
+        };
+
+        it("should show shuttle panel when shuttle mode is selected and info is available", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                    selectedTransportMode="shuttle"
+                    shuttleInfo={shuttleInfo}
+                    isShuttleLoading={false}
+                />
+            );
+            expect(screen.getByTestId("shuttle-departures-panel")).toBeTruthy();
+        });
+
+        it("should show two departure time chips (one null is excluded)", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                    selectedTransportMode="shuttle"
+                    shuttleInfo={shuttleInfo}
+                    isShuttleLoading={false}
+                />
+            );
+            expect(screen.getByTestId("shuttle-time-0")).toBeTruthy();
+            expect(screen.getByTestId("shuttle-time-1")).toBeTruthy();
+            expect(screen.queryByTestId("shuttle-time-2")).toBeNull();
+        });
+
+        it("should show 'No more shuttles today' when all departures are null", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                    selectedTransportMode="shuttle"
+                    shuttleInfo={{ ...shuttleInfo, departureTimes: [null, null, null] }}
+                    isShuttleLoading={false}
+                />
+            );
+            expect(screen.getByTestId("shuttle-no-more")).toBeTruthy();
+        });
+
+        it("should show weekend notice when isWeekend is true and shuttle mode selected", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={true}
+                    selectedTransportMode="shuttle"
+                />
+            );
+            expect(screen.getByTestId("shuttle-weekend-notice")).toBeTruthy();
+        });
+
+        it("should not show shuttle panel when not in shuttle mode", () => {
+            render(
+                <NavigationScreen
+                    {...defaultProps}
+                    isShuttleRoute={true}
+                    isWeekend={false}
+                    selectedTransportMode="walking"
+                    shuttleInfo={shuttleInfo}
+                />
+            );
+            expect(screen.queryByTestId("shuttle-departures-panel")).toBeNull();
         });
     });
 
