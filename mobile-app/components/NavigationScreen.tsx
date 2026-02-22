@@ -43,6 +43,8 @@ interface NavigationScreenProps {
     onOpenPreview?: () => void;
 }
 
+const DRAG_THRESHOLD = 40;
+
 const DIRECTIONS_ERROR_MESSAGES: Record<NonNullable<DirectionsErrorType>, string> = {
     same_origin_destination: "Origin and destination cannot be the same.",
     missing_coordinates: "Coordinates are missing for the selected name.",
@@ -288,52 +290,12 @@ export default function NavigationScreen({
                         {DIRECTIONS_ERROR_MESSAGES[directionsError]}
                     </Text>
                 ) : null}
-                <Pressable
-                    style={[
-                        styles.getDirectionsButton,
-                        { backgroundColor: previewBg },
-                        isGetDirectionsDisabled && styles.getDirectionsButtonDisabled,
-                    ]}
-                    disabled={isGetDirectionsDisabled}
-                    accessibilityRole="button"
-                    accessibilityLabel="Get directions"
-                    testID="get-directions-button"
-                >
-                    <MaterialIcons
-                        name="arrow-forward"
-                        size={16}
-                        color={isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor}
-                    />
-                    <Text
-                        style={[
-                            styles.getDirectionsText,
-                            {
-                                color: isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor,
-                            },
-                        ]}
-                    >
-                        Get Directions
-                    </Text>
-                </Pressable>
                 {navigationSteps.length > 0 ? (
                     <ScrollView
                         style={styles.scrollableContent}
                         showsVerticalScrollIndicator
                         nestedScrollEnabled
                     >
-                        <Text style={styles.tripTitle} numberOfLines={2}>
-                            {tripTitleText}
-                        </Text>
-                        {tripSummary && (
-                            <Text style={styles.tripMeta} numberOfLines={1}>
-                                {tripSummary.distanceText} - {tripSummary.durationText}
-                            </Text>
-                        )}
-                        {directionsError && (
-                            <Text style={styles.errorText} testID="directions-error">
-                                {DIRECTIONS_ERROR_MESSAGES[directionsError]}
-                            </Text>
-                        )}
                         <Pressable
                             style={[
                                 styles.getDirectionsButton,
