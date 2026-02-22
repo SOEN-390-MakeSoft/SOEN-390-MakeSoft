@@ -313,9 +313,9 @@ export default function MapScreen() {
                         key="route-driving"
                         coordinates={routePolyline}
                         strokeColor="#4A89F3"
-                        strokeWidth={5}
-                    />
-                )}                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
+                        strokeWidth={5}                    />
+                )}
+                {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
                     <Polyline
                         key="route-walking"
                         coordinates={routePolyline}
@@ -331,9 +331,9 @@ export default function MapScreen() {
                         coordinates={shuttleInfo.walkToHubPolyline}
                         strokeColor="#4A89F3"
                         strokeWidth={4}
-                        lineDashPattern={[10, 6]}
-                    />
-                )}                {/* Shuttle mode: shuttle segment (solid Concordia red, road-following driving route) */}
+                        lineDashPattern={[10, 6]}                    />
+                )}
+                {/* Shuttle mode: shuttle segment (solid Concordia red, road-following driving route) */}
                 {selectedTransportMode === 'shuttle' && shuttleInfo && shuttleInfo.shuttleSegmentPolyline.length > 0 && (
                     <Polyline
                         key="shuttle-segment"
@@ -421,7 +421,8 @@ export default function MapScreen() {
                     openNavigationForBuilding(selectedBuilding, remoteBuilding);
                     handleCloseCard();
                 }}
-            />            <NavigationScreen
+            />
+            <NavigationScreen
                 visible={isNavigationOpen}
                 startLabel={navigationStart}
                 destinationLabel={navigationDestination}
@@ -440,7 +441,8 @@ export default function MapScreen() {
                 isShuttleLoading={isShuttleLoading}
                 shuttleInfo={shuttleInfo}
                 isWeekend={isWeekend}
-            />            {/* Quick Pick Panel and Location Button */}
+            />
+            {/* Quick Pick Panel and Location Button */}
             {(!isMenuOpen && !isNavigationOpen) ? (
                 <QuickPickPanel
                     activeCampus={activeCampus}

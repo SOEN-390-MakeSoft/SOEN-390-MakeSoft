@@ -171,18 +171,17 @@ export default function NavigationScreen({
                             label={modeDurations?.driving ?? "--"}
                             isSelected={selectedTransportMode === 'driving'}
                             chipColor={chipColor}
-                            chipMutedColor={chipMutedColor}
-                            onPress={onTransportModeChange ?? (() => {})}
-                        />                        
+                            chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
+                        />
                         <ModeChip
                             mode="walking"
                             icon="directions-walk"
                             label={modeDurations?.walking ?? "--"}
                             isSelected={selectedTransportMode === 'walking'}
                             chipColor={chipColor}
-                            chipMutedColor={chipMutedColor}
-                            onPress={onTransportModeChange ?? (() => {})}
-                        />                        {isShuttleRoute ? (
+                            chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
+                        />
+                        {isShuttleRoute ? (
                             isWeekend ? (
                                 // Cross-campus but weekend — show disabled chip with N/A label
                                 <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
@@ -214,15 +213,18 @@ export default function NavigationScreen({
                     >
                         <MaterialIcons name="close" size={18} color={closeIcon} />
                     </Pressable>
-                </View>                <Text style={styles.tripTitle} numberOfLines={2}>
+                </View>
+                <Text style={styles.tripTitle} numberOfLines={2}>
                     {(selectedTransportMode === 'shuttle' && isShuttleRoute)
                         ? (isShuttleLoading ? "Loading shuttle times..." : "Shuttle - next departures")
                         : tripTitleText}
-                </Text>                {(tripSummary && selectedTransportMode !== 'shuttle') ? (
+                </Text>
+                {(tripSummary && selectedTransportMode !== 'shuttle') ? (
                     <Text style={styles.tripMeta} numberOfLines={1}>
                         {tripSummary.distanceText} - {tripSummary.durationText}
                     </Text>
-                ) : null}                {/* Shuttle departure times panel */}
+                ) : null}
+                {/* Shuttle departure times panel */}
                 {(selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && shuttleInfo) ? (
                     <View style={styles.shuttlePanel} testID="shuttle-departures-panel">
                         <Text style={styles.shuttleHubText}>
@@ -286,7 +288,8 @@ export default function NavigationScreen({
                     >
                         Get Directions
                     </Text>
-                </Pressable>                {navigationSteps.length > 0 ? (
+                </Pressable>
+                {navigationSteps.length > 0 ? (
                     <ScrollView
                         style={styles.stepsContainer}
                         testID="navigation-steps-list"
