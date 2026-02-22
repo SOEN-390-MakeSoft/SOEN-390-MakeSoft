@@ -10,12 +10,8 @@ type Building = {
     polygon: readonly { latitude: number; longitude: number }[];
 };
 
-type SearchResult = {
-    id: string;
-    name: string;
-    address: string | null;
-    code: string | null;
-};
+// Looser result type returned to the UI (polygon not required)
+type SearchResult = Omit<Building, "polygon"> & { polygon?: Building["polygon"] };
 
 /**
  * Hook to manage search functionality including query, focus state, and results
@@ -23,10 +19,10 @@ type SearchResult = {
 export function useSearch(buildings: Building[], onSelectResult: (building: Building) => void) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const searchInputRef = useRef<TextInput>(null);
+    const searchInputRef = useRef<TextInput | null>(null);
 
     // Memoized search results filtering
-    const searchResults = useMemo<SearchResult[]>(() => {
+    const searchResults = useMemo(() => {
         const query = normalizeLabel(searchQuery);
         if (!query) return [];
         return buildings
@@ -49,16 +45,15 @@ export function useSearch(buildings: Building[], onSelectResult: (building: Buil
     const handleSearchSubmit = () => {
         if (searchResults.length === 0) return;
         handleSelectSearchResult(searchResults[0]);
-    };    
-    /**
+    };    /**
      * Handles selection of a search result
      */
     const handleSelectSearchResult = (result: SearchResult) => {
         setSearchQuery(result.name);
         setIsSearchFocused(false);
         searchInputRef.current?.blur();
-        const building = buildings.find((b) => b.id === result.id);
-        if (building) onSelectResult(building);
+        // Results always come from `buildings` so polygon is always present
+        onSelectResult(result as Building);
     };
 
     return {
