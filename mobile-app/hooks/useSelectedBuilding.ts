@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef } from "react";
-import { Alert } from "react-native";
+import { useEffect, useState } from "react";
 import MapView from "react-native-maps";
 import { BuildingResponse, getBuildingById } from "../services/api";
 import { polygonCentroid } from "../utils/mapUtils";
@@ -17,7 +16,7 @@ type Building = {
 
  //Hook to manage building selection and remote building data fetching
  
-export function useSelectedBuilding(buildings: Building[], mapRef: React.RefObject<MapView>) {
+export function useSelectedBuilding(buildings: Building[], mapRef: React.RefObject<MapView | null>) {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     const [remoteBuilding, setRemoteBuilding] = useState<BuildingResponse | null>(null);
     const [isLoading, setIsLoading] = useState(false);

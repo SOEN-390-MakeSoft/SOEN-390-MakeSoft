@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import type { NavigationStep } from "../hooks/useNavigationBetweenBuildings";
+import type { NavigationStep, ShuttleInfo } from "../hooks/useNavigationBetweenBuildings";
 import NavigationMenu from "./NavigationMenu";
 import { useSettings } from "../context/settings";
 
 export type DirectionsErrorType = "same_origin_destination" | "missing_coordinates" | null;
 
-const DRAG_THRESHOLD = 40;
-
-type TransportMode = "driving" | "walking";
+type TransportMode = 'driving' | 'walking' | 'shuttle';
 
 interface NavigationScreenProps {
     visible: boolean;
@@ -34,6 +32,14 @@ interface NavigationScreenProps {
     selectedTransportMode?: TransportMode;
     onTransportModeChange?: (mode: TransportMode) => void;
     navigationSteps?: NavigationStep[];
+    /** Whether the route is a cross-campus route (SGW ↔ Loyola) */
+    isShuttleRoute?: boolean;
+    /** Whether shuttle schedule is loading */
+    isShuttleLoading?: boolean;
+    /** Shuttle departure times and route info returned from the backend */
+    shuttleInfo?: ShuttleInfo | null;
+    /** Whether today is a weekend (shuttle not available) */
+    isWeekend?: boolean;
     onOpenPreview?: () => void;
 }
 
@@ -90,6 +96,10 @@ export default function NavigationScreen({
     selectedTransportMode = "driving",
     onTransportModeChange,
     navigationSteps = [],
+    isShuttleRoute = false,
+    isShuttleLoading = false,
+    shuttleInfo = null,
+    isWeekend = false,
     onOpenPreview,
 }: Readonly<NavigationScreenProps>) {
     const { colourBlindMode } = useSettings();
@@ -122,7 +132,7 @@ export default function NavigationScreen({
     const handleToggleMinimized = () => {
         setIsMinimized((prev) => !prev);
     };
-
+    
     const handleOpenPreview = () => {
         if (isPreviewButtonDisabled) return;
         setIsMinimized(false);
@@ -186,8 +196,7 @@ export default function NavigationScreen({
                             label={modeDurations?.driving ?? "--"}
                             isSelected={selectedTransportMode === "driving"}
                             chipColor={chipColor}
-                            chipMutedColor={chipMutedColor}
-                            onPress={onTransportModeChange ?? (() => {})}
+                            chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
                         />
                         <ModeChip
                             mode="walking"
@@ -195,12 +204,33 @@ export default function NavigationScreen({
                             label={modeDurations?.walking ?? "--"}
                             isSelected={selectedTransportMode === "walking"}
                             chipColor={chipColor}
-                            chipMutedColor={chipMutedColor}
-                            onPress={onTransportModeChange ?? (() => {})}
+                            chipMutedColor={chipMutedColor}                            onPress={onTransportModeChange ?? (() => {})}
                         />
-                        <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}> 
-                            <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
-                        </View>
+                        {isShuttleRoute ? (
+                            isWeekend ? (
+                                // Cross-campus but weekend — show disabled chip with N/A label
+                                <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                                    <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+                                    <Text style={styles.shuttleUnavailableText}>N/A</Text>
+                                </View>
+                            ) : (
+                                // Cross-campus weekday — fully enabled shuttle chip
+                                <ModeChip
+                                    mode="shuttle"
+                                    icon="directions-bus"
+                                    label="Shuttle"
+                                    isSelected={selectedTransportMode === 'shuttle'}
+                                    chipColor={chipColor}
+                                    chipMutedColor={chipMutedColor}
+                                    onPress={onTransportModeChange ?? (() => {})}
+                                />
+                            )
+                        ) : (
+                            // Not a cross-campus route — show plain disabled bus icon, no text
+                            <View testID="mode-chip-shuttle-disabled" style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}>
+                                <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+                            </View>
+                        )}
                     </View>
                     <Pressable
                         onPress={onClose}
@@ -209,7 +239,83 @@ export default function NavigationScreen({
                         <MaterialIcons name="close" size={18} color={closeIcon} />
                     </Pressable>
                 </View>
-                {!isMinimized && (
+                <Text style={styles.tripTitle} numberOfLines={2}>
+                    {(selectedTransportMode === 'shuttle' && isShuttleRoute)
+                        ? (isShuttleLoading ? "Loading shuttle times..." : "Shuttle - next departures")
+                        : tripTitleText}
+                </Text>
+                {(tripSummary && selectedTransportMode !== 'shuttle') ? (
+                    <Text style={styles.tripMeta} numberOfLines={1}>
+                        {tripSummary.distanceText} - {tripSummary.durationText}
+                    </Text>
+                ) : null}
+                {/* Shuttle departure times panel */}
+                {(selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && shuttleInfo) ? (
+                    <View style={styles.shuttlePanel} testID="shuttle-departures-panel">
+                        <Text style={styles.shuttleHubText}>
+                            {`Departs from ${shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)'}`}
+                        </Text>
+                        <View style={styles.shuttleTimesRow}>
+                            {shuttleInfo.departureTimes.map((t, i) =>
+                                t ? (
+                                    <View key={`dep-${i}`} style={styles.shuttleTimeChip} testID={`shuttle-time-${i}`}>
+                                        <MaterialIcons name="directions-bus" size={14} color="#fff" />
+                                        <Text style={styles.shuttleTimeText}>
+                                            {new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                        </Text>
+                                    </View>
+                                ) : null
+                            )}
+                            {shuttleInfo.departureTimes.every(t => t === null) ? (
+                                <Text style={styles.shuttleNoMore} testID="shuttle-no-more">
+                                    No more shuttles today
+                                </Text>
+                            ) : null}
+                        </View>
+                        <Text style={styles.shuttleRideTime}>
+                            {`~${shuttleInfo.tripDurationMin} min ride`}
+                        </Text>
+                    </View>
+                ) : null}
+                {(selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute) ? (
+                    <Text style={styles.shuttleWeekendText} testID="shuttle-weekend-notice">
+                  
+                        Shuttle service is not available on weekends.
+                    </Text>
+                ) : null}
+                {directionsError ? (
+                    <Text style={styles.errorText} testID="directions-error">
+                        {DIRECTIONS_ERROR_MESSAGES[directionsError]}
+                    </Text>
+                ) : null}
+                <Pressable
+                    style={[
+                        styles.getDirectionsButton,
+                        { backgroundColor: previewBg },
+                        isGetDirectionsDisabled && styles.getDirectionsButtonDisabled,
+                    ]}
+                    disabled={isGetDirectionsDisabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Get directions"
+                    testID="get-directions-button"
+                >
+                    <MaterialIcons
+                        name="arrow-forward"
+                        size={16}
+                        color={isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor}
+                    />
+                    <Text
+                        style={[
+                            styles.getDirectionsText,
+                            {
+                                color: isGetDirectionsDisabled ? "#9b9b9b" : previewTextColor,
+                            },
+                        ]}
+                    >
+                        Get Directions
+                    </Text>
+                </Pressable>
+                {navigationSteps.length > 0 ? (
                     <ScrollView
                         style={styles.scrollableContent}
                         showsVerticalScrollIndicator
@@ -238,7 +344,7 @@ export default function NavigationScreen({
                             onPress={handleOpenPreview}
                             accessibilityRole="button"
                             accessibilityLabel="Preview route"
-                            testID="get-directions-button"
+                            testID="preview-route-button"
                         >
                             <MaterialIcons
                                 name="arrow-forward"
@@ -271,7 +377,7 @@ export default function NavigationScreen({
                             </View>
                         )}
                     </ScrollView>
-                )}
+                ) : null}
             </View>
         </View>
     );
@@ -406,5 +512,60 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "rgba(255,255,255,0.75)",
         marginTop: 2,
+    },
+    shuttleUnavailableText: {
+        fontSize: 10,
+        color: "rgba(255,255,255,0.6)",
+        marginLeft: 4,
+        fontWeight: "600",
+    },
+    shuttlePanel: {
+        marginTop: 12,
+        backgroundColor: "rgba(255,255,255,0.12)",
+        borderRadius: 12,
+        padding: 12,
+    },
+    shuttleHubText: {
+        fontSize: 12,
+        color: "rgba(255,255,255,0.75)",
+        marginBottom: 8,
+        fontWeight: "600",
+    },    shuttleTimesRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        rowGap: 8,
+        columnGap: 8,
+        marginBottom: 6,
+    },
+    shuttleTimeChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        columnGap: 4,
+        backgroundColor: "rgba(255,255,255,0.2)",
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+    },
+    shuttleTimeText: {
+        fontSize: 13,
+        color: "#fff",
+        fontWeight: "700",
+    },
+    shuttleNoMore: {
+        fontSize: 13,
+        color: "rgba(255,255,255,0.7)",
+        fontStyle: "italic",
+    },
+    shuttleRideTime: {
+        fontSize: 12,
+        color: "rgba(255,255,255,0.65)",
+        marginTop: 4,
+    },
+    shuttleWeekendText: {
+        marginTop: 10,
+        fontSize: 13,
+        color: "rgba(255,255,255,0.8)",
+        textAlign: "center",
+        fontStyle: "italic",
     },
 });

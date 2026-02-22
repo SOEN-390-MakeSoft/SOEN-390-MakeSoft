@@ -4,6 +4,12 @@ import { Platform } from "react-native";
 import * as Location from "expo-location";
 
 jest.mock("expo-location");
+jest.mock("../services/api", () => ({
+    getNextShuttles: jest.fn().mockResolvedValue({
+        threeNextShuttles: ["2026-02-21T10:00:00", "2026-02-21T10:30:00", null],
+        tripDuration: 30,
+    }),
+}));
 
 type LatLng = { latitude: number; longitude: number };
 type Building = {
@@ -868,8 +874,7 @@ describe("useNavigationBetweenBuildings", () => {
             });
 
             expect(result.current.navigationDestination).toBe("Xavier Hall (XH)");
-        });
-
+        });        
         it("should default destination label to 'Destination' when no names provided", () => {
             const { result } = renderNavHook();
 
@@ -878,6 +883,53 @@ describe("useNavigationBetweenBuildings", () => {
             });
 
             expect(result.current.navigationDestination).toBe("Destination");
+        });
+    });
+
+    describe("shuttle feature", () => {
+        it("should expose isShuttleRoute as false initially", () => {
+            const { result } = renderNavHook();
+            expect(result.current.isShuttleRoute).toBe(false);
+        });
+
+        it("should expose isShuttleLoading as false initially", () => {
+            const { result } = renderNavHook();
+            expect(result.current.isShuttleLoading).toBe(false);
+        });
+
+        it("should expose shuttleInfo as null initially", () => {
+            const { result } = renderNavHook();
+            expect(result.current.shuttleInfo).toBeNull();
+        });
+
+        it("should expose isWeekend as a boolean", () => {
+            const { result } = renderNavHook();
+            expect(typeof result.current.isWeekend).toBe("boolean");
+        });
+
+        it("should reset shuttle state on closeNavigation", () => {
+            const { result } = renderNavHook();
+
+            act(() => {
+                result.current.openNavigationForBuilding(mockBuildings[0], null);
+            });
+            act(() => {
+                result.current.closeNavigation();
+            });
+
+            expect(result.current.isShuttleRoute).toBe(false);
+            expect(result.current.isShuttleLoading).toBe(false);
+            expect(result.current.shuttleInfo).toBeNull();
+        });
+
+        it("should allow switching to 'shuttle' transport mode", () => {
+            const { result } = renderNavHook();
+
+            act(() => {
+                result.current.setSelectedTransportMode("shuttle");
+            });
+
+            expect(result.current.selectedTransportMode).toBe("shuttle");
         });
     });
 });

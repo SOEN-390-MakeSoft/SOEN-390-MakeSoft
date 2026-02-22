@@ -3,7 +3,7 @@ logging:
     com.makesoft.app: DEBUG
 
 server:
-  port: 8080
+  port: 8081
   address: 0.0.0.0  # Allow connections from all network interfaces (not just localhost)
 
 spring:

@@ -10,13 +10,16 @@ type Building = {
     polygon: readonly { latitude: number; longitude: number }[];
 };
 
+// Looser result type returned to the UI (polygon not required)
+type SearchResult = Omit<Building, "polygon"> & { polygon?: Building["polygon"] };
+
 /**
  * Hook to manage search functionality including query, focus state, and results
  */
 export function useSearch(buildings: Building[], onSelectResult: (building: Building) => void) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-    const searchInputRef = useRef<TextInput>(null);
+    const searchInputRef = useRef<TextInput | null>(null);
 
     // Memoized search results filtering
     const searchResults = useMemo(() => {
@@ -42,16 +45,15 @@ export function useSearch(buildings: Building[], onSelectResult: (building: Buil
     const handleSearchSubmit = () => {
         if (searchResults.length === 0) return;
         handleSelectSearchResult(searchResults[0]);
-    };
-
-    /**
+    };    /**
      * Handles selection of a search result
      */
-    const handleSelectSearchResult = (building: Building) => {
-        setSearchQuery(building.name);
+    const handleSelectSearchResult = (result: SearchResult) => {
+        setSearchQuery(result.name);
         setIsSearchFocused(false);
         searchInputRef.current?.blur();
-        onSelectResult(building);
+        // Results always come from `buildings` so polygon is always present
+        onSelectResult(result as Building);
     };
 
     return {

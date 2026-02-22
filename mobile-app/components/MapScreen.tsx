@@ -151,7 +151,7 @@ export default function MapScreen() {
         routeSummary,
         modeDurations,
         isRouteLoading,
-        directionsError,
+        directionsError,        
         isGetDirectionsDisabled,
         setNavigationActiveField,
         openNavigationForBuilding,
@@ -161,10 +161,14 @@ export default function MapScreen() {
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,
-        setSelectedTransportMode,
-        routePolyline,
+        setSelectedTransportMode,        routePolyline,
         routeRegion,
         navigationSteps,
+        isShuttleRoute,
+        isShuttleLoading,
+        shuttleInfo,
+        isWeekend,
+        routeSegments,
     } = useNavigationBetweenBuildings({
         buildings,
         onSelectBuilding: handleSelectBuilding,
@@ -362,9 +366,8 @@ export default function MapScreen() {
                     <Polyline
                         key="route-driving"
                         coordinates={routePolyline}
-                        strokeColor={routeColor}
-                        strokeWidth={5}
-                    />
+                        strokeColor="#4A89F3"
+                        strokeWidth={5}                    />
                 )}
                 {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
                     <Polyline
@@ -374,6 +377,18 @@ export default function MapScreen() {
                         strokeWidth={5}
                         lineDashPattern={[10, 6]}
                     />
+                )}                {/* Shuttle mode: render each segment with appropriate style */}
+                {selectedTransportMode === 'shuttle' && routeSegments.map((seg, i) =>
+                    seg.polyline.length > 0 ? (
+                        <Polyline
+                            key={`shuttle-seg-${i}`}
+                            testID={`route-shuttle-segment-${seg.kind}-${i}`}
+                            coordinates={seg.polyline}
+                            strokeColor={seg.kind === 'shuttle' ? (brandRed ?? "rgba(178, 27, 44, 0.9)") : "#4A89F3"}
+                            strokeWidth={seg.kind === 'shuttle' ? 5 : 4}
+                            {...(seg.kind !== 'shuttle' ? { lineDashPattern: [10, 6] } : {})}
+                        />
+                    ) : null
                 )}
                 {buildings.map((building) => {
                     const centroid = polygonCentroid(building.polygon);
@@ -447,7 +462,6 @@ export default function MapScreen() {
                     handleCloseCard();
                 }}
             />
-
             <NavigationScreen
                 visible={isNavigationOpen && !isRoutePreviewOpen}
                 startLabel={navigationStart}
@@ -463,6 +477,10 @@ export default function MapScreen() {
                 selectedTransportMode={selectedTransportMode}
                 onTransportModeChange={setSelectedTransportMode}
                 navigationSteps={navigationSteps}
+                isShuttleRoute={isShuttleRoute}
+                isShuttleLoading={isShuttleLoading}
+                shuttleInfo={shuttleInfo}
+                isWeekend={isWeekend}
                 onOpenPreview={handleOpenRoutePreview}
             />
 
@@ -473,9 +491,8 @@ export default function MapScreen() {
                 onSelectStep={handleSelectPreviewStep}
                 onClose={handleCloseRoutePreview}
             />
-
             {/* Quick Pick Panel and Location Button */}
-            {!isMenuOpen && !isNavigationOpen && !isRoutePreviewOpen && (
+            {(!isMenuOpen && !isNavigationOpen) ? (
                 <QuickPickPanel
                     activeCampus={activeCampus}
                     isColorBlind={isColorBlind}
@@ -490,15 +507,15 @@ export default function MapScreen() {
                     onQuickPick={handleQuickPick}
                     onLocationPress={goToUserLocation}
                 />
-            )}
+            ) : null}
 
             {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
 
-            {buildingNotFoundToast && (
+            {buildingNotFoundToast ? (
                 <View style={styles.toast} testID="building-not-found-toast">
                     <Text style={styles.toastText}>Building not found</Text>
                 </View>
-            )}
+            ) : null}
         </View>
     );
 }

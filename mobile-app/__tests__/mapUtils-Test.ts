@@ -5,6 +5,7 @@ import {
     distanceMeters,
     coordsEqual,
     findBuildingAtOrNearCoordinate,
+    isCrossCampusRoute,
     type LatLng,
     type BuildingWithPolygon,
 } from "../utils/mapUtils";
@@ -224,6 +225,39 @@ describe("mapUtils", () => {
             const result = findBuildingAtOrNearCoordinate(point, [], 80);
 
             expect(result).toBeNull();
+        });
+    });
+
+    describe("isCrossCampusRoute", () => {
+        it("returns true for SGW -> Loyola routes", () => {
+            const origin: LatLng = { latitude: 45.4972, longitude: -73.5791 };
+            const destination: LatLng = { latitude: 45.4576, longitude: -73.6387 };
+
+            expect(isCrossCampusRoute(origin, destination)).toBe(true);
+        });
+
+        it("returns true for Loyola -> SGW routes", () => {
+            const origin: LatLng = { latitude: 45.4576, longitude: -73.6387 };
+            const destination: LatLng = { latitude: 45.4972, longitude: -73.5791 };
+
+            expect(isCrossCampusRoute(origin, destination)).toBe(true);
+        });
+
+        it("returns false for intra-campus routes", () => {
+            const sgwOrigin: LatLng = { latitude: 45.4972, longitude: -73.5791 };
+            const sgwDestination: LatLng = { latitude: 45.4965, longitude: -73.5779 };
+            const loyolaOrigin: LatLng = { latitude: 45.4582, longitude: -73.6418 };
+            const loyolaDestination: LatLng = { latitude: 45.4591, longitude: -73.6409 };
+
+            expect(isCrossCampusRoute(sgwOrigin, sgwDestination)).toBe(false);
+            expect(isCrossCampusRoute(loyolaOrigin, loyolaDestination)).toBe(false);
+        });
+
+        it("detects southern SGW outlier coordinates as cross-campus", () => {
+            const southSgwOutlier: LatLng = { latitude: 45.493626, longitude: -73.576897 };
+            const loyolaDestination: LatLng = { latitude: 45.4576, longitude: -73.6387 };
+
+            expect(isCrossCampusRoute(southSgwOutlier, loyolaDestination)).toBe(true);
         });
     });
 });
