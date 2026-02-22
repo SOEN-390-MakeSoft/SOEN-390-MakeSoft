@@ -3,6 +3,10 @@ import {
     formatAddress,
     pointInPolygon,
     distanceMeters,
+    distanceToCampusBorderMeters,
+    getClosestCampusBorder,
+    getClosestCampusWithinBorderThreshold,
+    SGW_BOUNDS,
     coordsEqual,
     findBuildingAtOrNearCoordinate,
     isCrossCampusRoute,
@@ -225,6 +229,41 @@ describe("mapUtils", () => {
             const result = findBuildingAtOrNearCoordinate(point, [], 80);
 
             expect(result).toBeNull();
+        });
+    });
+
+    describe("campus border distance helpers", () => {
+        it("returns inside-border distance for a point inside SGW bounds", () => {
+            const point: LatLng = { latitude: 45.496, longitude: -73.577 };
+            const distance = distanceToCampusBorderMeters(point, SGW_BOUNDS);
+
+            expect(distance).toBeGreaterThan(0);
+            expect(distance).toBeLessThan(1000);
+        });
+
+        it("returns clamped nearest-point distance for point outside SGW bounds", () => {
+            const point: LatLng = { latitude: 45.496, longitude: SGW_BOUNDS.maxLng + 0.001 };
+            const expected = distanceMeters(point, {
+                latitude: 45.496,
+                longitude: SGW_BOUNDS.maxLng,
+            });
+
+            const distance = distanceToCampusBorderMeters(point, SGW_BOUNDS);
+
+            expect(Math.abs(distance - expected)).toBeLessThan(2);
+        });
+
+        it("returns closest campus border and threshold resolution", () => {
+            const nearSgw: LatLng = { latitude: 45.4968, longitude: -73.5819 };
+            const nearLoyola: LatLng = { latitude: 45.4588, longitude: -73.6331 };
+            const farAway: LatLng = { latitude: 46.2, longitude: -74.2 };
+
+            expect(getClosestCampusBorder(nearSgw).campus).toBe("SGW");
+            expect(getClosestCampusBorder(nearLoyola).campus).toBe("Loyola");
+
+            expect(getClosestCampusWithinBorderThreshold(nearSgw, 150)).toBe("SGW");
+            expect(getClosestCampusWithinBorderThreshold(nearLoyola, 150)).toBe("Loyola");
+            expect(getClosestCampusWithinBorderThreshold(farAway, 150)).toBeNull();
         });
     });
 

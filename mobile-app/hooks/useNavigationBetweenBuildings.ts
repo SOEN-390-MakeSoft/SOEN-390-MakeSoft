@@ -618,6 +618,10 @@ export function useNavigationBetweenBuildings({
         setIsShuttleRoute(false);
     }, []);
 
+    const clearTapMarker = useCallback(() => {
+        setTapMarkerCoordinate(null);
+    }, []);
+
     const openNavigationForBuilding = useCallback(
         (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
             const destinationName =
@@ -627,7 +631,9 @@ export function useNavigationBetweenBuildings({
             setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
             setActiveMode("driving");
             if (selectedBuilding) {
-                setNavigationDestinationCoord(polygonCentroid(selectedBuilding.polygon));
+                const destCentroid = polygonCentroid(selectedBuilding.polygon);
+                setNavigationDestinationCoord(destCentroid);
+                setTapMarkerCoordinate(destCentroid);
             }
             resetRouteState();
             setIsNavigationOpen(true);
@@ -640,8 +646,8 @@ export function useNavigationBetweenBuildings({
             const building = buildings.find((b) => b.id === buildingId);
             if (!building) return;
             const centroid = polygonCentroid(building.polygon);
-            setTapMarkerCoordinate(centroid);
             if (!isNavigationOpen) {
+                setTapMarkerCoordinate(centroid);
                 onSelectBuilding(buildingId);
                 return;
             }
@@ -655,8 +661,10 @@ export function useNavigationBetweenBuildings({
             if (navigationActiveField === "destination") {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
+                setTapMarkerCoordinate(centroid);
                 resetRouteState();
-                return;            }
+                return;
+            }
             // Default: if destination is already set, assign start; otherwise assign destination
             if (navigationDestination.trim() !== "") {
                 setNavigationStart(label);
@@ -664,6 +672,7 @@ export function useNavigationBetweenBuildings({
             } else {
                 setNavigationDestination(label);
                 setNavigationDestinationCoord(centroid);
+                setTapMarkerCoordinate(centroid);
             }
             resetRouteState();
         },
@@ -716,13 +725,35 @@ export function useNavigationBetweenBuildings({
             } else {
                 setNavigationDestination(label);
                 if (building) {
-                    setNavigationDestinationCoord(polygonCentroid(building.polygon));
+                    const destCentroid = polygonCentroid(building.polygon);
+                    setNavigationDestinationCoord(destCentroid);
+                    setTapMarkerCoordinate(destCentroid);
                 }
             }
             resetRouteState();
         },
         [allBuildings, formatBuildingLabel, resetRouteState]
-    );    
+    );
+
+    const setStartToCurrentLocation = useCallback(
+        (coordinate: LatLng) => {
+            setNavigationStart("Your location");
+            setNavigationOrigin(coordinate);
+            resetRouteState();
+        },
+        [resetRouteState]
+    );
+
+    const setStartToCurrentLocationBuilding = useCallback(
+        (name: string, code: string | null, coordinate: LatLng) => {
+            const label = formatBuildingLabel(name, code);
+            setNavigationStart(`Current location - ${label}`);
+            setNavigationOrigin(coordinate);
+            resetRouteState();
+        },
+        [formatBuildingLabel, resetRouteState]
+    );
+
     const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
@@ -754,15 +785,21 @@ export function useNavigationBetweenBuildings({
         handleMapBuildingPress,
         handleMapCoordinatePress,
         handleSearchSelect,
+        setStartToCurrentLocation,
+        setStartToCurrentLocationBuilding,
         closeNavigation,
+        clearTapMarker,
         tapMarkerCoordinate,
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
-        routeRegion,        navigationSteps,        // Shuttle
+        routeRegion,
+        navigationSteps,
+        // Shuttle
         isShuttleRoute,
         isShuttleLoading,
-        shuttleInfo,        isWeekend: isWeekend(),
+        shuttleInfo,
+        isWeekend: isWeekend(),
         routeSegments: shuttleInfo
             ? [
                   { kind: "walking" as const, polyline: shuttleInfo.walkToHubPolyline },

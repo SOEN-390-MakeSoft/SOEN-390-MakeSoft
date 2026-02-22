@@ -117,13 +117,26 @@ jest.mock('../data/buildingPolygons', () => ({
   },
 }));
 jest.mock('../data/buildingPolygonsLoyola', () => ({
-  LOYOLA_BUILDING_POLYGONS: {},
+  LOYOLA_BUILDING_POLYGONS: {
+    VL: {
+      name: 'Vanier Library (VL)',
+      street: null,
+      housenumber: null,
+      polygon: [
+        { latitude: 45.4588, longitude: -73.6409 },
+        { latitude: 45.4588, longitude: -73.6402 },
+        { latitude: 45.4583, longitude: -73.6402 },
+        { latitude: 45.4583, longitude: -73.6409 },
+      ],
+    },
+  },
 }));
 jest.mock('../data/building-addresses', () => ({
   BUILDING_ADDRESSES: [
     { code: 'TB', name: 'Test Building', address: '123 Test St', aliases: ['Test Building Alias'] },
     { code: 'TA', name: 'Addressed Building', address: '1 Test St' },
     { code: 'H', name: 'Henry F Hall Building', address: '100 Test St', aliases: ['Hall'] },
+    { code: 'VL', name: 'Vanier Library (VL)', address: '7141 Sherbrooke St W' },
   ],
 }));
 
@@ -335,13 +348,13 @@ describe('MapScreen', () => {
   });
 
   describe('Location Permission Handling', () => {
-    it('should get user location when permission is granted', async () => {
+    it('should get user location in normal map mode when permission is granted and location is outside buildings', async () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.5, longitude: -73.5 },
       });
 
-      const { getByTestId } = renderWithProviders(<MapScreen />);
+      const { getByTestId, queryByText } = renderWithProviders(<MapScreen />);
       const locationButton = getByTestId('location-button');
 
       await act(async () => {
@@ -360,6 +373,66 @@ describe('MapScreen', () => {
         },
         500
       );
+      expect(queryByText('Test Building')).toBeNull();
+      expect(queryByText('Vanier Library (VL)')).toBeNull();
+    });
+
+    it('should open building card when location button resolves inside a building in normal map mode', async () => {
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+        coords: { latitude: 45.5015, longitude: -73.567 },
+      });
+
+      const { getByTestId, getByText } = renderWithProviders(<MapScreen />);
+      const locationButton = getByTestId('location-button');
+
+      await act(async () => {
+        fireEvent.press(locationButton);
+        await waitFor(() => {
+          expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+        }, { timeout: 2000 });
+      });
+
+      await waitFor(() => {
+        expect(getByText('Test Building')).toBeTruthy();
+      });
+
+      expect(mockAnimateToRegion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          latitudeDelta: 0.0032,
+          longitudeDelta: 0.0032,
+        }),
+        500
+      );
+      expect(mockAnimateToRegion).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }),
+        500
+      );
+    });
+
+    it('should switch campus and open Loyola building card when location is inside Loyola building', async () => {
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+        coords: { latitude: 45.4585, longitude: -73.6405 },
+      });
+
+      const { getByTestId, getByText } = renderWithProviders(<MapScreen />);
+      const locationButton = getByTestId('location-button');
+
+      await act(async () => {
+        fireEvent.press(locationButton);
+        await waitFor(() => {
+          expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+        }, { timeout: 2000 });
+      });
+
+      await waitFor(() => {
+        expect(getByText('Vanier Library (VL)')).toBeTruthy();
+      });
+      expect(getByTestId('campus-label').children[0]).toBe('LOYOLA');
     });
 
     it('should request permission when not granted', async () => {
@@ -450,6 +523,57 @@ describe('MapScreen', () => {
 
       // Restore console.error
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Directions Mode - Use current location', () => {
+    const openDirectionsMode = () => {
+      const screen = renderWithProviders(<MapScreen />);
+      fireEvent.press(screen.getAllByTestId('polygon')[0]);
+      fireEvent.press(screen.getByLabelText('Get directions'));
+      return screen;
+    };
+
+    it('should set Start to closest SGW building when current location is near SGW border', async () => {
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+        coords: { latitude: 45.4968, longitude: -73.5819 },
+      });
+
+      const { getByPlaceholderText, getByText, getByDisplayValue, getByTestId } = openDirectionsMode();
+
+      fireEvent(getByPlaceholderText('Start'), 'focus');
+      fireEvent.press(getByText('Use your location'));
+
+      await waitFor(() => {
+        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(getByDisplayValue('Current location - Henry F Hall Building (H)')).toBeTruthy();
+      });
+      expect(getByTestId('campus-map').props.showsUserLocation).toBe(true);
+    });
+
+    it('should keep Start as current location when user is far from campus borders', async () => {
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+        coords: { latitude: 46.2, longitude: -74.2 },
+      });
+
+      const { getByPlaceholderText, getByText, getByDisplayValue, queryByDisplayValue } = openDirectionsMode();
+
+      fireEvent(getByPlaceholderText('Start'), 'focus');
+      fireEvent.press(getByText('Use your location'));
+
+      await waitFor(() => {
+        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(getByDisplayValue('Your location')).toBeTruthy();
+      });
+      expect(queryByDisplayValue('Current location - Henry F Hall Building (H)')).toBeNull();
     });
   });
 
