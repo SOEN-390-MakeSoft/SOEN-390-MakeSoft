@@ -182,6 +182,7 @@ export default function MapScreen() {
         setStartToCurrentLocation,
         setStartToCurrentLocationBuilding,
         closeNavigation,
+        clearTapMarker,
         tapMarkerCoordinate,
         selectedTransportMode,
         setSelectedTransportMode,
@@ -629,7 +630,10 @@ export default function MapScreen() {
                 remoteBuilding={remoteBuilding}
                 isLoading={isLoading}
                 errorMessage={errorMessage}
-                onClose={handleCloseCard}
+                onClose={() => {
+                    handleCloseCard();
+                    clearTapMarker();
+                }}
                 isColorBlind={isColorBlind}
                 onDirections={() => {
                     openNavigationForBuilding(selectedBuilding, remoteBuilding);
