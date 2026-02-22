@@ -633,16 +633,10 @@ export function useNavigationBetweenBuildings({
                 setNavigationDestinationCoord(centroid);
                 resetRouteState();
                 return;
-            }
-            if (navigationDestination) {
-                setNavigationStart(label);
-                setNavigationOrigin(centroid);
-                resetRouteState();
-            } else {
-                setNavigationDestination(label);
-                setNavigationDestinationCoord(centroid);
-                resetRouteState();
-            }
+            }            // Default: always update destination when no active field is set
+            setNavigationDestination(label);
+            setNavigationDestinationCoord(centroid);
+            resetRouteState();
         },
         [
             buildings,
