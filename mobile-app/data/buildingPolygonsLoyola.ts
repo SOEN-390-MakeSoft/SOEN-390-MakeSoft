@@ -1,7 +1,3 @@
-// ⚠️ AUTO-GENERATED — DO NOT EDIT
-// Source: OpenStreetMap bounding box query for Concordia Loyola Campus
-// Bbox: south=45.454, west=-73.647, north=45.464, east=-73.633
-
 export const LOYOLA_BUILDING_POLYGONS = {
   "35": {
     "name": "Hingston Hall (HB)",

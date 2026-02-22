@@ -5,12 +5,13 @@ import com.makesoft.app.domain.model.building.BuildingId;
 import com.makesoft.app.infrastructure.persistence.entity.BuildingEntity;
 import com.makesoft.app.infrastructure.persistence.entity.BuildingEntityBuilder;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class BuildingMapperTest {
 
-    private final BuildingMapper mapper = new BuildingMapperImpl();
+    private final BuildingMapper mapper = Mappers.getMapper(BuildingMapper.class);
 
     /**
      * Test BuildingMapper.toDomain with a valid BuildingEntity.
