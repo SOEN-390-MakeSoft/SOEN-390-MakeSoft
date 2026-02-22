@@ -75,13 +75,17 @@ export function useCampusContext(
             })
             .filter((building) => building.polygon.length > 0);
 
-    // Build a unified buildings list so both campuses always stay highlighted.
-    const buildings = useMemo<Building[]>(() => {
-        return [
-            ...mapCampusPolygons(BUILDING_POLYGONS as Record<string, BuildingRecord>),
-            ...mapCampusPolygons(LOYOLA_BUILDING_POLYGONS as Record<string, BuildingRecord>),
-        ];
+    const sgwBuildings = useMemo<Building[]>(() => {
+        return mapCampusPolygons(BUILDING_POLYGONS as Record<string, BuildingRecord>);
     }, [addressLookup]);
+
+    const loyolaBuildings = useMemo<Building[]>(() => {
+        return mapCampusPolygons(LOYOLA_BUILDING_POLYGONS as Record<string, BuildingRecord>);
+    }, [addressLookup]);
+
+    const buildings = useMemo<Building[]>(() => {
+        return [...sgwBuildings, ...loyolaBuildings];
+    }, [loyolaBuildings, sgwBuildings]);
 
     /**
      * Handles campus switching with map region change
@@ -99,6 +103,8 @@ export function useCampusContext(
         activeCampus,
         setActiveCampus,
         buildings,
+        sgwBuildings,
+        loyolaBuildings,
         addressLookup,
         handleSelectCampus,
     };

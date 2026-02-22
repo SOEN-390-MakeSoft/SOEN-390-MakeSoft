@@ -26,6 +26,8 @@ jest.mock("../hooks/useCampusContext", () => ({
     useCampusContext: () => ({
         activeCampus: "sgw",
         buildings: [],
+        sgwBuildings: [],
+        loyolaBuildings: [],
         handleSelectCampus: jest.fn(),
     }),
 }));
@@ -131,6 +133,8 @@ describe("MapScreen shuttle visual distinction", () => {
             handleMapBuildingPress: jest.fn(),
             handleMapCoordinatePress: jest.fn(),
             handleSearchSelect: jest.fn(),
+            setStartToCurrentLocation: jest.fn(),
+            setStartToCurrentLocationBuilding: jest.fn(),
             closeNavigation: jest.fn(),
             tapMarkerCoordinate: null,
             selectedTransportMode: "shuttle",

@@ -23,7 +23,13 @@ import { useSearch } from "../hooks/useSearch";
 import { useUserLocation } from "../hooks/useUserLocation";
 import { useMapUI } from "../hooks/useMapUI";
 import { useCampusContext } from "../hooks/useCampusContext";
-import { polygonCentroid } from "../utils/mapUtils";
+import {
+    findBuildingAtOrNearCoordinate,
+    getClosestCampusWithinBorderThreshold,
+    polygonCentroid,
+    type BuildingWithPolygon,
+    type LatLng,
+} from "../utils/mapUtils";
 import { normalizeLabel } from "../utils/stringUtils";
 
 type QuickPick = {
@@ -35,6 +41,9 @@ type QuickPick = {
     hint?: string;
 };
 type Campus = "sgw" | "loyola";
+type ResolvedCampusBuilding = { building: BuildingWithPolygon; campus: Campus };
+type PendingMapBuilding = { id: string; campus: Campus };
+type PendingStartBuilding = { campus: Campus; building: BuildingWithPolygon };
 
 const POLYGON_STROKE = "rgba(178, 27, 44, 0.9)";
 const POLYGON_FILL = "rgba(178, 27, 44, 0.25)";
@@ -119,13 +128,23 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
 };
 
 const isSearchDisabled = false;
+const USER_LOCATION_REGION_DELTA = 0.01;
+// 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
+const BORDER_THRESHOLD_METERS = 150;
+const NEAREST_BUILDING_MAX_METERS = 800;
 
 export default function MapScreen() {
     const mapRef = useRef<MapView>(null);
     const { width, height } = Dimensions.get("window");
 
     // Use custom hooks for state management
-    const { activeCampus, buildings, handleSelectCampus } = useCampusContext();
+    const {
+        activeCampus,
+        buildings,
+        sgwBuildings,
+        loyolaBuildings,
+        handleSelectCampus,
+    } = useCampusContext();
     const {
         selectedBuildingId,
         remoteBuilding,
@@ -137,6 +156,8 @@ export default function MapScreen() {
     const [buildingNotFoundToast, setBuildingNotFoundToast] = useState(false);
     const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
     const [previewStepIndex, setPreviewStepIndex] = useState(0);
+    const [pendingMapBuilding, setPendingMapBuilding] = useState<PendingMapBuilding | null>(null);
+    const [pendingStartBuilding, setPendingStartBuilding] = useState<PendingStartBuilding | null>(null);
     const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
     useEffect(() => {
         if (!buildingNotFoundToast) return;
@@ -151,17 +172,20 @@ export default function MapScreen() {
         routeSummary,
         modeDurations,
         isRouteLoading,
-        directionsError,        
+        directionsError,
         isGetDirectionsDisabled,
         setNavigationActiveField,
         openNavigationForBuilding,
         handleMapBuildingPress,
         handleMapCoordinatePress,
         handleSearchSelect,
+        setStartToCurrentLocation,
+        setStartToCurrentLocationBuilding,
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,
-        setSelectedTransportMode,        routePolyline,
+        setSelectedTransportMode,
+        routePolyline,
         routeRegion,
         navigationSteps,
         isShuttleRoute,
@@ -285,6 +309,156 @@ export default function MapScreen() {
         setIsSearchFocused(false);
         searchInputRef.current?.blur();
     };
+
+    const resolveInsideBuilding = useCallback(
+        (coordinate: LatLng): ResolvedCampusBuilding | null => {
+            const sgwMatch = findBuildingAtOrNearCoordinate(coordinate, sgwBuildings, 0);
+            if (sgwMatch) {
+                return { building: sgwMatch, campus: "sgw" };
+            }
+            const loyolaMatch = findBuildingAtOrNearCoordinate(coordinate, loyolaBuildings, 0);
+            if (loyolaMatch) {
+                return { building: loyolaMatch, campus: "loyola" };
+            }
+            return null;
+        },
+        [loyolaBuildings, sgwBuildings]
+    );
+
+    const selectResolvedBuildingOnMap = useCallback(
+        (resolved: ResolvedCampusBuilding) => {
+            if (resolved.campus !== activeCampus) {
+                setPendingMapBuilding({ id: resolved.building.id, campus: resolved.campus });
+                handleSelectCampus(resolved.campus, mapRef);
+                return;
+            }
+            handleSelectBuilding(resolved.building.id);
+        },
+        [activeCampus, handleSelectBuilding, handleSelectCampus]
+    );
+
+    const setDirectionsStartToBuilding = useCallback(
+        (resolved: ResolvedCampusBuilding) => {
+            if (resolved.campus !== activeCampus) {
+                setPendingStartBuilding({
+                    campus: resolved.campus,
+                    building: resolved.building,
+                });
+                handleSelectCampus(resolved.campus, mapRef);
+                return;
+            }
+            const centroid = polygonCentroid(resolved.building.polygon);
+            setStartToCurrentLocationBuilding(
+                resolved.building.name,
+                resolved.building.code,
+                centroid
+            );
+        },
+        [activeCampus, handleSelectCampus, setStartToCurrentLocationBuilding]
+    );
+
+    const resolveDirectionsStartFromCoordinate = useCallback(
+        (coordinate: LatLng) => {
+            const insideMatch = resolveInsideBuilding(coordinate);
+            if (insideMatch) {
+                setDirectionsStartToBuilding(insideMatch);
+                return;
+            }
+
+            const closestCampus = getClosestCampusWithinBorderThreshold(
+                coordinate,
+                BORDER_THRESHOLD_METERS
+            );
+            if (closestCampus) {
+                const campusKey: Campus = closestCampus === "SGW" ? "sgw" : "loyola";
+                const campusBuildings = campusKey === "sgw" ? sgwBuildings : loyolaBuildings;
+                const nearBorderBuilding = findBuildingAtOrNearCoordinate(
+                    coordinate,
+                    campusBuildings,
+                    NEAREST_BUILDING_MAX_METERS
+                );
+
+                if (nearBorderBuilding) {
+                    setDirectionsStartToBuilding({
+                        building: nearBorderBuilding,
+                        campus: campusKey,
+                    });
+                    return;
+                }
+            }
+
+            setStartToCurrentLocation(coordinate);
+        },
+        [
+            loyolaBuildings,
+            resolveInsideBuilding,
+            setDirectionsStartToBuilding,
+            setStartToCurrentLocation,
+            sgwBuildings,
+        ]
+    );
+
+    const handleNavigationBuildingSelect = useCallback(
+        (field: "start" | "destination", name: string, code: string | null) => {
+            const normalizedName = normalizeLabel(name);
+            const isCurrentLocationStart =
+                field === "start" &&
+                (normalizedName === normalizeLabel("Your location") ||
+                    normalizedName === normalizeLabel("Current location"));
+            if (!isCurrentLocationStart) {
+                handleSearchSelect(field, name, code);
+                return;
+            }
+
+            void goToUserLocation({
+                animateToUser: false,
+                onResolved: resolveDirectionsStartFromCoordinate,
+            });
+        },
+        [goToUserLocation, handleSearchSelect, resolveDirectionsStartFromCoordinate]
+    );
+
+    const handleLocationPress = useCallback(async () => {
+        await goToUserLocation({
+            animateToUser: false,
+            onResolved: (coordinate) => {
+                const insideMatch = resolveInsideBuilding(coordinate);
+                if (insideMatch) {
+                    selectResolvedBuildingOnMap(insideMatch);
+                    return;
+                }
+
+                mapRef.current?.animateToRegion(
+                    {
+                        latitude: coordinate.latitude,
+                        longitude: coordinate.longitude,
+                        latitudeDelta: USER_LOCATION_REGION_DELTA,
+                        longitudeDelta: USER_LOCATION_REGION_DELTA,
+                    },
+                    500
+                );
+            },
+        });
+    }, [goToUserLocation, resolveInsideBuilding, selectResolvedBuildingOnMap]);
+
+    useEffect(() => {
+        if (!pendingMapBuilding) return;
+        if (activeCampus !== pendingMapBuilding.campus) return;
+        handleSelectBuilding(pendingMapBuilding.id);
+        setPendingMapBuilding(null);
+    }, [activeCampus, handleSelectBuilding, pendingMapBuilding]);
+
+    useEffect(() => {
+        if (!pendingStartBuilding) return;
+        if (activeCampus !== pendingStartBuilding.campus) return;
+        const centroid = polygonCentroid(pendingStartBuilding.building.polygon);
+        setStartToCurrentLocationBuilding(
+            pendingStartBuilding.building.name,
+            pendingStartBuilding.building.code,
+            centroid
+        );
+        setPendingStartBuilding(null);
+    }, [activeCampus, pendingStartBuilding, setStartToCurrentLocationBuilding]);
 
     const handlePreviewStepChange = useCallback(
         (step: { focusCoordinate?: { latitude: number; longitude: number } }, index: number) => {
@@ -468,7 +642,7 @@ export default function MapScreen() {
                 destinationLabel={navigationDestination}
                 onClose={closeNavigation}
                 onActiveFieldChange={setNavigationActiveField}
-                onBuildingSelect={handleSearchSelect}
+                onBuildingSelect={handleNavigationBuildingSelect}
                 modeDurations={modeDurations}
                 tripSummary={routeSummary}
                 isLoading={isRouteLoading}
@@ -505,7 +679,7 @@ export default function MapScreen() {
                     onToggleOpen={handleToggleQuickPick}
                     onHeightChange={setQuickPickContentHeight}
                     onQuickPick={handleQuickPick}
-                    onLocationPress={goToUserLocation}
+                    onLocationPress={handleLocationPress}
                 />
             ) : null}
 

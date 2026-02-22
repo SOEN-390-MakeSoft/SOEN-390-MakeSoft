@@ -1,5 +1,11 @@
 export type LatLng = { latitude: number; longitude: number };
 export type CampusName = "SGW" | "Loyola";
+export type CampusBounds = {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+};
 
 const DEFAULT_REGION = {
     latitude: 45.4973,
@@ -33,8 +39,11 @@ export function polygonCentroid(points: readonly LatLng[]): LatLng {
  * @param record Building record with address components
  * @returns Formatted address string or null
  */
-export function formatAddress(record: { housenumber?: string; street?: string }): string | null {
-    const parts = [record.housenumber, record.street].filter(Boolean);
+export function formatAddress(record: { housenumber?: string | number; street?: string }): string | null {
+    const parts = [
+        record.housenumber != null ? String(record.housenumber) : null,
+        record.street,
+    ].filter(Boolean);
     return parts.length ? parts.join(" ") : null;
 }
 
@@ -139,21 +148,71 @@ export function findBuildingAtOrNearCoordinate(
             minDist = d;
             closest = building;
         }
-    }    return closest;
+    }
+    return closest;
 }
 
 // Bounding boxes for each Concordia campus.
 // SGW minLat includes the southern SGW outlier building used in our dataset.
-const SGW_BOUNDS = { minLat: 45.492, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
-const LOYOLA_BOUNDS = { minLat: 45.454, maxLat: 45.464, minLng: -73.647, maxLng: -73.633 };
+export const SGW_BOUNDS: CampusBounds = { minLat: 45.492, maxLat: 45.500, minLng: -73.582, maxLng: -73.571 };
+export const LOYOLA_BOUNDS: CampusBounds = { minLat: 45.454, maxLat: 45.464, minLng: -73.647, maxLng: -73.633 };
 
-function inBounds(point: LatLng, bounds: typeof SGW_BOUNDS): boolean {
+function inBounds(point: LatLng, bounds: CampusBounds): boolean {
     return (
         point.latitude >= bounds.minLat &&
         point.latitude <= bounds.maxLat &&
         point.longitude >= bounds.minLng &&
         point.longitude <= bounds.maxLng
     );
+}
+
+/**
+ * Returns the shortest distance in meters from a point to a campus rectangle border.
+ * - If the point is inside: minimum distance to one of the 4 edges.
+ * - If outside: distance to the nearest clamped point on the rectangle.
+ */
+export function distanceToCampusBorderMeters(point: LatLng, bounds: CampusBounds): number {
+    if (!point || point.latitude == null || point.longitude == null) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    const clampedLat = Math.min(Math.max(point.latitude, bounds.minLat), bounds.maxLat);
+    const clampedLng = Math.min(Math.max(point.longitude, bounds.minLng), bounds.maxLng);
+    const isInside = inBounds(point, bounds);
+
+    if (!isInside) {
+        return distanceMeters(point, { latitude: clampedLat, longitude: clampedLng });
+    }
+
+    const northEdge = distanceMeters(point, { latitude: bounds.maxLat, longitude: point.longitude });
+    const southEdge = distanceMeters(point, { latitude: bounds.minLat, longitude: point.longitude });
+    const eastEdge = distanceMeters(point, { latitude: point.latitude, longitude: bounds.maxLng });
+    const westEdge = distanceMeters(point, { latitude: point.latitude, longitude: bounds.minLng });
+
+    return Math.min(northEdge, southEdge, eastEdge, westEdge);
+}
+
+/**
+ * Returns the campus whose border is closest to the given point.
+ */
+export function getClosestCampusBorder(point: LatLng): { campus: CampusName; distanceMeters: number } {
+    const sgwDistance = distanceToCampusBorderMeters(point, SGW_BOUNDS);
+    const loyolaDistance = distanceToCampusBorderMeters(point, LOYOLA_BOUNDS);
+    if (sgwDistance <= loyolaDistance) {
+        return { campus: "SGW", distanceMeters: sgwDistance };
+    }
+    return { campus: "Loyola", distanceMeters: loyolaDistance };
+}
+
+/**
+ * Resolves to the closest campus when the border distance is within threshold.
+ */
+export function getClosestCampusWithinBorderThreshold(
+    point: LatLng,
+    thresholdMeters: number
+): CampusName | null {
+    const closest = getClosestCampusBorder(point);
+    return closest.distanceMeters <= thresholdMeters ? closest.campus : null;
 }
 
 /**

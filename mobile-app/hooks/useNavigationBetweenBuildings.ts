@@ -722,7 +722,27 @@ export function useNavigationBetweenBuildings({
             resetRouteState();
         },
         [allBuildings, formatBuildingLabel, resetRouteState]
-    );    
+    );
+
+    const setStartToCurrentLocation = useCallback(
+        (coordinate: LatLng) => {
+            setNavigationStart("Your location");
+            setNavigationOrigin(coordinate);
+            resetRouteState();
+        },
+        [resetRouteState]
+    );
+
+    const setStartToCurrentLocationBuilding = useCallback(
+        (name: string, code: string | null, coordinate: LatLng) => {
+            const label = formatBuildingLabel(name, code);
+            setNavigationStart(`Current location - ${label}`);
+            setNavigationOrigin(coordinate);
+            resetRouteState();
+        },
+        [formatBuildingLabel, resetRouteState]
+    );
+
     const closeNavigation = useCallback(() => {
         setIsNavigationOpen(false);
         setNavigationActiveField(null);
@@ -754,15 +774,20 @@ export function useNavigationBetweenBuildings({
         handleMapBuildingPress,
         handleMapCoordinatePress,
         handleSearchSelect,
+        setStartToCurrentLocation,
+        setStartToCurrentLocationBuilding,
         closeNavigation,
         tapMarkerCoordinate,
         selectedTransportMode,
         setSelectedTransportMode,
         routePolyline,
-        routeRegion,        navigationSteps,        // Shuttle
+        routeRegion,
+        navigationSteps,
+        // Shuttle
         isShuttleRoute,
         isShuttleLoading,
-        shuttleInfo,        isWeekend: isWeekend(),
+        shuttleInfo,
+        isWeekend: isWeekend(),
         routeSegments: shuttleInfo
             ? [
                   { kind: "walking" as const, polyline: shuttleInfo.walkToHubPolyline },

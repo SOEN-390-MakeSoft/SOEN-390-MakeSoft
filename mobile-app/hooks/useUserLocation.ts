@@ -3,6 +3,10 @@ import { Alert, Linking } from "react-native";
 import * as Location from "expo-location";
 
 type LatLng = { latitude: number; longitude: number };
+type GoToUserLocationOptions = {
+    onResolved?: (coordinate: LatLng) => Promise<void> | void;
+    animateToUser?: boolean;
+};
 
 /**
  * Hook to manage user location access and map navigation
@@ -51,9 +55,10 @@ export function useUserLocation(mapRef: React.RefObject<{ animateToRegion: (regi
     };
 
     /**
-     * Gets user's current location and animates map to it
+     * Gets user's current location and optionally animates map and/or delegates resolved coordinate.
      */
-    const goToUserLocation = async () => {
+    const goToUserLocation = async (options?: GoToUserLocationOptions) => {
+        const { onResolved, animateToUser = true } = options ?? {};
         setIsLocating(true);
         try {
             const ok = await ensureLocationPermission();
@@ -67,16 +72,23 @@ export function useUserLocation(mapRef: React.RefObject<{ animateToRegion: (regi
             });
 
             const { latitude, longitude } = location.coords;
+            const coordinate = { latitude, longitude };
 
-            mapRef.current?.animateToRegion(
-                {
-                    latitude,
-                    longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                },
-                500
-            );
+            if (onResolved) {
+                await onResolved(coordinate);
+            }
+
+            if (animateToUser) {
+                mapRef.current?.animateToRegion(
+                    {
+                        latitude,
+                        longitude,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    },
+                    500
+                );
+            }
         } catch (error) {
             console.error("Error getting location:", error);
             Alert.alert("Error", "Could not get your location.");

@@ -1,5 +1,6 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
+import { TextInput } from "react-native";
 import SearchBar from "../components/SearchBar";
 
 describe("SearchBar", () => {
@@ -14,7 +15,7 @@ describe("SearchBar", () => {
     searchResults: [],
     onSelectResult: jest.fn(),
     onOpenMenu: jest.fn(),
-    inputRef: React.createRef(),
+    inputRef: React.createRef<TextInput>(),
     brandColor: "#b21b2c",
     logoSource: { uri: "test" },
   };
