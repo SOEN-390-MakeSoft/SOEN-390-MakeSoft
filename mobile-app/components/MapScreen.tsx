@@ -530,7 +530,7 @@ export default function MapScreen() {
             strokeWidth={5}
             lineDashPattern={[10, 6]}
           />
-        )}{' '}
+        )}
         {/* Shuttle mode: render each segment with appropriate style */}
         {selectedTransportMode === 'shuttle' &&
           routeSegments.map((seg, i) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { NavigationStep, ShuttleInfo } from '../hooks/useNavigationBetweenBuildings';
@@ -32,7 +32,7 @@ interface NavigationScreenProps {
   selectedTransportMode?: TransportMode;
   onTransportModeChange?: (mode: TransportMode) => void;
   navigationSteps?: NavigationStep[];
-  /** Whether the route is a cross-campus route (SGW ↔ Loyola) */
+  /** Whether the route is a cross-campus route (SGW <-> Loyola) */
   isShuttleRoute?: boolean;
   /** Whether shuttle schedule is loading */
   isShuttleLoading?: boolean;
@@ -99,7 +99,6 @@ function renderShuttleChip({
   onTransportModeChange?: (mode: TransportMode) => void;
 }>) {
   if (isShuttleRoute && isWeekend) {
-    // Cross-campus but weekend — show disabled chip with N/A label
     return (
       <View
         testID="mode-chip-shuttle-disabled"
@@ -112,7 +111,6 @@ function renderShuttleChip({
   }
 
   if (isShuttleRoute) {
-    // Cross-campus weekday — fully enabled shuttle chip
     return (
       <ModeChip
         mode="shuttle"
@@ -126,7 +124,6 @@ function renderShuttleChip({
     );
   }
 
-  // Not a cross-campus route — show plain disabled bus icon, no text
   return (
     <View
       testID="mode-chip-shuttle-disabled"
@@ -134,6 +131,211 @@ function renderShuttleChip({
     >
       <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
     </View>
+  );
+}
+
+type ThemeColors = {
+  bottomCardColor: string;
+  chipColor: string;
+  chipMutedColor: string;
+  closeBg: string;
+  closeIcon: string;
+  previewBg: string;
+  previewTextColor: string;
+};
+
+function getThemeColors(colourBlindMode: boolean): ThemeColors {
+  if (colourBlindMode) {
+    return {
+      bottomCardColor: '#9aa7b2',
+      chipColor: 'rgba(255,255,255,0.34)',
+      chipMutedColor: 'rgba(255,255,255,0.18)',
+      closeBg: '#e6eaee',
+      closeIcon: '#4b5862',
+      previewBg: '#e6eaee',
+      previewTextColor: '#4b5862',
+    };
+  }
+
+  return {
+    bottomCardColor: '#8e2334',
+    chipColor: 'rgba(255,255,255,0.30)',
+    chipMutedColor: 'rgba(255,255,255,0.14)',
+    closeBg: '#f6dce0',
+    closeIcon: '#7f1f2a',
+    previewBg: '#f6dce0',
+    previewTextColor: '#7f1f2a',
+  };
+}
+
+function getTripTitleText({
+  isLoading,
+  tripSummary,
+  selectedTransportMode,
+  isShuttleRoute,
+  isShuttleLoading,
+}: Readonly<{
+  isLoading?: boolean;
+  tripSummary?: NavigationScreenProps['tripSummary'];
+  selectedTransportMode: TransportMode;
+  isShuttleRoute: boolean;
+  isShuttleLoading: boolean;
+}>): string {
+  if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
+    return isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
+  }
+
+  if (tripSummary) {
+    return `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`;
+  }
+
+  if (isLoading) {
+    return 'Loading route...';
+  }
+
+  return 'Select start and destination';
+}
+
+function TripMeta({
+  tripSummary,
+  selectedTransportMode,
+}: Readonly<{
+  tripSummary?: NavigationScreenProps['tripSummary'];
+  selectedTransportMode: TransportMode;
+}>) {
+  if (!tripSummary || selectedTransportMode === 'shuttle') return null;
+
+  return (
+    <Text style={styles.tripMeta} numberOfLines={1}>
+      {tripSummary.distanceText} - {tripSummary.durationText}
+    </Text>
+  );
+}
+
+function ShuttleDeparturesPanel({
+  show,
+  shuttleInfo,
+}: Readonly<{
+  show: boolean;
+  shuttleInfo: ShuttleInfo | null;
+}>) {
+  if (!show || !shuttleInfo) return null;
+
+  const departureHubLabel =
+    shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)';
+  const noMoreShuttles = shuttleInfo.departureTimes.every((t) => t === null);
+
+  return (
+    <View style={styles.shuttlePanel} testID="shuttle-departures-panel">
+      <Text style={styles.shuttleHubText}>{`Departs from ${departureHubLabel}`}</Text>
+      <View style={styles.shuttleTimesRow}>
+        {shuttleInfo.departureTimes.map((t, i) =>
+          t ? (
+            <View key={`dep-${t}`} style={styles.shuttleTimeChip} testID={`shuttle-time-${i}`}>
+              <MaterialIcons name="directions-bus" size={14} color="#fff" />
+              <Text style={styles.shuttleTimeText}>
+                {new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+            </View>
+          ) : null,
+        )}
+        {noMoreShuttles ? (
+          <Text style={styles.shuttleNoMore} testID="shuttle-no-more">
+            No more shuttles today
+          </Text>
+        ) : null}
+      </View>
+      <Text style={styles.shuttleRideTime}>{`~${shuttleInfo.tripDurationMin} min ride`}</Text>
+    </View>
+  );
+}
+
+function ShuttleWeekendNotice({ show }: Readonly<{ show: boolean }>) {
+  if (!show) return null;
+
+  return (
+    <Text style={styles.shuttleWeekendText} testID="shuttle-weekend-notice">
+      Shuttle service is not available on weekends.
+    </Text>
+  );
+}
+
+function DirectionsErrorNotice({
+  directionsError,
+}: Readonly<{ directionsError: DirectionsErrorType }>) {
+  if (!directionsError) return null;
+
+  return (
+    <Text style={styles.errorText} testID="directions-error">
+      {DIRECTIONS_ERROR_MESSAGES[directionsError]}
+    </Text>
+  );
+}
+
+function formatStepMeta(step: NavigationStep): string {
+  if (step.durationText) {
+    return `${step.distanceText} \u00B7 ${step.durationText}`;
+  }
+  return step.distanceText;
+}
+
+function PreviewAndSteps({
+  hasSteps,
+  isPreviewButtonDisabled,
+  previewBg,
+  previewTextColor,
+  onOpenPreview,
+  navigationSteps,
+}: Readonly<{
+  hasSteps: boolean;
+  isPreviewButtonDisabled: boolean;
+  previewBg: string;
+  previewTextColor: string;
+  onOpenPreview: () => void;
+  navigationSteps: NavigationStep[];
+}>) {
+  if (!hasSteps) return null;
+
+  const buttonTextColor = isPreviewButtonDisabled ? '#9b9b9b' : previewTextColor;
+
+  return (
+    <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator nestedScrollEnabled>
+      <Pressable
+        style={[
+          styles.getDirectionsButton,
+          { backgroundColor: previewBg },
+          isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
+        ]}
+        disabled={isPreviewButtonDisabled}
+        onPress={onOpenPreview}
+        accessibilityRole="button"
+        accessibilityLabel="Preview route"
+        testID="preview-route-button"
+      >
+        <MaterialIcons name="arrow-forward" size={16} color={buttonTextColor} />
+        <Text style={[styles.getDirectionsText, { color: buttonTextColor }]}>Preview</Text>
+      </Pressable>
+      <View testID="navigation-steps-list" style={styles.stepsList}>
+        {navigationSteps.map((step, index) => {
+          const stepKey = [
+            step.instruction,
+            step.distanceText,
+            step.durationText,
+            step.maneuver ?? '',
+            step.focusCoordinate?.latitude ?? '',
+            step.focusCoordinate?.longitude ?? '',
+            index,
+          ].join('|');
+
+          return (
+            <View key={stepKey} testID={`nav-step-${index}`} style={styles.stepRow}>
+              <Text style={styles.stepInstruction}>{step.instruction}</Text>
+              <Text style={styles.stepMeta}>{formatStepMeta(step)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -164,26 +366,22 @@ export default function NavigationScreen({
 
   const hasSteps = navigationSteps.length > 0;
   const isPreviewButtonDisabled = isGetDirectionsDisabled || !hasSteps;
+  const themeColors = getThemeColors(colourBlindMode);
+  const tripTitleText = getTripTitleText({
+    isLoading,
+    tripSummary,
+    selectedTransportMode,
+    isShuttleRoute,
+    isShuttleLoading,
+  });
+  const showShuttlePanel =
+    selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && !!shuttleInfo;
+  const showShuttleWeekendNotice =
+    selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute;
 
   useEffect(() => {
     isMinimizedRef.current = isMinimized;
   }, [isMinimized]);
-
-  let tripTitleText = 'Select start and destination';
-  if (isLoading) {
-    tripTitleText = 'Loading route...';
-  }
-  if (tripSummary) {
-    tripTitleText = `Arrive at ${tripSummary.arrivalText} - via ${tripSummary.viaText}`;
-  }
-
-  const bottomCardColor = colourBlindMode ? '#9aa7b2' : '#8e2334';
-  const chipColor = colourBlindMode ? 'rgba(255,255,255,0.34)' : 'rgba(255,255,255,0.30)';
-  const chipMutedColor = colourBlindMode ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.14)';
-  const closeBg = colourBlindMode ? '#e6eaee' : '#f6dce0';
-  const closeIcon = colourBlindMode ? '#4b5862' : '#7f1f2a';
-  const previewBg = colourBlindMode ? '#e6eaee' : '#f6dce0';
-  const previewTextColor = colourBlindMode ? '#4b5862' : '#7f1f2a';
 
   const handleToggleMinimized = () => {
     setIsMinimized((prev) => !prev);
@@ -194,11 +392,6 @@ export default function NavigationScreen({
     setIsMinimized(false);
     onOpenPreview?.();
   };
-
-  let computedTripTitle = tripTitleText;
-  if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
-    computedTripTitle = isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
-  }
 
   const handlePanRelease = (_: unknown, dy: number) => {
     const currentlyMinimized = isMinimizedRef.current;
@@ -234,7 +427,7 @@ export default function NavigationScreen({
         style={[
           styles.bottomCard,
           isMinimized && styles.bottomCardMinimized,
-          { backgroundColor: bottomCardColor },
+          { backgroundColor: themeColors.bottomCardColor },
         ]}
       >
         <Pressable
@@ -254,8 +447,8 @@ export default function NavigationScreen({
               icon="directions-car"
               label={modeDurations?.driving ?? '--'}
               isSelected={selectedTransportMode === 'driving'}
-              chipColor={chipColor}
-              chipMutedColor={chipMutedColor}
+              chipColor={themeColors.chipColor}
+              chipMutedColor={themeColors.chipMutedColor}
               onPress={onTransportModeChange ?? (() => {})}
             />
             <ModeChip
@@ -263,124 +456,41 @@ export default function NavigationScreen({
               icon="directions-walk"
               label={modeDurations?.walking ?? '--'}
               isSelected={selectedTransportMode === 'walking'}
-              chipColor={chipColor}
-              chipMutedColor={chipMutedColor}
+              chipColor={themeColors.chipColor}
+              chipMutedColor={themeColors.chipMutedColor}
               onPress={onTransportModeChange ?? (() => {})}
             />
             {renderShuttleChip({
               isShuttleRoute,
               isWeekend,
               selectedTransportMode,
-              chipColor,
-              chipMutedColor,
+              chipColor: themeColors.chipColor,
+              chipMutedColor: themeColors.chipMutedColor,
               onTransportModeChange,
             })}
           </View>
-          <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: closeBg }]}>
-            <MaterialIcons name="close" size={18} color={closeIcon} />
+          <Pressable
+            onPress={onClose}
+            style={[styles.closeButton, { backgroundColor: themeColors.closeBg }]}
+          >
+            <MaterialIcons name="close" size={18} color={themeColors.closeIcon} />
           </Pressable>
         </View>
         <Text style={styles.tripTitle} numberOfLines={2}>
-          {computedTripTitle}
+          {tripTitleText}
         </Text>
-        {tripSummary && selectedTransportMode !== 'shuttle' ? (
-          <Text style={styles.tripMeta} numberOfLines={1}>
-            {tripSummary.distanceText} - {tripSummary.durationText}
-          </Text>
-        ) : null}
-        {/* Shuttle departure times panel */}
-        {selectedTransportMode === 'shuttle' &&
-        isShuttleRoute &&
-        !isShuttleLoading &&
-        shuttleInfo ? (
-          <View style={styles.shuttlePanel} testID="shuttle-departures-panel">
-            <Text style={styles.shuttleHubText}>
-              {`Departs from ${shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)'}`}
-            </Text>
-            <View style={styles.shuttleTimesRow}>
-              {shuttleInfo.departureTimes.map((t, i) =>
-                t ? (
-                  <View
-                    key={`dep-${t}`}
-                    style={styles.shuttleTimeChip}
-                    testID={`shuttle-time-${i}`}
-                  >
-                    <MaterialIcons name="directions-bus" size={14} color="#fff" />
-                    <Text style={styles.shuttleTimeText}>
-                      {new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                ) : null,
-              )}
-              {shuttleInfo.departureTimes.every((t) => t === null) ? (
-                <Text style={styles.shuttleNoMore} testID="shuttle-no-more">
-                  No more shuttles today
-                </Text>
-              ) : null}
-            </View>
-            <Text style={styles.shuttleRideTime}>{`~${shuttleInfo.tripDurationMin} min ride`}</Text>
-          </View>
-        ) : null}
-        {selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute ? (
-          <Text style={styles.shuttleWeekendText} testID="shuttle-weekend-notice">
-            Shuttle service is not available on weekends.
-          </Text>
-        ) : null}
-        {directionsError ? (
-          <Text style={styles.errorText} testID="directions-error">
-            {DIRECTIONS_ERROR_MESSAGES[directionsError]}
-          </Text>
-        ) : null}
-        {navigationSteps.length > 0 ? (
-          <ScrollView
-            style={styles.scrollableContent}
-            showsVerticalScrollIndicator
-            nestedScrollEnabled
-          >
-            <Pressable
-              style={[
-                styles.getDirectionsButton,
-                { backgroundColor: previewBg },
-                isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
-              ]}
-              disabled={isPreviewButtonDisabled}
-              onPress={handleOpenPreview}
-              accessibilityRole="button"
-              accessibilityLabel="Preview route"
-              testID="preview-route-button"
-            >
-              <MaterialIcons
-                name="arrow-forward"
-                size={16}
-                color={isPreviewButtonDisabled ? '#9b9b9b' : previewTextColor}
-              />
-              <Text
-                style={[
-                  styles.getDirectionsText,
-                  {
-                    color: isPreviewButtonDisabled ? '#9b9b9b' : previewTextColor,
-                  },
-                ]}
-              >
-                Preview
-              </Text>
-            </Pressable>
-            {hasSteps && (
-              <View testID="navigation-steps-list" style={styles.stepsList}>
-                {navigationSteps.map((step, index) => (
-                  <View key={step.instruction} testID={`nav-step-${index}`} style={styles.stepRow}>
-                    <Text style={styles.stepInstruction}>{step.instruction}</Text>
-                    <Text style={styles.stepMeta}>
-                      {step.durationText
-                        ? `${step.distanceText} · ${step.durationText}`
-                        : step.distanceText}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        ) : null}
+        <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
+        <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
+        <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
+        <DirectionsErrorNotice directionsError={directionsError} />
+        <PreviewAndSteps
+          hasSteps={hasSteps}
+          isPreviewButtonDisabled={isPreviewButtonDisabled}
+          previewBg={themeColors.previewBg}
+          previewTextColor={themeColors.previewTextColor}
+          onOpenPreview={handleOpenPreview}
+          navigationSteps={navigationSteps}
+        />
       </View>
     </View>
   );
