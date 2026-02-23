@@ -4,6 +4,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BUILDING_ADDRESSES } from '../data/building-addresses';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
+import { formatAddress } from '../utils/mapUtils';
 import MapMenu from './MapMenu';
 import { useSettings } from '../context/settings';
 
@@ -80,6 +81,16 @@ export default function NavigationMenu({
 
   const activeQuery = activeField === 'start' ? startQuery : destinationQuery;
   const buildingOptions = useMemo<SearchEntry[]>(() => {
+    const addressLookup = new Map<string, string>();
+    for (const entry of BUILDING_ADDRESSES) {
+      addressLookup.set(normalizeLabel(entry.name), entry.address);
+      if (entry.aliases) {
+        for (const alias of entry.aliases) {
+          addressLookup.set(normalizeLabel(alias), entry.address);
+        }
+      }
+    }
+
     const sgw = BUILDING_ADDRESSES.map((entry) => ({
       name: entry.name,
       code: entry.code,
@@ -89,7 +100,7 @@ export default function NavigationMenu({
     const loyola = Object.values(LOYOLA_BUILDING_POLYGONS).map((entry) => ({
       name: entry.name,
       code: extractCodeFromName(entry.name),
-      address: null,
+      address: formatAddress(entry) ?? addressLookup.get(normalizeLabel(entry.name)) ?? null,
     }));
     return [...sgw, ...loyola];
   }, []);
