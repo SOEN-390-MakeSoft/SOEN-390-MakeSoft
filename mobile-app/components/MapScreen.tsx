@@ -533,20 +533,24 @@ export default function MapScreen() {
         )}{' '}
         {/* Shuttle mode: render each segment with appropriate style */}
         {selectedTransportMode === 'shuttle' &&
-          routeSegments.map((seg, i) =>
-            seg.polyline.length > 0 ? (
+          routeSegments.map((seg, i) => {
+            if (seg.polyline.length === 0) return null;
+            const isShuttleSegment = seg.kind === 'shuttle';
+            const segmentColor = isShuttleSegment
+              ? (brandRed ?? 'rgba(178, 27, 44, 0.9)')
+              : '#4A89F3';
+            const dashPattern = isShuttleSegment ? undefined : [10, 6];
+            return (
               <Polyline
-                key={`shuttle-seg-${i}`}
+                key={`shuttle-seg-${seg.kind}-${i}`}
                 testID={`route-shuttle-segment-${seg.kind}-${i}`}
                 coordinates={seg.polyline}
-                strokeColor={
-                  seg.kind === 'shuttle' ? (brandRed ?? 'rgba(178, 27, 44, 0.9)') : '#4A89F3'
-                }
-                strokeWidth={seg.kind === 'shuttle' ? 5 : 4}
-                {...(seg.kind !== 'shuttle' ? { lineDashPattern: [10, 6] } : {})}
+                strokeColor={segmentColor}
+                strokeWidth={isShuttleSegment ? 5 : 4}
+                {...(dashPattern ? { lineDashPattern: dashPattern } : {})}
               />
-            ) : null,
-          )}
+            );
+          })}
         {buildings.map((building) => {
           const centroid = polygonCentroid(building.polygon);
           const isSelected = building.id === selectedBuildingId;

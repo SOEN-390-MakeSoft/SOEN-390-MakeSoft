@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+﻿import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { Platform } from 'react-native';
 import * as Location from 'expo-location';
@@ -69,59 +69,59 @@ const setup = (overrides?: Partial<HookArgs>) => {
   return { ...hook, args };
 };
 
+const MOCK_POLYLINE = '_p~iF~ps|U_ulLnnqC_mqNvxq`@';
+
+function setupDirectionsMocks() {
+  jest.clearAllMocks();
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = 'test-api-key';
+  (Platform as any).OS = 'android';
+  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+    status: 'granted',
+  });
+  (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+    coords: { latitude: 45.505, longitude: -73.572 },
+  });
+}
+
+function teardownDirectionsMocks() {
+  delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
+  jest.restoreAllMocks();
+}
+
+function createDrivingWalkingFetch(drivingResponse: object, walkingResponse: object) {
+  let callCount = 0;
+  const mockFetch = jest.fn().mockImplementation((url: string) => {
+    callCount++;
+    const response = url.includes('mode=driving') ? drivingResponse : walkingResponse;
+    return Promise.resolve({ json: () => Promise.resolve(response) });
+  });
+  globalThis.fetch = mockFetch;
+  return { mockFetch, getCallCount: () => callCount };
+}
+
+function renderNavHook(overrides: Record<string, any> = {}) {
+  return renderHook(() =>
+    useNavigationBetweenBuildings({
+      buildings: mockBuildings,
+      onSelectBuilding: jest.fn(),
+      ...overrides,
+    }),
+  );
+}
+
+function openNavAndSetStart(result: { current: any }, startBuildingId: string) {
+  act(() => {
+    result.current.openNavigationForBuilding(mockBuildings[0], null);
+  });
+  act(() => {
+    result.current.setNavigationActiveField('start');
+  });
+  act(() => {
+    result.current.handleMapBuildingPress(startBuildingId);
+  });
+}
+
 describe('useNavigationBetweenBuildings', () => {
-  const MOCK_POLYLINE = '_p~iF~ps|U_ulLnnqC_mqNvxq`@';
-
-  function setupDirectionsMocks() {
-    jest.clearAllMocks();
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = 'test-api-key';
-    (Platform as any).OS = 'android';
-    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-      status: 'granted',
-    });
-    (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
-      coords: { latitude: 45.505, longitude: -73.572 },
-    });
-  }
-
-  function teardownDirectionsMocks() {
-    delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
-    jest.restoreAllMocks();
-  }
-
-  function createDrivingWalkingFetch(drivingResponse: object, walkingResponse: object) {
-    let callCount = 0;
-    const mockFetch = jest.fn().mockImplementation((url: string) => {
-      callCount++;
-      const response = url.includes('mode=driving') ? drivingResponse : walkingResponse;
-      return Promise.resolve({ json: () => Promise.resolve(response) });
-    });
-    global.fetch = mockFetch;
-    return { mockFetch, getCallCount: () => callCount };
-  }
-
-  function renderNavHook(overrides: Record<string, any> = {}) {
-    return renderHook(() =>
-      useNavigationBetweenBuildings({
-        buildings: mockBuildings,
-        onSelectBuilding: jest.fn(),
-        ...overrides,
-      }),
-    );
-  }
-
-  function openNavAndSetStart(result: { current: any }, startBuildingId: string) {
-    act(() => {
-      result.current.openNavigationForBuilding(mockBuildings[0], null);
-    });
-    act(() => {
-      result.current.setNavigationActiveField('start');
-    });
-    act(() => {
-      result.current.handleMapBuildingPress(startBuildingId);
-    });
-  }
-
   describe('handleMapCoordinatePress', () => {
     it('should call onSelectBuilding and set tap marker when coordinate is inside a building (happy path)', () => {
       const onSelectBuilding = jest.fn();
@@ -349,7 +349,7 @@ describe('useNavigationBetweenBuildings', () => {
 
       const { result } = renderNavHook();
 
-      // Open navigation — default start is "Your location"
+      // Open navigation â€” default start is "Your location"
       act(() => {
         result.current.openNavigationForBuilding(mockBuildings[0], null);
       });
@@ -438,7 +438,7 @@ describe('useNavigationBetweenBuildings', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         json: () => Promise.resolve(makeMockDirectionsResponse()),
       });
-      global.fetch = mockFetch;
+      globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
 
@@ -485,7 +485,7 @@ describe('useNavigationBetweenBuildings', () => {
     });
 
     it('should handle API returning non-OK status', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
+      globalThis.fetch = jest.fn().mockResolvedValue({
         json: () => Promise.resolve({ status: 'ZERO_RESULTS', routes: [] }),
       });
 
@@ -500,7 +500,7 @@ describe('useNavigationBetweenBuildings', () => {
       });
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(globalThis.fetch).toHaveBeenCalled();
       });
 
       await waitFor(() => {
@@ -512,7 +512,7 @@ describe('useNavigationBetweenBuildings', () => {
     });
 
     it('should handle API response with no legs', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
+      globalThis.fetch = jest.fn().mockResolvedValue({
         json: () =>
           Promise.resolve({
             status: 'OK',
@@ -527,7 +527,7 @@ describe('useNavigationBetweenBuildings', () => {
       });
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(globalThis.fetch).toHaveBeenCalled();
       });
 
       await waitFor(() => {
@@ -541,7 +541,7 @@ describe('useNavigationBetweenBuildings', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         json: () => Promise.resolve(makeMockDirectionsResponse()),
       });
-      global.fetch = mockFetch;
+      globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
 
@@ -563,7 +563,7 @@ describe('useNavigationBetweenBuildings', () => {
     it('should not fetch directions when API key is missing', async () => {
       delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
       const mockFetch = jest.fn();
-      global.fetch = mockFetch;
+      globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
 
@@ -575,7 +575,7 @@ describe('useNavigationBetweenBuildings', () => {
         expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
       });
 
-      // Give it a tick — fetch should NOT have been called
+      // Give it a tick â€” fetch should NOT have been called
       await act(async () => {
         await new Promise((r) => setTimeout(r, 50));
       });
@@ -688,7 +688,7 @@ describe('useNavigationBetweenBuildings', () => {
         expect(result.current.navigationSteps.length).toBeGreaterThan(0);
       });
 
-      // Initially driving — steps should be driving steps
+      // Initially driving â€” steps should be driving steps
       expect(result.current.navigationSteps.length).toBe(1);
       expect(result.current.navigationSteps[0].instruction).toBe('Take the highway');
 
@@ -769,7 +769,7 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.setNavigationActiveField(null);
       });
 
-      // Press Hall — since destination is already set, it should assign start
+      // Press Hall â€” since destination is already set, it should assign start
       act(() => {
         result.current.handleMapBuildingPress('B2');
       });
@@ -786,7 +786,7 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.openNavigationForBuilding(null, null);
       });
 
-      // Close to reset, then reopen — we need destination to be empty
+      // Close to reset, then reopen â€” we need destination to be empty
       act(() => {
         result.current.closeNavigation();
       });
@@ -801,7 +801,7 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.setNavigationActiveField(null);
       });
 
-      // Press TB — since destination is empty string, it should assign destination
+      // Press TB â€” since destination is empty string, it should assign destination
       act(() => {
         result.current.handleMapBuildingPress('B2');
       });

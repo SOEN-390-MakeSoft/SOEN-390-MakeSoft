@@ -22,7 +22,7 @@ const DEFAULT_REGION = {
 export function polygonCentroid(points: readonly LatLng[]): LatLng {
   if (!points || points.length === 0) return DEFAULT_REGION;
 
-  const validPoints = points.filter((p) => p && p.latitude != null && p.longitude != null);
+  const validPoints = points.filter((p) => p?.latitude != null && p?.longitude != null);
   if (validPoints.length === 0) return DEFAULT_REGION;
 
   const sum = validPoints.reduce(
@@ -45,10 +45,10 @@ export function formatAddress(record: {
   street?: string;
 }): string | null {
   const parts = [
-    record.housenumber != null ? String(record.housenumber) : null,
+    record.housenumber == null ? null : String(record.housenumber),
     record.street,
   ].filter(Boolean);
-  return parts.length ? parts.join(' ') : null;
+  return parts.length === 0 ? null : parts.join(' ');
 }
 
 /**
@@ -58,7 +58,7 @@ export function formatAddress(record: {
  * @returns true if point is inside the polygon
  */
 export function pointInPolygon(point: LatLng, polygon: readonly LatLng[]): boolean {
-  if (!point || point.latitude == null || point.longitude == null) return false;
+  if (point?.latitude == null || point?.longitude == null) return false;
   if (!polygon || polygon.length === 0) return false;
 
   const { latitude: y, longitude: x } = point;
@@ -137,7 +137,7 @@ export function findBuildingAtOrNearCoordinate(
   buildings: readonly BuildingWithPolygon[],
   maxDistanceMeters: number,
 ): BuildingWithPolygon | null {
-  if (!point || point.latitude == null || point.longitude == null) return null;
+  if (point?.latitude == null || point?.longitude == null) return null;
   if (!buildings || buildings.length === 0) return null;
 
   // Filter buildings with valid polygons
@@ -145,7 +145,7 @@ export function findBuildingAtOrNearCoordinate(
     (b) =>
       b.polygon &&
       b.polygon.length > 0 &&
-      b.polygon.every((p) => p && p.latitude != null && p.longitude != null),
+      b.polygon.every((p) => p?.latitude != null && p?.longitude != null),
   );
 
   const inside = validBuildings.find((b) => pointInPolygon(point, b.polygon));

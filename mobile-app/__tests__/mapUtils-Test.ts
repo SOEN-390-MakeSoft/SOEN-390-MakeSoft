@@ -158,11 +158,11 @@ describe('mapUtils', () => {
     });
 
     it('should be symmetric: distance(a,b) equals distance(b,a)', () => {
-      const a: LatLng = { latitude: 45.497, longitude: -73.579 };
-      const b: LatLng = { latitude: 45.458, longitude: -73.64 };
+      const pointA: LatLng = { latitude: 45.497, longitude: -73.579 };
+      const pointB: LatLng = { latitude: 45.458, longitude: -73.64 };
 
-      const d1 = distanceMeters(a, b);
-      const d2 = distanceMeters(b, a);
+      const d1 = distanceMeters(pointA, pointB);
+      const d2 = distanceMeters(pointB, pointA);
 
       expect(d1).toBe(d2);
     });

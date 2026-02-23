@@ -33,7 +33,7 @@ export default function NavigationMenu({
   destinationLabel = '',
   onActiveFieldChange,
   onBuildingSelect,
-}: NavigationMenuProps) {
+}: Readonly<NavigationMenuProps>) {
   const { colourBlindMode } = useSettings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeField, setActiveField] = useState<ActiveField>(null);
@@ -45,7 +45,7 @@ export default function NavigationMenu({
   const topBarColor = isColorBlind ? '#9aa7b2' : '#8e2334';
   const routeCardColor = isColorBlind ? '#e6eaee' : '#f6dce0';
   const menuIconColor = isColorBlind ? '#b21b2c' : '#e8c9cf';
-  const destinationIconColor = isColorBlind ? '#c1464f' : '#c1464f';
+  const destinationIconColor = '#c1464f';
   const clearIconColor = isColorBlind ? '#b21b2c' : '#8e2334';
   const dividerColor = isColorBlind ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.15)';
 

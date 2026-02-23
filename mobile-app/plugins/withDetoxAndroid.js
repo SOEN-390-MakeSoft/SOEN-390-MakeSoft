@@ -123,7 +123,7 @@ function withDetoxAndroid(config) {
     'android',
     async (mod) => {
       const androidRoot = mod.modRequest.platformProjectRoot;
-      const packagePath = androidPackage.replace(/\./g, '/');
+      const packagePath = androidPackage.replaceAll('.', '/');
 
       const androidTestDir = path.join(androidRoot, 'app', 'src', 'androidTest');
       const manifestPath = path.join(androidTestDir, 'AndroidManifest.xml');

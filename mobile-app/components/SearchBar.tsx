@@ -48,7 +48,7 @@ export default function SearchBar({
   inputRef,
   brandColor,
   logoSource,
-}: SearchBarProps) {
+}: Readonly<SearchBarProps>) {
   return (
     <>
       <View style={styles.mapSearchRow}>

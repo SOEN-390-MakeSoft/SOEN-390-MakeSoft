@@ -11,7 +11,7 @@ interface MapMenuProps {
   fullScreen?: boolean;
 }
 
-export default function MapMenu({ visible, onClose, fullScreen = false }: MapMenuProps) {
+export default function MapMenu({ visible, onClose, fullScreen = false }: Readonly<MapMenuProps>) {
   const { colourBlindMode, setColourBlindMode } = useSettings();
   const theme = useTheme();
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';

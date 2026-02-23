@@ -83,6 +83,60 @@ function ModeChip({
   );
 }
 
+function renderShuttleChip({
+  isShuttleRoute,
+  isWeekend,
+  selectedTransportMode,
+  chipColor,
+  chipMutedColor,
+  onTransportModeChange,
+}: Readonly<{
+  isShuttleRoute: boolean;
+  isWeekend: boolean;
+  selectedTransportMode: TransportMode;
+  chipColor: string;
+  chipMutedColor: string;
+  onTransportModeChange?: (mode: TransportMode) => void;
+}>) {
+  if (isShuttleRoute && isWeekend) {
+    // Cross-campus but weekend — show disabled chip with N/A label
+    return (
+      <View
+        testID="mode-chip-shuttle-disabled"
+        style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}
+      >
+        <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+        <Text style={styles.shuttleUnavailableText}>N/A</Text>
+      </View>
+    );
+  }
+
+  if (isShuttleRoute) {
+    // Cross-campus weekday — fully enabled shuttle chip
+    return (
+      <ModeChip
+        mode="shuttle"
+        icon="directions-bus"
+        label="Shuttle"
+        isSelected={selectedTransportMode === 'shuttle'}
+        chipColor={chipColor}
+        chipMutedColor={chipMutedColor}
+        onPress={onTransportModeChange ?? (() => {})}
+      />
+    );
+  }
+
+  // Not a cross-campus route — show plain disabled bus icon, no text
+  return (
+    <View
+      testID="mode-chip-shuttle-disabled"
+      style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}
+    >
+      <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
+    </View>
+  );
+}
+
 export default function NavigationScreen({
   visible,
   startLabel,
@@ -140,6 +194,11 @@ export default function NavigationScreen({
     setIsMinimized(false);
     onOpenPreview?.();
   };
+
+  let computedTripTitle = tripTitleText;
+  if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
+    computedTripTitle = isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
+  }
 
   const handlePanRelease = (_: unknown, dy: number) => {
     const currentlyMinimized = isMinimizedRef.current;
@@ -208,48 +267,21 @@ export default function NavigationScreen({
               chipMutedColor={chipMutedColor}
               onPress={onTransportModeChange ?? (() => {})}
             />
-            {isShuttleRoute ? (
-              isWeekend ? (
-                // Cross-campus but weekend — show disabled chip with N/A label
-                <View
-                  testID="mode-chip-shuttle-disabled"
-                  style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}
-                >
-                  <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.shuttleUnavailableText}>N/A</Text>
-                </View>
-              ) : (
-                // Cross-campus weekday — fully enabled shuttle chip
-                <ModeChip
-                  mode="shuttle"
-                  icon="directions-bus"
-                  label="Shuttle"
-                  isSelected={selectedTransportMode === 'shuttle'}
-                  chipColor={chipColor}
-                  chipMutedColor={chipMutedColor}
-                  onPress={onTransportModeChange ?? (() => {})}
-                />
-              )
-            ) : (
-              // Not a cross-campus route — show plain disabled bus icon, no text
-              <View
-                testID="mode-chip-shuttle-disabled"
-                style={[styles.modeChipDisabled, { backgroundColor: chipMutedColor }]}
-              >
-                <MaterialIcons name="directions-bus" size={18} color="rgba(255,255,255,0.4)" />
-              </View>
-            )}
+            {renderShuttleChip({
+              isShuttleRoute,
+              isWeekend,
+              selectedTransportMode,
+              chipColor,
+              chipMutedColor,
+              onTransportModeChange,
+            })}
           </View>
           <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: closeBg }]}>
             <MaterialIcons name="close" size={18} color={closeIcon} />
           </Pressable>
         </View>
         <Text style={styles.tripTitle} numberOfLines={2}>
-          {selectedTransportMode === 'shuttle' && isShuttleRoute
-            ? isShuttleLoading
-              ? 'Loading shuttle times...'
-              : 'Shuttle - next departures'
-            : tripTitleText}
+          {computedTripTitle}
         </Text>
         {tripSummary && selectedTransportMode !== 'shuttle' ? (
           <Text style={styles.tripMeta} numberOfLines={1}>
@@ -269,7 +301,7 @@ export default function NavigationScreen({
               {shuttleInfo.departureTimes.map((t, i) =>
                 t ? (
                   <View
-                    key={`dep-${i}`}
+                    key={`dep-${t}`}
                     style={styles.shuttleTimeChip}
                     testID={`shuttle-time-${i}`}
                   >

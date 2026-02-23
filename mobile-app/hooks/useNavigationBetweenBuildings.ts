@@ -92,13 +92,6 @@ type RouteSummary = {
 
 type RouteMode = 'driving' | 'transit' | 'walking';
 
-type RouteInfo = {
-  durationText: string;
-  durationSec: number;
-  distanceText: string;
-  viaText: string;
-};
-
 type ModeDurations = {
   driving?: string;
   walking?: string;
@@ -208,11 +201,6 @@ export function useNavigationBetweenBuildings({
   const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
   const [navigationDestinationCoord, setNavigationDestinationCoord] = useState<LatLng | null>(null);
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
-  const [routeDetails, setRouteDetails] = useState<Record<RouteMode, RouteInfo | null>>({
-    driving: null,
-    transit: null,
-    walking: null,
-  });
   const [modeDurations, setModeDurations] = useState<ModeDurations>({});
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<RouteMode>('driving');
@@ -268,12 +256,6 @@ export function useNavigationBetweenBuildings({
   else if (missingCoordinates) directionsError = 'missing_coordinates';
   const isGetDirectionsDisabled =
     !hasOrigin || !hasDestinationLabel || sameOriginDestination || missingCoordinates;
-
-  const clearRouteState = useCallback(() => {
-    setRouteSummary(null);
-    setModeDurations({});
-    setRouteDetails({ driving: null, transit: null, walking: null });
-  }, []);
 
   const formatBuildingLabel = useCallback((name: string, code: string | null) => {
     if (!code) return name;
@@ -398,7 +380,6 @@ export function useNavigationBetweenBuildings({
     const load = async () => {
       setIsRouteLoading(true);
       setModeDurations({});
-      setRouteDetails({ driving: null, transit: null, walking: null });
       try {
         const [driving, walking] = await Promise.all([
           fetchDirections('driving'),
@@ -676,19 +657,18 @@ export function useNavigationBetweenBuildings({
         return;
       }
       // Default: if destination is already set, assign start; otherwise assign destination
-      if (navigationDestination.trim() !== '') {
-        setNavigationStart(label);
-        setNavigationOrigin(centroid);
-      } else {
+      if (navigationDestination.trim() === '') {
         setNavigationDestination(label);
         setNavigationDestinationCoord(centroid);
         setTapMarkerCoordinate(centroid);
+      } else {
+        setNavigationStart(label);
+        setNavigationOrigin(centroid);
       }
       resetRouteState();
     },
     [
       buildings,
-      clearRouteState,
       formatBuildingLabel,
       isNavigationOpen,
       navigationActiveField,
