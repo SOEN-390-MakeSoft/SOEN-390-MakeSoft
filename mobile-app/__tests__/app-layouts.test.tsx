@@ -5,18 +5,22 @@ jest.mock('expo-router', () => {
   const { View, Text } = require('react-native');
 
   const Stack = ({ children, ...props }: any) => (
-    <View testID="stack" {...props}>{children}</View>
+    <View testID="stack" {...props}>
+      {children}
+    </View>
   );
   Stack.Screen = ({ name, options }: any) => (
-    <Text testID={`stack-screen-${name}`} options={options}>{name}</Text>
+    <Text testID={`stack-screen-${name}`} options={options}>
+      {name}
+    </Text>
   );
 
   const Tabs = ({ children, ...props }: any) => (
-    <View testID="tabs" {...props}>{children}</View>
+    <View testID="tabs" {...props}>
+      {children}
+    </View>
   );
-  Tabs.Screen = ({ name }: any) => (
-    <Text testID={`tab-${name}`}>{name}</Text>
-  );
+  Tabs.Screen = ({ name }: any) => <Text testID={`tab-${name}`}>{name}</Text>;
 
   return { Stack, Tabs };
 });
@@ -25,10 +29,14 @@ jest.mock('tamagui', () => {
   const { View } = require('react-native');
   return {
     TamaguiProvider: ({ children, ...props }: any) => (
-      <View testID="tamagui" {...props}>{children}</View>
+      <View testID="tamagui" {...props}>
+        {children}
+      </View>
     ),
     Theme: ({ children, ...props }: any) => (
-      <View testID="theme" {...props}>{children}</View>
+      <View testID="theme" {...props}>
+        {children}
+      </View>
     ),
   };
 });

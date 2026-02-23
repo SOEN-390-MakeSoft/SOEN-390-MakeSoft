@@ -1,12 +1,12 @@
-const fs = require("node:fs");
-const path = require("node:path");
+const fs = require('node:fs');
+const path = require('node:path');
 
 const OVERPASS_URLS = [
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.nchc.org.tw/api/interpreter",
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.nchc.org.tw/api/interpreter',
 ];
-const USER_AGENT = "MakeSoft-Overpass/1.0";
+const USER_AGENT = 'MakeSoft-Overpass/1.0';
 const RELATION_ID = 19962197;
 
 async function fetchRelation() {
@@ -18,7 +18,7 @@ async function fetchRelation() {
     out skel qt;
   `;
 
-  throw new Error("Overpass failed on all endpoints");
+  throw new Error('Overpass failed on all endpoints');
 }
 
 async function fetchWayTags(wayId) {
@@ -33,22 +33,22 @@ async function fetchWayTags(wayId) {
   for (const url of OVERPASS_URLS) {
     try {
       const res = await fetch(url, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "text/plain",
-          "User-Agent": USER_AGENT,
+          'Content-Type': 'text/plain',
+          'User-Agent': USER_AGENT,
         },
         body: query,
       });
 
       const text = await res.text();
-      if (text.trim().startsWith("<")) {
+      if (text.trim().startsWith('<')) {
         lastError = new Error(`Overpass returned HTML/XML from ${url}`);
         continue;
       }
 
       const data = JSON.parse(text);
-      const way = data.elements?.find(el => el.type === "way" && el.id === wayId);
+      const way = data.elements?.find((el) => el.type === 'way' && el.id === wayId);
       return way?.tags || null;
     } catch (error) {
       lastError = error;
@@ -65,28 +65,26 @@ async function extractPolygons(data) {
 
   // Populate nodes and ways maps
   for (const el of data.elements) {
-    if (el.type === "node") nodes.set(el.id, el);
-    if (el.type === "way") ways.set(el.id, el);
+    if (el.type === 'node') nodes.set(el.id, el);
+    if (el.type === 'way') ways.set(el.id, el);
   }
 
-  const relation = data.elements.find(
-    el => el.type === "relation" && el.id === RELATION_ID
-  );
+  const relation = data.elements.find((el) => el.type === 'relation' && el.id === RELATION_ID);
 
   const result = {};
   const wayTagCache = new Map();
 
   const getAddressFields = (tags) => ({
-    street: tags?.["addr:street"] || null,
-    housenumber: tags?.["addr:housenumber"] || null,
+    street: tags?.['addr:street'] || null,
+    housenumber: tags?.['addr:housenumber'] || null,
   });
 
   // Extract polygon points from given way, filtered by valid nodes
-  const getPolygonFromWay = (way) => 
+  const getPolygonFromWay = (way) =>
     (way.nodes || [])
-      .map(id => nodes.get(id))
+      .map((id) => nodes.get(id))
       .filter(Boolean)
-      .map(n => ({
+      .map((n) => ({
         latitude: n.lat,
         longitude: n.lon,
       }));
@@ -111,7 +109,7 @@ async function extractPolygons(data) {
 
   // For each way member, extract polygon and build result object
   async function processWayMember(member) {
-    if (member.type !== "way") return;
+    if (member.type !== 'way') return;
 
     const way = ways.get(member.ref);
     if (!way || !way.nodes) return;
@@ -119,10 +117,7 @@ async function extractPolygons(data) {
     const polygon = getPolygonFromWay(way);
     let tags = await getWayTagsWithCache(way);
 
-    const name =
-      tags?.name ||
-      tags?.ref ||
-      `way_${way.id}`;
+    const name = tags?.name || tags?.ref || `way_${way.id}`;
     const { street, housenumber } = getAddressFields(tags);
 
     result[name] = {
@@ -142,7 +137,7 @@ async function extractPolygons(data) {
   return result;
 }
 
-console.log("▶ Fetching campus relation…");
+console.log('▶ Fetching campus relation…');
 
 const data = await fetchRelation();
 const polygons = await extractPolygons(data);
@@ -154,11 +149,9 @@ const output = `
 export const BUILDING_POLYGONS = ${JSON.stringify(polygons, null, 2)} as const;
 `;
 
-const outDir = path.resolve(process.cwd(), "data");
-const outFile = path.join(outDir, "buildingPolygons.ts");
+const outDir = path.resolve(process.cwd(), 'data');
+const outFile = path.join(outDir, 'buildingPolygons.ts');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outFile, output);
 
-console.log(
-  `✅ Extracted ${Object.keys(polygons).length} buildings -> ${outFile}`
-);
+console.log(`✅ Extracted ${Object.keys(polygons).length} buildings -> ${outFile}`);

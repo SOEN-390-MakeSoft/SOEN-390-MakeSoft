@@ -5,8 +5,8 @@ describe('buildingPolygonsLoyola', () => {
     expect(LOYOLA_BUILDING_POLYGONS).toBeDefined();
   });
   it('should contain Hingston Hall (HB)', () => {
-    const found = Object.values(LOYOLA_BUILDING_POLYGONS).find(
-      (b: any) => b.name?.includes('Hingston Hall')
+    const found = Object.values(LOYOLA_BUILDING_POLYGONS).find((b: any) =>
+      b.name?.includes('Hingston Hall'),
     );
     expect(found).toBeTruthy();
   });

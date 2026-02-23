@@ -4,9 +4,9 @@
  * @returns Color hex code
  */
 export function getFeatureColor(value: boolean | null): string {
-    if (value === true) return "#b21b2c";  // Concordia red - available
-    if (value === false) return "#b8b8b8"; // Gray - not available
-    return "#d6d6d6"; // Light gray - unknown
+  if (value === true) return '#b21b2c'; // Concordia red - available
+  if (value === false) return '#b8b8b8'; // Gray - not available
+  return '#d6d6d6'; // Light gray - unknown
 }
 
 /**
@@ -15,7 +15,7 @@ export function getFeatureColor(value: boolean | null): string {
  * @returns Color hex code
  */
 export function getMetroColor(value: boolean | null): string {
-    if (value === true) return "#2f6fe4";  // Blue - metro access
-    if (value === false) return "#b8b8b8"; // Gray - no metro access
-    return "#d6d6d6"; // Light gray - unknown
+  if (value === true) return '#2f6fe4'; // Blue - metro access
+  if (value === false) return '#b8b8b8'; // Gray - no metro access
+  return '#d6d6d6'; // Light gray - unknown
 }

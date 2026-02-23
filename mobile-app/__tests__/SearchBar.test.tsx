@@ -1,11 +1,11 @@
-import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
-import { TextInput } from "react-native";
-import SearchBar from "../components/SearchBar";
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { TextInput } from 'react-native';
+import SearchBar from '../components/SearchBar';
 
-describe("SearchBar", () => {
+describe('SearchBar', () => {
   const baseProps = {
-    searchQuery: "",
+    searchQuery: '',
     onChangeText: jest.fn(),
     onSubmit: jest.fn(),
     onFocus: jest.fn(),
@@ -16,22 +16,22 @@ describe("SearchBar", () => {
     onSelectResult: jest.fn(),
     onOpenMenu: jest.fn(),
     inputRef: React.createRef<TextInput>(),
-    brandColor: "#b21b2c",
-    logoSource: { uri: "test" },
+    brandColor: '#b21b2c',
+    logoSource: { uri: 'test' },
   };
 
-  it("renders placeholder", () => {
+  it('renders placeholder', () => {
     const { getByPlaceholderText } = render(<SearchBar {...baseProps} />);
-    expect(getByPlaceholderText("Search")).toBeTruthy();
+    expect(getByPlaceholderText('Search')).toBeTruthy();
   });
 
-  it("shows clear button when text exists and clears on press", () => {
+  it('shows clear button when text exists and clears on press', () => {
     const onChangeText = jest.fn();
     const { getByLabelText } = render(
-      <SearchBar {...baseProps} searchQuery="Hall" onChangeText={onChangeText} />
+      <SearchBar {...baseProps} searchQuery="Hall" onChangeText={onChangeText} />,
     );
 
-    fireEvent.press(getByLabelText("Clear search"));
-    expect(onChangeText).toHaveBeenCalledWith("");
+    fireEvent.press(getByLabelText('Clear search'));
+    expect(onChangeText).toHaveBeenCalledWith('');
   });
 });

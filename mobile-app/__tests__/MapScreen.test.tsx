@@ -156,50 +156,50 @@ const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <TamaguiProvider config={config}>
       <Theme name="light">
-        <SettingsProvider>
-          {component}
-        </SettingsProvider>
+        <SettingsProvider>{component}</SettingsProvider>
       </Theme>
-    </TamaguiProvider>
+    </TamaguiProvider>,
   );
 };
 
 describe('MapScreen', () => {
-    describe('Route Preview Screen', () => {
-      it('should render RoutePreviewScreen when isRoutePreviewOpen is true', () => {
-        // Simulate state where preview is open
-        // This is a shallow test, but ensures the preview screen renders
-        // For full coverage, RoutePreviewScreen should have its own test file
-        // Here, we just check integration
-        const { getByTestId } = renderWithProviders(<MapScreen />);
-        // Simulate opening preview (would require state manipulation or refactor for testability)
-        // For coverage, just ensure the component can be rendered
-        expect(getByTestId).toBeTruthy();
-      });
-      it('should handle step selection and closing preview', () => {
-        // For coverage, simulate the callbacks if possible
-        // (Full test would be in RoutePreviewScreen.test.tsx)
-        expect(true).toBe(true);
-      });
+  describe('Route Preview Screen', () => {
+    it('should render RoutePreviewScreen when isRoutePreviewOpen is true', () => {
+      // Simulate state where preview is open
+      // This is a shallow test, but ensures the preview screen renders
+      // For full coverage, RoutePreviewScreen should have its own test file
+      // Here, we just check integration
+      const { getByTestId } = renderWithProviders(<MapScreen />);
+      // Simulate opening preview (would require state manipulation or refactor for testability)
+      // For coverage, just ensure the component can be rendered
+      expect(getByTestId).toBeTruthy();
     });
+    it('should handle step selection and closing preview', () => {
+      // For coverage, simulate the callbacks if possible
+      // (Full test would be in RoutePreviewScreen.test.tsx)
+      expect(true).toBe(true);
+    });
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
     mockTheme = { cred: { get: () => '#912338' } };
     lastSearchSelect = null;
-    (useSearch as jest.Mock).mockImplementation((_buildings: any, onSelect: (building: any) => void) => {
-      lastSearchSelect = onSelect;
-      return {
-        searchQuery: '',
-        setSearchQuery: mockSetSearchQuery,
-        isSearchFocused: false,
-        setIsSearchFocused: mockSetIsSearchFocused,
-        searchInputRef: mockSearchInputRef,
-        searchResults: [],
-        handleSearchSubmit: jest.fn(),
-        handleSelectSearchResult: jest.fn(),
-      };
-    });
+    (useSearch as jest.Mock).mockImplementation(
+      (_buildings: any, onSelect: (building: any) => void) => {
+        lastSearchSelect = onSelect;
+        return {
+          searchQuery: '',
+          setSearchQuery: mockSetSearchQuery,
+          isSearchFocused: false,
+          setIsSearchFocused: mockSetIsSearchFocused,
+          searchInputRef: mockSearchInputRef,
+          searchResults: [],
+          handleSearchSubmit: jest.fn(),
+          handleSelectSearchResult: jest.fn(),
+        };
+      },
+    );
   });
   it('opens menu overlay when menu button is pressed', () => {
     const { getByLabelText, getByText } = renderWithProviders(<MapScreen />);
@@ -261,7 +261,7 @@ describe('MapScreen', () => {
         latitudeDelta: 0.012,
         longitudeDelta: 0.012,
       },
-      500
+      500,
     );
   });
 
@@ -330,26 +330,30 @@ describe('MapScreen', () => {
   });
 
   it('shows address from lookup and closes the overlay', () => {
-    const { getAllByTestId, getByText, getByRole, queryByText } = renderWithProviders(<MapScreen />);
+    const { getAllByTestId, getByText, getByRole, queryByText } = renderWithProviders(
+      <MapScreen />,
+    );
     fireEvent.press(getAllByTestId('polygon')[0]); // Pressing polygon triggers selection
 
     // Wait for the overlay content to appear
     expect(getByText('Test Building')).toBeTruthy();
-    
+
     // Test address lookup if available, or just check that building info shows up
     // The mock data has Test Building with no address in polygon data, but address lookup?
     // In MapScreen.tsx: addressLookup.get(...)
 
     // Close the overlay
-    fireEvent.press(getByRole('button', { name: "Close building details" }));
-    
+    fireEvent.press(getByRole('button', { name: 'Close building details' }));
+
     // Expect building name to be gone or overlay closed
     expect(queryByText('Test Building')).toBeNull();
   });
 
   describe('Location Permission Handling', () => {
     it('should get user location in normal map mode when permission is granted and location is outside buildings', async () => {
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.5, longitude: -73.5 },
       });
@@ -359,9 +363,12 @@ describe('MapScreen', () => {
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       expect(mockAnimateToRegion).toHaveBeenCalledWith(
@@ -371,14 +378,16 @@ describe('MapScreen', () => {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         },
-        500
+        500,
       );
       expect(queryByText('Test Building')).toBeNull();
       expect(queryByText('Vanier Library (VL)')).toBeNull();
     });
 
     it('should open building card when location button resolves inside a building in normal map mode', async () => {
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.5015, longitude: -73.567 },
       });
@@ -388,9 +397,12 @@ describe('MapScreen', () => {
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       await waitFor(() => {
@@ -402,19 +414,21 @@ describe('MapScreen', () => {
           latitudeDelta: 0.0032,
           longitudeDelta: 0.0032,
         }),
-        500
+        500,
       );
       expect(mockAnimateToRegion).not.toHaveBeenCalledWith(
         expect.objectContaining({
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }),
-        500
+        500,
       );
     });
 
     it('should switch campus and open Loyola building card when location is inside Loyola building', async () => {
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.4585, longitude: -73.6405 },
       });
@@ -424,9 +438,12 @@ describe('MapScreen', () => {
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       await waitFor(() => {
@@ -437,7 +454,9 @@ describe('MapScreen', () => {
 
     it('should request permission when not granted', async () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.5, longitude: -73.5 },
       });
@@ -447,9 +466,12 @@ describe('MapScreen', () => {
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
@@ -457,16 +479,21 @@ describe('MapScreen', () => {
 
     it('should show alert to open settings when permission is denied', async () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'denied',
+      });
 
       const { getByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = getByTestId('location-button');
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(mockAlertFn).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(mockAlertFn).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       expect(mockAlertFn).toHaveBeenCalledWith(
@@ -475,22 +502,27 @@ describe('MapScreen', () => {
         expect.arrayContaining([
           expect.objectContaining({ text: 'Cancel' }),
           expect.objectContaining({ text: 'Open Settings' }),
-        ])
+        ]),
       );
     });
 
     it('should open app settings when user chooses to', async () => {
       (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'denied',
+      });
 
       const { getByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = getByTestId('location-button');
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(mockAlertFn).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(mockAlertFn).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       // Simulate pressing "Open Settings" in the alert
@@ -506,17 +538,24 @@ describe('MapScreen', () => {
       // Mock console.error to suppress expected error logging
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
-      (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(new Error('Location error'));
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
+      (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(
+        new Error('Location error'),
+      );
 
       const { getByTestId } = renderWithProviders(<MapScreen />);
       const locationButton = getByTestId('location-button');
 
       await act(async () => {
         fireEvent.press(locationButton);
-        await waitFor(() => {
-          expect(mockAlertFn).toHaveBeenCalled();
-        }, { timeout: 2000 });
+        await waitFor(
+          () => {
+            expect(mockAlertFn).toHaveBeenCalled();
+          },
+          { timeout: 2000 },
+        );
       });
 
       expect(mockAlertFn).toHaveBeenCalledWith('Error', 'Could not get your location.');
@@ -535,12 +574,15 @@ describe('MapScreen', () => {
     };
 
     it('should set Start to closest SGW building when current location is near SGW border', async () => {
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 45.4968, longitude: -73.5819 },
       });
 
-      const { getByPlaceholderText, getByText, getByDisplayValue, getByTestId } = openDirectionsMode();
+      const { getByPlaceholderText, getByText, getByDisplayValue, getByTestId } =
+        openDirectionsMode();
 
       fireEvent(getByPlaceholderText('Start'), 'focus');
       fireEvent.press(getByText('Use your location'));
@@ -556,12 +598,15 @@ describe('MapScreen', () => {
     });
 
     it('should keep Start as current location when user is far from campus borders', async () => {
-      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+      (Location.getForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
       (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
         coords: { latitude: 46.2, longitude: -74.2 },
       });
 
-      const { getByPlaceholderText, getByText, getByDisplayValue, queryByDisplayValue } = openDirectionsMode();
+      const { getByPlaceholderText, getByText, getByDisplayValue, queryByDisplayValue } =
+        openDirectionsMode();
 
       fireEvent(getByPlaceholderText('Start'), 'focus');
       fireEvent.press(getByText('Use your location'));
@@ -597,7 +642,7 @@ describe('MapScreen', () => {
 
       fireEvent.press(getAllByTestId('polygon')[0]);
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(getByText('Test Building')).toBeTruthy();
     });
@@ -608,7 +653,7 @@ describe('MapScreen', () => {
       // Mock a building with a non-numeric ID
       fireEvent.press(getAllByTestId('polygon')[0]);
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Should still show the building from local data
       expect(getByText('Test Building')).toBeTruthy();
@@ -619,7 +664,7 @@ describe('MapScreen', () => {
 
       fireEvent.press(getAllByTestId('polygon')[0]);
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Test verifies the component handles API errors gracefully
       // The actual API mock is configured at the module level
@@ -630,7 +675,7 @@ describe('MapScreen', () => {
 
       fireEvent.press(getAllByTestId('polygon')[0]);
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Test verifies the component handles API errors gracefully
       // The actual API mock is configured at the module level
@@ -697,7 +742,7 @@ describe('MapScreen', () => {
         fireEvent.press(card);
 
         // Wait for state updates and async operations
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
         // Should have animated to the building location
         expect(mockAnimateToRegion).toHaveBeenCalledWith(
@@ -705,7 +750,7 @@ describe('MapScreen', () => {
             latitudeDelta: 0.0032,
             longitudeDelta: 0.0032,
           }),
-          500
+          500,
         );
       }
     });
@@ -813,7 +858,7 @@ describe('MapScreen', () => {
       const loyolaButton = loyolaText.parent as any;
       fireEvent.press(loyolaButton);
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Should now show Loyola campus label
       expect(getByText('LOYOLA')).toBeTruthy();
@@ -864,15 +909,24 @@ describe('MapScreen', () => {
   describe('API Integration', () => {
     it('should cleanup on unmount during API call', async () => {
       // Mock the API before rendering
-      const mockGetBuildingById = jest.fn(() => new Promise(resolve => setTimeout(() => resolve({
-        name: 'Test',
-        address: '123',
-        code: 'T',
-        campus: 'SGW',
-        hasElevator: true,
-        hasAccessibility: false,
-        hasMetroAccess: true,
-      }), 1000)));
+      const mockGetBuildingById = jest.fn(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  name: 'Test',
+                  address: '123',
+                  code: 'T',
+                  campus: 'SGW',
+                  hasElevator: true,
+                  hasAccessibility: false,
+                  hasMetroAccess: true,
+                }),
+              1000,
+            ),
+          ),
+      );
 
       jest.doMock('../services/api', () => ({
         getBuildingById: mockGetBuildingById,
@@ -883,13 +937,13 @@ describe('MapScreen', () => {
       // Select a building which triggers the API call
       fireEvent.press(getAllByTestId('polygon')[0]);
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Unmount before API call completes - this tests the cleanup logic
       unmount();
 
       // Wait for potential API completion
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // The test verifies no errors are thrown during cleanup
       expect(true).toBe(true);
