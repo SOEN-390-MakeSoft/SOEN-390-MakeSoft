@@ -1,6 +1,5 @@
 // Setup file for Jest
 
-
 // Configure React Testing Library environment
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -10,10 +9,10 @@ beforeAll(() => {
   console.error = (...args) => {
     // Suppress act warnings - we handle them properly with act() in tests
     if (
-        typeof args[0] === 'string' &&
-        (args[0].includes('Warning: An update to') ||
-            args[0].includes('was not wrapped in act') ||
-            args[0].includes('The current testing environment is not configured to support act'))
+      typeof args[0] === 'string' &&
+      (args[0].includes('Warning: An update to') ||
+        args[0].includes('was not wrapped in act') ||
+        args[0].includes('The current testing environment is not configured to support act'))
     ) {
       return;
     }

@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Quick notes:
 // Android emulator: use 10.0.2.2 -> maps to host machine's localhost
@@ -11,17 +11,17 @@ import Constants from 'expo-constants';
 // fall back to emulator/simulator host when running in emulators.
 const envHost = Constants?.expoConfig?.extra?.PC_IP ?? (Constants as any).manifest?.extra?.PC_IP;
 
-const ANDROID_EMULATOR_HOST = '10.0.2.2:8080';
-const IOS_SIMULATOR_HOST = 'localhost:8080';
+const ANDROID_EMULATOR_HOST = '10.0.2.2:8081';
+const IOS_SIMULATOR_HOST = 'localhost:8081';
 
-// normalize env host (append :8080 if missing)
+// normalize env host (append :8081 if missing)
 let normalizedEnvHost: string | undefined;
 if (typeof envHost !== 'string' || envHost.length === 0) {
   normalizedEnvHost = undefined;
 } else if (envHost.includes(':')) {
   normalizedEnvHost = envHost;
 } else {
-  normalizedEnvHost = `${envHost}:8080`;
+  normalizedEnvHost = `${envHost}:8081`;
 }
 
 const host = (() => {
@@ -31,9 +31,8 @@ const host = (() => {
     return normalizedEnvHost;
   }
   if (Platform.OS === 'android' && !isDevice) return ANDROID_EMULATOR_HOST;
-  if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST;
-  // Fallback: env host if present, otherwise localhost:8080
-  return normalizedEnvHost ?? 'localhost:8080';
+  if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST; // Fallback: env host if present, otherwise localhost:8081
+  return normalizedEnvHost ?? 'localhost:8081';
 })();
 
 // DEBUG: show the final chosen host
@@ -78,6 +77,32 @@ export type BuildingResponse = {
 
 export const getBuildingById = async (id: number) => {
   const response = await api.get<BuildingResponse>(`/buildings/${id}`);
+  return response.data;
+};
+
+export type ShuttleResponse = {
+  /** ISO datetime strings (or null if no more shuttles / weekend) */
+  threeNextShuttles: (string | null)[];
+  tripDuration: number;
+};
+
+/**
+ * Fetch the next shuttle departures from the backend.
+ * @param departureCampus 'SGW' or 'LOY'
+ * @param offMinutes      Walking time (minutes) to reach the departure hub, rounded to integer
+ */
+export const getNextShuttles = async (
+  departureCampus: 'SGW' | 'LOY',
+  offMinutes: number,
+  dateTimeOverride?: string,
+): Promise<ShuttleResponse> => {
+  const response = await api.get<ShuttleResponse>('/shuttle/next', {
+    params: {
+      departureCampus,
+      offMinutes: Math.round(offMinutes),
+      ...(dateTimeOverride ? { dateTime: dateTimeOverride } : {}),
+    },
+  });
   return response.data;
 };
 

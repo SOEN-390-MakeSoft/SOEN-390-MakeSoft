@@ -15,9 +15,7 @@ describe('CampusSwitch', () => {
   };
 
   it('highlights the selected campus', () => {
-    const { getByText } = render(
-      <CampusSwitch selectedCampus="SGW" onCampusChange={jest.fn()} />
-    );
+    const { getByText } = render(<CampusSwitch selectedCampus="SGW" onCampusChange={jest.fn()} />);
 
     const sgwColor = getColorFromStyle(getByText('SGW').props.style);
     const loyolaColor = getColorFromStyle(getByText('Loyola').props.style);
@@ -27,7 +25,7 @@ describe('CampusSwitch', () => {
 
   it('highlights Loyola when selected', () => {
     const { getByText } = render(
-      <CampusSwitch selectedCampus="Loyola" onCampusChange={jest.fn()} />
+      <CampusSwitch selectedCampus="Loyola" onCampusChange={jest.fn()} />,
     );
 
     const loyolaColor = getColorFromStyle(getByText('Loyola').props.style);
@@ -37,7 +35,7 @@ describe('CampusSwitch', () => {
   it('calls onCampusChange when a campus is pressed', () => {
     const onCampusChange = jest.fn();
     const { getByText } = render(
-      <CampusSwitch selectedCampus="SGW" onCampusChange={onCampusChange} />
+      <CampusSwitch selectedCampus="SGW" onCampusChange={onCampusChange} />,
     );
 
     const loyolaButton = getByText('Loyola').parent as any;
