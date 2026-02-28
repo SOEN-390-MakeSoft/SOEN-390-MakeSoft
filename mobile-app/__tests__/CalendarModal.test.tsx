@@ -61,6 +61,9 @@ describe('CalendarModal', () => {
     const { getByText, getByPlaceholderText } = render(<CalendarModal {...baseProps} />);
     expect(getByText(/Paste your/)).toBeTruthy();
     expect(getByPlaceholderText('https://calendar.google.com/calendar/...')).toBeTruthy();
+    // Verify the hint tells the user about the secret iCal address
+    expect(getByText(/secret iCal address/i)).toBeTruthy();
+    expect(getByText(/No need to make your calendar public/)).toBeTruthy();
   });
 
   it('shows an error message when error prop is set', () => {
@@ -97,9 +100,7 @@ describe('CalendarModal', () => {
   });
 
   it('renders location when provided', () => {
-    const { getByText, queryByText } = render(
-      <CalendarModal {...baseProps} isConnected events={mockEvents} />,
-    );
+    const { getByText } = render(<CalendarModal {...baseProps} isConnected events={mockEvents} />);
     // First event has a location
     expect(getByText(/Room 101/)).toBeTruthy();
     // Second event has no location – should not show a stray pin emoji for it

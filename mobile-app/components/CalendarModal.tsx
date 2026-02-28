@@ -108,11 +108,12 @@ export default function CalendarModal({
           {!isConnected ? (
             <View style={styles.connectSection}>
               <Text style={styles.instructions}>
-                Paste your <Text style={styles.bold}>public</Text> Google Calendar URL below.
+                Paste your Google Calendar <Text style={styles.bold}>secret iCal address</Text>{' '}
+                below.
               </Text>
               <Text style={styles.hint}>
-                In Google Calendar → Settings → your calendar → Integrate calendar → copy the Public
-                URL to this calendar.
+                In Google Calendar → Settings → your calendar → Integrate calendar → copy the{' '}
+                &ldquo;Secret address in iCal format&rdquo;. No need to make your calendar public.
               </Text>
               <TextInput
                 style={styles.input}
