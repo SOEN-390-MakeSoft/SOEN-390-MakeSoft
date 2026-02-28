@@ -158,14 +158,14 @@ export async function fetchICalEvents(icalUrl: string): Promise<CalendarEvent[]>
     });
   }
 
-  // Sort by start time ascending and limit to 20
+  // Sort by start time ascending and return all upcoming events (generous limit for dev)
   events.sort((a, b) => {
     const aTime = new Date(a.start.dateTime ?? a.start.date ?? '').getTime();
     const bTime = new Date(b.start.dateTime ?? b.start.date ?? '').getTime();
     return aTime - bTime;
   });
 
-  return events.slice(0, 20);
+  return events.slice(0, 250);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +227,7 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
       `https://www.googleapis.com/calendar/v3/calendars/${encodedId}/events` +
       `?key=${API_KEY}` +
       `&timeMin=${now}` +
-      `&maxResults=20` +
+      `&maxResults=250` +
       `&singleEvents=true` +
       `&orderBy=startTime`;
 
