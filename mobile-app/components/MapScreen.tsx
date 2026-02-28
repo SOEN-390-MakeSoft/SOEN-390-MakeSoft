@@ -10,7 +10,9 @@ import MapMenu from './MapMenu';
 import NavigationScreen from './NavigationScreen';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
+import CalendarModal from './CalendarModal';
 import { useSettings } from '../context/settings';
+import { usePublicCalendar } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -222,6 +224,29 @@ export default function MapScreen() {
   const { isLocating, goToUserLocation } = useUserLocation(
     mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>,
   );
+
+  // Google Calendar integration (public calendar — no OAuth needed)
+  const {
+    connectCalendar,
+    disconnect: calendarDisconnect,
+    refreshEvents,
+    isConnected: isCalendarConnected,
+    events: calendarEvents,
+    loading: calendarLoading,
+    error: calendarError,
+  } = usePublicCalendar();
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+
+  const handleLogoPress = useCallback(() => {
+    setCalendarModalVisible(true);
+    if (isCalendarConnected) {
+      refreshEvents();
+    }
+  }, [isCalendarConnected, refreshEvents]);
+
+  const handleCalendarDisconnect = useCallback(async () => {
+    await calendarDisconnect();
+  }, [calendarDisconnect]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -595,6 +620,7 @@ export default function MapScreen() {
             inputRef={searchInputRef}
             brandColor={brandRed}
             logoSource={require('../assets/images/Concordia_icon.png')}
+            onLogoPress={handleLogoPress}
           />
           <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
             <CampusSwitch
@@ -675,6 +701,18 @@ export default function MapScreen() {
           <Text style={styles.toastText}>Building not found</Text>
         </View>
       ) : null}
+
+      {/* Google Calendar Modal */}
+      <CalendarModal
+        visible={calendarModalVisible}
+        events={calendarEvents}
+        loading={calendarLoading}
+        error={calendarError}
+        isConnected={isCalendarConnected}
+        onClose={() => setCalendarModalVisible(false)}
+        onConnect={connectCalendar}
+        onDisconnect={handleCalendarDisconnect}
+      />
     </View>
   );
 }
