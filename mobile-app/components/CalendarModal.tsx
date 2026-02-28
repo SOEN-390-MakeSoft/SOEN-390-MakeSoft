@@ -164,6 +164,8 @@ export default function CalendarModal({
                 data={events}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
+                // TODO: Display event description (item.description) and allow tapping
+                // to view full event details. Currently only titles are rendered as placeholders.
                 renderItem={({ item }) => (
                   <View style={styles.eventRow}>
                     <View style={styles.eventDot} />
