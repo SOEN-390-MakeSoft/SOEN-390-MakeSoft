@@ -60,6 +60,23 @@ export default function MenuScreen() {
           </Switch>
         </XStack>
       </YStack>
+
+      {/* New menu item for Google Calendar Instructions */}
+      <YStack backgroundColor="white" borderRadius="$4" padding="$4" marginTop="$3">
+        <Pressable
+          onPress={() => router.push('/google-calendar-instructions')}
+          accessibilityLabel="Instructions to connect Google Calendar"
+        >
+          <XStack alignItems="center" gap="$2">
+            <MaterialIcons
+              name="info-outline"
+              size={20}
+              color={theme.cred ? theme.cred.get() : '#912338'}
+            />
+            <Text fontWeight="600">Instructions to connect Google Calendar</Text>
+          </XStack>
+        </Pressable>
+      </YStack>
     </YStack>
   );
 }
