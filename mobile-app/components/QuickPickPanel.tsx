@@ -26,6 +26,7 @@ interface QuickPickPanelProps {
   onHeightChange: (height: number) => void;
   onQuickPick: (pick: QuickPick) => void;
   onLocationPress: () => void;
+  onDirectionsToNextClassPress?: () => void;
 }
 
 /**
@@ -45,9 +46,24 @@ export default function QuickPickPanel({
   onHeightChange,
   onQuickPick,
   onLocationPress,
+  onDirectionsToNextClassPress,
 }: Readonly<QuickPickPanelProps>) {
   return (
     <View style={styles.quickPickWrapper} pointerEvents="auto" testID="quick-pick-panel">
+      <Pressable
+        testID="directions-to-next-class-button"
+        style={styles.directionsToNextClassButton}
+        onPress={onDirectionsToNextClassPress ?? (() => {})}
+        accessibilityLabel="Directions to my next class"
+      >
+        <View style={styles.directionsToNextClassIcon}>
+          <MaterialIcons name="directions-walk" size={28} color="#c41230" />
+          <View style={styles.directionsToNextClassIconRight}>
+            <MaterialIcons name="event" size={20} color="#c41230" />
+            <MaterialIcons name="place" size={20} color="#c41230" />
+          </View>
+        </View>
+      </Pressable>
       <Pressable
         testID="location-button"
         style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
@@ -175,5 +191,32 @@ const styles = StyleSheet.create({
     borderColor: '#d8d8d8',
     zIndex: 4,
     elevation: 6,
+  },
+  directionsToNextClassButton: {
+    position: 'absolute',
+    top: -44,
+    left: 18,
+    width: 65,
+    height: 65,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d8d8d8',
+    zIndex: 4,
+    elevation: 6,
+  },
+  directionsToNextClassIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  directionsToNextClassIconRight: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 2,
   },
 });

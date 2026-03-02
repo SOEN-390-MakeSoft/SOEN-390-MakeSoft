@@ -691,6 +691,7 @@ export default function MapScreen() {
           onHeightChange={setQuickPickContentHeight}
           onQuickPick={handleQuickPick}
           onLocationPress={handleLocationPress}
+          onDirectionsToNextClassPress={() => {}}
         />
       ) : null}
 
