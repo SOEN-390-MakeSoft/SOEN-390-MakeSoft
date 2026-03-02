@@ -1,6 +1,6 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, View, Text } from 'react-native';
-import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { Dimensions, Keyboard, Platform, StyleSheet, View, Text } from 'react-native';
+import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
 import CampusSwitch from './CampusSwitch';
@@ -11,6 +11,10 @@ import NavigationScreen from './NavigationScreen';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
+import IndoorMapOverlay from './indoor/IndoorMapOverlay';
+import FloorSelector from './indoor/FloorSelector';
+import RoomInfoBubble from './indoor/RoomInfoBubble';
+import { findBuildingAtCoordinate } from '../services/indoor';
 import { useSettings } from '../context/settings';
 import { usePublicCalendar } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
@@ -19,6 +23,7 @@ import { useSearch } from '../hooks/useSearch';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { useMapUI } from '../hooks/useMapUI';
 import { useCampusContext } from '../hooks/useCampusContext';
+import { useIndoorNavigation } from '../hooks/useIndoorNavigation';
 import {
   findBuildingAtOrNearCoordinate,
   getClosestCampusWithinBorderThreshold,
@@ -27,6 +32,39 @@ import {
   type LatLng,
 } from '../utils/mapUtils';
 import { normalizeLabel } from '../utils/stringUtils';
+
+/** Format seconds into a compact label like "1 min" or "30 sec". */
+function formatIndoorTime(seconds: number): string {
+  const rounded = Math.round(seconds);
+  if (rounded < 60) return `${rounded} sec`;
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  if (secs === 0) return `${mins} min`;
+  return `${mins} min ${secs} sec`;
+}
+
+/**
+ * Parse a Google-style duration label (e.g. "12 mins", "1 hour 5 mins")
+ * into total seconds, add extra seconds, then re-format.
+ */
+function addSecondsToLabel(label: string, extraSeconds: number): string {
+  // Parse hours and minutes from the label
+  const hourMatch = label.match(/(\d+)\s*hour/);
+  const minMatch = label.match(/(\d+)\s*min/);
+  let totalSec =
+    (hourMatch ? parseInt(hourMatch[1], 10) * 3600 : 0) +
+    (minMatch ? parseInt(minMatch[1], 10) * 60 : 0);
+  // If neither matched, try bare number ("5" → 5 min)
+  if (!hourMatch && !minMatch) {
+    const bare = parseInt(label, 10);
+    if (!isNaN(bare)) totalSec = bare * 60;
+  }
+  totalSec += extraSeconds;
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.ceil((totalSec % 3600) / 60);
+  if (hours > 0) return mins > 0 ? `${hours} hour ${mins} mins` : `${hours} hour`;
+  return `${mins} mins`;
+}
 
 type QuickPick = {
   code: string;
@@ -128,6 +166,15 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
+// When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
+const INDOOR_ZOOM_THRESHOLD = 0.002;
+
+// Google Maps style that hides POI labels/icons (used when indoor overlay is active)
+const HIDE_POIS_MAP_STYLE = [
+  { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+];
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
@@ -219,6 +266,137 @@ export default function MapScreen() {
     quickPickMaxHeight,
     handleToggleQuickPick,
   } = useMapUI();
+  // Indoor navigation
+  const indoor = useIndoorNavigation();
+
+  // -----------------------------------------------------------------------
+  // Room autocomplete: when indoor is active, merge room suggestions into
+  // the search results so the user sees rooms like "H-840" alongside buildings.
+  // -----------------------------------------------------------------------
+  const roomSearchResults = useMemo(() => {
+    if (!indoor.isIndoorActive || !searchQuery.trim()) return [];
+    return indoor.searchRooms(searchQuery, 6).map((room) => ({
+      id: `room-${room.featureId}`,
+      name: room.ref,
+      address: `${indoor.buildingMeta?.name ?? ''} · Floor ${room.level}`,
+      code: indoor.activeBuildingCode,
+      // Stash the full resolved room for later selection
+      _room: room,
+    }));
+  }, [indoor, searchQuery]);
+
+  type RoomSearchResult = (typeof roomSearchResults)[number];
+
+  const mergedSearchResults = useMemo(() => {
+    // Room results first, then building results
+    return [...roomSearchResults, ...searchResults];
+  }, [roomSearchResults, searchResults]);
+
+  /** Handle selecting an autocomplete result — room or building. */
+  const handleSelectMergedResult = useCallback(
+    (result: {
+      id: string;
+      name: string;
+      address: string | null;
+      code: string | null;
+      _room?: any;
+    }) => {
+      // If it's a room result, select the room and show the bubble
+      if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
+        const room = (result as RoomSearchResult)._room;
+        indoor.selectRoom(room);
+        indoor.setActiveLevel(room.level);
+        setSearchQuery(room.ref);
+        setIsSearchFocused(false);
+        searchInputRef.current?.blur();
+
+        // Zoom to the room position
+        mapRef.current?.animateToRegion(
+          {
+            latitude: room.position.latitude,
+            longitude: room.position.longitude,
+            latitudeDelta: 0.001,
+            longitudeDelta: 0.001,
+          },
+          500,
+        );
+        return;
+      }
+      // Otherwise delegate to the normal building search handler
+      handleSelectSearchResult(result as any);
+    },
+    [indoor, handleSelectSearchResult, setSearchQuery, setIsSearchFocused, searchInputRef],
+  );
+
+  /** Navigate to the room from the info bubble — triggers full outdoor+indoor directions. */
+  const handleRoomNavigate = useCallback(
+    (room: { ref: string; level: string }) => {
+      // 1. Compute the indoor route
+      indoor.navigateToRoom(room.ref);
+      indoor.selectRoom(null); // close the bubble
+
+      // Mark as user-triggered so zoom-out won’t deactivate indoor mode
+      lastIndoorAutoRef.current = null;
+
+      // 2. Close the building info card if open so it doesn't overlap
+      handleCloseCard();
+
+      // 3. Directly open outdoor navigation to the building entrance.
+      //    This skips the BuildingInfoCard step so the user doesn't need
+      //    to tap "Navigate" again on a separate popup.
+      if (indoor.activeBuildingCode) {
+        const outdoorBuilding = buildings.find(
+          (b) => b.code?.toUpperCase() === indoor.activeBuildingCode!.toUpperCase(),
+        );
+        if (outdoorBuilding) {
+          openNavigationForBuilding(outdoorBuilding, null);
+        }
+      }
+    },
+    [indoor, buildings, handleCloseCard, openNavigationForBuilding],
+  );
+
+  /** Room marker tapped on the indoor overlay → toggle selection. */
+  const handleRoomMarkerPress = useCallback(
+    (room: any) => {
+      // If this room is already selected, deselect it
+      if (indoor.selectedRoom?.featureId === room.featureId) {
+        indoor.selectRoom(null);
+      } else {
+        indoor.selectRoom(room);
+      }
+    },
+    [indoor],
+  );
+
+  // Track the last map region for zoom-based indoor auto-show
+  const lastIndoorAutoRef = useRef<string | null>(null);
+
+  /**
+   * When the user zooms in close enough over a building that has an indoor map,
+   * automatically activate the indoor view (with the last-selected or default floor).
+   * When they zoom back out, deactivate.
+   */
+  const handleRegionChange = useCallback(
+    (region: Region) => {
+      if (region.latitudeDelta < INDOOR_ZOOM_THRESHOLD) {
+        // Zoomed in — check if a building with indoor data is under the camera centre
+        const center = { latitude: region.latitude, longitude: region.longitude };
+        const meta = findBuildingAtCoordinate(center);
+        if (meta && (!indoor.isIndoorActive || indoor.activeBuildingCode !== meta.code)) {
+          indoor.activateBuilding(meta.code);
+          lastIndoorAutoRef.current = meta.code;
+        }
+      } else if (indoor.isIndoorActive && lastIndoorAutoRef.current && !indoor.indoorRoute) {
+        // Zoomed out — deactivate ONLY if it was auto-activated (not user-search-triggered)
+        // and there’s no active indoor route (navigation in progress).
+        indoor.deactivate();
+        lastIndoorAutoRef.current = null;
+      }
+    },
+    [indoor],
+  );
+
   const { colourBlindMode } = useSettings();
   const theme = useTheme();
   const { isLocating, goToUserLocation } = useUserLocation(
@@ -297,6 +475,57 @@ export default function MapScreen() {
   /**
    * Handle quick pick building selection
    */
+  /**
+   * Detect indoor room destinations typed in the search / navigation fields.
+   * If matched (e.g. "H-840"), activate the building + compute the indoor route,
+   * AND trigger outdoor navigation to the building entrance for seamless directions.
+   */
+  const handleIndoorSearchQuery = useCallback(
+    (query: string) => {
+      const detected = indoor.detectIndoor(query);
+      if (!detected) return false;
+
+      // 1. Activate indoor map + compute indoor route
+      indoor.activateBuilding(detected.buildingCode);
+      indoor.navigateToRoom(detected.roomRef);
+
+      // Mark as NOT auto-activated so zoom-out won't dismiss it
+      lastIndoorAutoRef.current = null;
+
+      // 2. Find the matching outdoor building and open navigation to it
+      //    This triggers Google Directions from user location → building entrance.
+      const outdoorBuilding = buildings.find(
+        (b) => b.code?.toUpperCase() === detected.buildingCode.toUpperCase(),
+      );
+      if (outdoorBuilding) {
+        handleSelectBuilding(outdoorBuilding.id);
+        openNavigationForBuilding(outdoorBuilding, null);
+      }
+
+      // 3. Zoom the map to the building entrance area
+      const meta = indoor.buildingMeta;
+      const entrance = meta?.entrances?.[0];
+      if (entrance) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: entrance.latitude,
+            longitude: entrance.longitude,
+            latitudeDelta: 0.002,
+            longitudeDelta: 0.002,
+          },
+          600,
+        );
+      } else {
+        mapRef.current?.animateToRegion(
+          { latitude: 45.4973, longitude: -73.5789, latitudeDelta: 0.003, longitudeDelta: 0.003 },
+          600,
+        );
+      }
+      return true;
+    },
+    [indoor, buildings, handleSelectBuilding, openNavigationForBuilding],
+  );
+
   const handleQuickPick = (pick: QuickPick) => {
     const hint = pick.hint ? normalizeLabel(pick.hint) : null;
     const match =
@@ -467,32 +696,108 @@ export default function MapScreen() {
     setPendingStartBuilding(null);
   }, [activeCampus, pendingStartBuilding, setStartToCurrentLocationBuilding]);
 
+  /**
+   * Combine outdoor navigation steps with indoor route steps for a seamless
+   * step-by-step experience: "Walk to Hall Building → Enter building →
+   * Take elevator to floor 8 → Walk to room H-840".
+   */
+  const combinedNavigationSteps = useMemo(() => {
+    if (!indoor.isIndoorActive || !indoor.indoorRoute) return navigationSteps;
+
+    const indoorSteps = indoor.indoorRoute.steps.map((step) => ({
+      instruction: step.instruction,
+      distanceText: step.distanceMeters != null ? `${Math.round(step.distanceMeters)} m` : '',
+      durationText: step.estimatedSeconds != null ? formatIndoorTime(step.estimatedSeconds) : '',
+      maneuver: step.fromLevel !== step.toLevel ? 'level-change' : 'walk',
+      focusCoordinate:
+        step.path.length > 0 ? step.path[Math.floor(step.path.length / 2)] : undefined,
+      _indoorLevel: step.toLevel, // used to auto-switch floor during preview
+    }));
+
+    // Add a bridging step between outdoor and indoor
+    const entrance = indoor.buildingMeta?.entrances?.[0];
+    const enterStep = {
+      instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
+      distanceText: '',
+      durationText: '',
+      maneuver: 'enter-building' as const,
+      focusCoordinate: entrance,
+      _indoorLevel: indoor.indoorRoute.startLevel,
+    };
+
+    return [...navigationSteps, enterStep, ...indoorSteps];
+  }, [navigationSteps, indoor.isIndoorActive, indoor.indoorRoute, indoor.buildingMeta]);
+
+  // -----------------------------------------------------------------------
+  // Augment the Google route summary with indoor navigation time so the
+  // displayed total reflects outdoor travel + indoor wayfinding.
+  // -----------------------------------------------------------------------
+  const indoorTimeSec = indoor.indoorRoute?.totalEstimatedSeconds ?? 0;
+
+  const augmentedRouteSummary = useMemo(() => {
+    if (!routeSummary || indoorTimeSec <= 0) return routeSummary;
+    return {
+      ...routeSummary,
+      durationText: addSecondsToLabel(routeSummary.durationText, indoorTimeSec),
+    };
+  }, [routeSummary, indoorTimeSec]);
+
+  const augmentedModeDurations = useMemo(() => {
+    if (!modeDurations || indoorTimeSec <= 0) return modeDurations;
+    return {
+      driving: modeDurations.driving
+        ? addSecondsToLabel(modeDurations.driving, indoorTimeSec)
+        : modeDurations.driving,
+      walking: modeDurations.walking
+        ? addSecondsToLabel(modeDurations.walking, indoorTimeSec)
+        : modeDurations.walking,
+    };
+  }, [modeDurations, indoorTimeSec]);
+
   const handlePreviewStepChange = useCallback(
-    (step: { focusCoordinate?: { latitude: number; longitude: number } }, index: number) => {
+    (
+      step: { focusCoordinate?: { latitude: number; longitude: number }; _indoorLevel?: string },
+      index: number,
+    ) => {
       const coordinate = step.focusCoordinate;
       if (!coordinate) return;
-      mapRef.current?.animateToRegion(
-        {
-          latitude: coordinate.latitude,
-          longitude: coordinate.longitude,
-          latitudeDelta: 0.003,
-          longitudeDelta: 0.003,
-        },
-        450,
-      );
+
+      // If this is an indoor step, auto-switch to the right floor and zoom close
+      if (step._indoorLevel) {
+        indoor.setActiveLevel(step._indoorLevel);
+        mapRef.current?.animateToRegion(
+          {
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            latitudeDelta: 0.001,
+            longitudeDelta: 0.001,
+          },
+          450,
+        );
+      } else {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            latitudeDelta: 0.003,
+            longitudeDelta: 0.003,
+          },
+          450,
+        );
+      }
     },
-    [],
+    [indoor],
   );
 
   const handleOpenRoutePreview = useCallback(() => {
-    if (navigationSteps.length === 0) return;
+    if (combinedNavigationSteps.length === 0) return;
     setPreviewStepIndex(0);
     setIsRoutePreviewOpen(true);
-    const firstStep = navigationSteps[0];
+    const firstStep = combinedNavigationSteps[0];
     if (firstStep) {
       handlePreviewStepChange(firstStep, 0);
     }
-  }, [handlePreviewStepChange, navigationSteps]);
+  }, [handlePreviewStepChange, combinedNavigationSteps]);
 
   const handleCloseRoutePreview = useCallback(() => {
     setIsRoutePreviewOpen(false);
@@ -500,23 +805,35 @@ export default function MapScreen() {
 
   const handleSelectPreviewStep = useCallback(
     (index: number) => {
-      if (navigationSteps.length === 0) return;
-      const safeIndex = Math.min(Math.max(index, 0), navigationSteps.length - 1);
+      if (combinedNavigationSteps.length === 0) return;
+      const safeIndex = Math.min(Math.max(index, 0), combinedNavigationSteps.length - 1);
       setPreviewStepIndex(safeIndex);
-      const step = navigationSteps[safeIndex];
+      const step = combinedNavigationSteps[safeIndex];
       if (step) {
         handlePreviewStepChange(step, safeIndex);
       }
     },
-    [handlePreviewStepChange, navigationSteps],
+    [handlePreviewStepChange, combinedNavigationSteps],
   );
 
+  const prevNavOpenRef = useRef(isNavigationOpen);
   useEffect(() => {
+    const wasOpen = prevNavOpenRef.current;
+    prevNavOpenRef.current = isNavigationOpen;
+
     if (!isNavigationOpen) {
       setIsRoutePreviewOpen(false);
       setPreviewStepIndex(0);
+
+      // Only clear indoor state on the transition from open → closed,
+      // not on every render where navigation happens to be closed
+      // (otherwise zoom-auto-activation gets immediately undone).
+      if (wasOpen) {
+        indoor.deactivate();
+        lastIndoorAutoRef.current = null;
+      }
     }
-  }, [isNavigationOpen]);
+  }, [isNavigationOpen, indoor]);
 
   return (
     <View style={styles.container} testID="map-screen">
@@ -529,9 +846,24 @@ export default function MapScreen() {
         showsUserLocation
         showsCompass={false}
         showsMyLocationButton={false}
+        showsPointsOfInterest={!indoor.isIndoorActive}
+        customMapStyle={indoor.isIndoorActive ? HIDE_POIS_MAP_STYLE : []}
+        onRegionChangeComplete={handleRegionChange}
         onPress={(e) => {
+          // Always dismiss keyboard & search focus when tapping the map
+          if (isSearchFocused) {
+            Keyboard.dismiss();
+            setIsSearchFocused(false);
+          }
+
           const coordinate = e.nativeEvent?.coordinate;
           if (coordinate?.latitude != null && coordinate?.longitude != null) {
+            // When indoor mode is active, tapping empty space on the map should
+            // dismiss the selected room bubble rather than selecting the building.
+            if (indoor.isIndoorActive) {
+              indoor.selectRoom(null);
+              return;
+            }
             handleMapCoordinatePress(coordinate);
           }
         }}
@@ -579,6 +911,11 @@ export default function MapScreen() {
         {buildings.map((building) => {
           const centroid = polygonCentroid(building.polygon);
           const isSelected = building.id === selectedBuildingId;
+          // When indoor mode is active for this building, disable the polygon/marker
+          // tap so that room markers underneath can receive the press events.
+          const isIndoorBuilding =
+            indoor.isIndoorActive &&
+            building.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase();
           return (
             <React.Fragment key={building.id}>
               <Polygon
@@ -586,19 +923,63 @@ export default function MapScreen() {
                 strokeColor={polygonStroke}
                 fillColor={isSelected ? polygonFillSelected : polygonFill}
                 strokeWidth={2}
-                tappable
-                onPress={() => handleMapBuildingPress(building.id)}
+                tappable={!isIndoorBuilding}
+                onPress={
+                  isIndoorBuilding
+                    ? undefined
+                    : () => {
+                        handleMapBuildingPress(building.id);
+                      }
+                }
               />
-              <Marker
-                coordinate={centroid}
-                onPress={() => handleMapBuildingPress(building.id)}
-                anchor={{ x: 0.5, y: 0.5 }}
-                opacity={0}
-              />
+              {!isIndoorBuilding && (
+                <Marker
+                  coordinate={centroid}
+                  onPress={() => {
+                    handleMapBuildingPress(building.id);
+                  }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  opacity={0}
+                />
+              )}
             </React.Fragment>
           );
         })}
+        {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
+        {indoor.isIndoorActive && (
+          <IndoorMapOverlay
+            activeLevelFeatures={indoor.activeLevelFeatures}
+            route={indoor.indoorRoute}
+            activeLevel={indoor.activeLevel}
+            destinationRoom={indoor.destinationRoom}
+            selectedRoom={indoor.selectedRoom}
+            onRoomPress={handleRoomMarkerPress}
+            routeColor={routeColor}
+          />
+        )}
       </MapView>
+
+      {/* Indoor floor selector pill */}
+      {indoor.isIndoorActive && !isNavigationOpen && (
+        <FloorSelector
+          levels={indoor.levels}
+          activeLevel={indoor.activeLevel}
+          onSelectLevel={indoor.setActiveLevel}
+          accentColor={brandRed}
+        />
+      )}
+
+      {/* Room info bubble — appears when a room is tapped or selected from search */}
+      {indoor.isIndoorActive && indoor.selectedRoom && (
+        <RoomInfoBubble
+          room={indoor.selectedRoom}
+          buildingName={indoor.buildingMeta?.name}
+          onNavigate={handleRoomNavigate}
+          onClose={() => indoor.selectRoom(null)}
+          accentColor={brandRed}
+          bottomOffset={isQuickPickOpen ? 320 : 160}
+        />
+      )}
 
       {/* Top Controls: Search, Menu, Brand Badge */}
       {!isRoutePreviewOpen && (
@@ -609,13 +990,18 @@ export default function MapScreen() {
           <SearchBar
             searchQuery={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmit={handleSearchSubmit}
+            onSubmit={() => {
+              // Try indoor destination first (e.g. "H-840"); fall back to normal building search
+              if (!handleIndoorSearchQuery(searchQuery)) {
+                handleSearchSubmit();
+              }
+            }}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
             isSearchFocused={isSearchFocused}
             isSearchDisabled={isSearchDisabled}
-            searchResults={searchResults}
-            onSelectResult={handleSelectSearchResult}
+            searchResults={mergedSearchResults}
+            onSelectResult={handleSelectMergedResult}
             onOpenMenu={() => setIsMenuOpen(true)}
             inputRef={searchInputRef}
             brandColor={brandRed}
@@ -632,6 +1018,14 @@ export default function MapScreen() {
       )}
 
       {/* Building Info Card */}
+      {/* Indoor error toast */}
+      {indoor.error ? (
+        <View style={styles.indoorErrorToast} testID="indoor-error-toast">
+          <Text style={styles.toastText}>{indoor.error}</Text>
+        </View>
+      ) : null}
+
+      {/* Building Info Card */}
       <BuildingInfoCard
         selectedBuilding={selectedBuilding}
         remoteBuilding={remoteBuilding}
@@ -640,6 +1034,8 @@ export default function MapScreen() {
         onClose={() => {
           handleCloseCard();
           clearTapMarker();
+          indoor.deactivate();
+          lastIndoorAutoRef.current = null;
         }}
         isColorBlind={isColorBlind}
         onDirections={() => {
@@ -654,14 +1050,14 @@ export default function MapScreen() {
         onClose={closeNavigation}
         onActiveFieldChange={setNavigationActiveField}
         onBuildingSelect={handleNavigationBuildingSelect}
-        modeDurations={modeDurations}
-        tripSummary={routeSummary}
+        modeDurations={augmentedModeDurations}
+        tripSummary={augmentedRouteSummary}
         isLoading={isRouteLoading}
         directionsError={directionsError}
         isGetDirectionsDisabled={isGetDirectionsDisabled}
         selectedTransportMode={selectedTransportMode}
         onTransportModeChange={setSelectedTransportMode}
-        navigationSteps={navigationSteps}
+        navigationSteps={combinedNavigationSteps}
         isShuttleRoute={isShuttleRoute}
         isShuttleLoading={isShuttleLoading}
         shuttleInfo={shuttleInfo}
@@ -671,7 +1067,7 @@ export default function MapScreen() {
 
       <RoutePreviewScreen
         visible={isRoutePreviewOpen}
-        steps={navigationSteps}
+        steps={combinedNavigationSteps}
         selectedStepIndex={previewStepIndex}
         onSelectStep={handleSelectPreviewStep}
         onClose={handleCloseRoutePreview}
@@ -748,5 +1144,14 @@ const styles = StyleSheet.create({
   toastText: {
     color: '#fff',
     fontSize: 14,
+  },
+  indoorErrorToast: {
+    position: 'absolute',
+    bottom: 140,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(180,30,30,0.9)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
 });

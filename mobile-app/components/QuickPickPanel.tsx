@@ -1,5 +1,13 @@
-import React from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type QuickPick = {
@@ -30,7 +38,8 @@ interface QuickPickPanelProps {
 
 /**
  * Panel component displaying featured building quick pick cards
- * Collapsible panel with animation and location button
+ * Collapsible panel with swipe gesture and animation, plus location button
+ * that repositions when collapsed.
  */
 export default function QuickPickPanel({
   activeCampus,
@@ -46,60 +55,114 @@ export default function QuickPickPanel({
   onQuickPick,
   onLocationPress,
 }: Readonly<QuickPickPanelProps>) {
+  // Swipe gesture: down to collapse, up to expand
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_evt, gestureState) => {
+        // Only capture vertical swipes (not horizontal scrolls)
+        return (
+          Math.abs(gestureState.dy) > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+        );
+      },
+      onPanResponderRelease: (_evt, gestureState) => {
+        const SWIPE_THRESHOLD = 30;
+        if (gestureState.dy > SWIPE_THRESHOLD && isQuickPickOpen) {
+          // Swipe down → collapse
+          onToggleOpen();
+        } else if (gestureState.dy < -SWIPE_THRESHOLD && !isQuickPickOpen) {
+          // Swipe up → expand
+          onToggleOpen();
+        }
+      },
+    }),
+  ).current;
+
   return (
-    <View style={styles.quickPickWrapper} pointerEvents="auto" testID="quick-pick-panel">
-      <Pressable
-        testID="location-button"
-        style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
-        onPress={onLocationPress}
-        disabled={isLocating}
-        accessibilityLabel="Go to my location"
-      >
-        {isLocating ? (
-          <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
-        ) : (
-          <MaterialIcons name="my-location" size={32} color="#c41230" />
-        )}
-      </Pressable>
-      <Pressable style={styles.quickPickHeader} onPress={onToggleOpen}>
-        <Text style={styles.quickPickTitle} testID="campus-label">
-          {activeCampus === 'loyola' ? 'LOYOLA' : 'SGW'}
-        </Text>
-      </Pressable>
-      <Animated.View
-        style={[
-          styles.quickPickGridWrapper,
-          quickPickContentHeight ? { height: quickPickVisibleHeight } : null,
-        ]}
-      >
-        <View
-          style={styles.quickPickGrid}
-          onLayout={(event) => {
-            const height = event.nativeEvent.layout.height;
-            if (height > 0 && height !== quickPickContentHeight) {
-              onHeightChange(height);
-            }
-          }}
+    <>
+      {/* Location button — repositions to bottom-right when panel is collapsed */}
+      {!isQuickPickOpen && (
+        <Pressable
+          testID="location-button"
+          style={[styles.recenterButtonFloating, { opacity: isLocating ? 0.85 : 1 }]}
+          onPress={onLocationPress}
+          disabled={isLocating}
+          accessibilityLabel="Go to my location"
         >
-          {featuredBuildings.map((pick) => {
-            const cardBackground = isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
-            const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : '#fff';
-            return (
-              <Pressable
-                key={pick.label}
-                style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
-                onPress={() => onQuickPick(pick)}
-              >
-                <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
-                <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
-                  {pick.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Animated.View>
-    </View>
+          {isLocating ? (
+            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
+          ) : (
+            <MaterialIcons name="my-location" size={32} color="#c41230" />
+          )}
+        </Pressable>
+      )}
+
+      <View
+        style={styles.quickPickWrapper}
+        pointerEvents="auto"
+        testID="quick-pick-panel"
+        {...panResponder.panHandlers}
+      >
+        {/* Location button inside the panel when open */}
+        {isQuickPickOpen && (
+          <Pressable
+            testID="location-button"
+            style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
+            onPress={onLocationPress}
+            disabled={isLocating}
+            accessibilityLabel="Go to my location"
+          >
+            {isLocating ? (
+              <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
+            ) : (
+              <MaterialIcons name="my-location" size={32} color="#c41230" />
+            )}
+          </Pressable>
+        )}
+
+        {/* Drag handle indicator */}
+        <View style={styles.dragHandle} />
+
+        <Pressable style={styles.quickPickHeader} onPress={onToggleOpen}>
+          <Text style={styles.quickPickTitle} testID="campus-label">
+            {activeCampus === 'loyola' ? 'LOYOLA' : 'SGW'}
+          </Text>
+        </Pressable>
+        <Animated.View
+          style={[
+            styles.quickPickGridWrapper,
+            quickPickContentHeight ? { height: quickPickVisibleHeight } : null,
+          ]}
+        >
+          <View
+            style={styles.quickPickGrid}
+            onLayout={(event) => {
+              const height = event.nativeEvent.layout.height;
+              if (height > 0 && height !== quickPickContentHeight) {
+                onHeightChange(height);
+              }
+            }}
+          >
+            {featuredBuildings.map((pick) => {
+              const cardBackground = isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
+              const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : '#fff';
+              return (
+                <Pressable
+                  key={pick.label}
+                  style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
+                  onPress={() => onQuickPick(pick)}
+                >
+                  <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
+                  <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
+                    {pick.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
+      </View>
+    </>
   );
 }
 
@@ -114,12 +177,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     padding: 17,
+    paddingTop: 10,
     shadowColor: '#000',
     shadowOpacity: 0.14,
     shadowRadius: 8,
     elevation: 4,
     overflow: 'visible',
     zIndex: 2,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ccc',
+    marginBottom: 8,
   },
   quickPickHeader: {
     flexDirection: 'row',
@@ -174,6 +245,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d8d8d8',
     zIndex: 4,
+    elevation: 6,
+  },
+  recenterButtonFloating: {
+    position: 'absolute',
+    bottom: 60,
+    right: 18,
+    width: 65,
+    height: 65,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d8d8d8',
+    zIndex: 10,
     elevation: 6,
   },
 });

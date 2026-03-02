@@ -383,31 +383,37 @@ export default function NavigationScreen({
     isMinimizedRef.current = isMinimized;
   }, [isMinimized]);
 
-  const handleToggleMinimized = () => {
-    setIsMinimized((prev) => !prev);
-  };
-
   const handleOpenPreview = () => {
     if (isPreviewButtonDisabled) return;
     setIsMinimized(false);
     onOpenPreview?.();
   };
 
-  const handlePanRelease = (_: unknown, dy: number) => {
+  const handlePanRelease = (_: unknown, gestureState: { dy: number; dx: number }) => {
+    const { dy, dx } = gestureState;
     const currentlyMinimized = isMinimizedRef.current;
+
+    // Tap (very little movement) → toggle minimized state
+    if (Math.abs(dy) < 6 && Math.abs(dx) < 6) {
+      setIsMinimized(!currentlyMinimized);
+      return;
+    }
+
+    // Swipe: expand if swiped up past threshold; minimize if swiped down
     const nextMinimized = currentlyMinimized ? dy >= -DRAG_THRESHOLD : dy > DRAG_THRESHOLD;
     setIsMinimized(nextMinimized);
   };
 
   const handlePanResponder = React.useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      // Immediately claim the gesture so Pressable / ScrollView don't steal it
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderRelease: (_, gestureState) => {
-        handlePanRelease(_, gestureState.dy);
+        handlePanRelease(_, gestureState);
       },
       onPanResponderTerminate: (_, gestureState) => {
-        handlePanRelease(_, gestureState.dy);
+        handlePanRelease(_, gestureState);
       },
     }),
   ).current;
@@ -430,8 +436,7 @@ export default function NavigationScreen({
           { backgroundColor: themeColors.bottomCardColor },
         ]}
       >
-        <Pressable
-          onPress={handleToggleMinimized}
+        <View
           style={styles.minimizeHandleTouch}
           {...handlePanResponder.panHandlers}
           accessibilityRole="button"
@@ -439,7 +444,7 @@ export default function NavigationScreen({
           testID="menu-minimize-toggle"
         >
           <View style={styles.minimizeHandleBar} />
-        </Pressable>
+        </View>
         <View style={styles.bottomHeader}>
           <View style={styles.tripModeRow}>
             <ModeChip
@@ -476,21 +481,25 @@ export default function NavigationScreen({
             <MaterialIcons name="close" size={18} color={themeColors.closeIcon} />
           </Pressable>
         </View>
-        <Text style={styles.tripTitle} numberOfLines={2}>
-          {tripTitleText}
-        </Text>
-        <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
-        <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
-        <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
-        <DirectionsErrorNotice directionsError={directionsError} />
-        <PreviewAndSteps
-          hasSteps={hasSteps}
-          isPreviewButtonDisabled={isPreviewButtonDisabled}
-          previewBg={themeColors.previewBg}
-          previewTextColor={themeColors.previewTextColor}
-          onOpenPreview={handleOpenPreview}
-          navigationSteps={navigationSteps}
-        />
+        {!isMinimized && (
+          <>
+            <Text style={styles.tripTitle} numberOfLines={2}>
+              {tripTitleText}
+            </Text>
+            <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
+            <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
+            <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
+            <DirectionsErrorNotice directionsError={directionsError} />
+            <PreviewAndSteps
+              hasSteps={hasSteps}
+              isPreviewButtonDisabled={isPreviewButtonDisabled}
+              previewBg={themeColors.previewBg}
+              previewTextColor={themeColors.previewTextColor}
+              onOpenPreview={handleOpenPreview}
+              navigationSteps={navigationSteps}
+            />
+          </>
+        )}
       </View>
     </View>
   );
@@ -516,8 +525,9 @@ const styles = StyleSheet.create({
     maxHeight: 350,
   },
   minimizeHandleTouch: {
-    alignSelf: 'center',
-    paddingBottom: 8,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: 10,
   },
   minimizeHandleBar: {
     width: 44,
