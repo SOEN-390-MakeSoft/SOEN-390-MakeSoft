@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
 import { useSettings } from '../context/settings';
+import { useRouter } from 'expo-router';
 
 interface MapMenuProps {
   visible: boolean;
@@ -15,6 +16,7 @@ export default function MapMenu({ visible, onClose, fullScreen = false }: Readon
   const { colourBlindMode, setColourBlindMode } = useSettings();
   const theme = useTheme();
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';
+  const router = useRouter();
 
   if (!visible) return null;
 
@@ -39,6 +41,25 @@ export default function MapMenu({ visible, onClose, fullScreen = false }: Readon
           trackColor={{ false: '#ddd', true: '#f3b6bf' }}
           thumbColor={colourBlindMode ? brandRed : '#fff'}
         />
+      </View>
+      {/* New menu item for Google Calendar Instructions */}
+      <View style={[styles.menuRow, { marginTop: 18, alignItems: 'center' }]}>
+        <Pressable
+          onPress={() => {
+            onClose();
+            setTimeout(() => router.push('/google-calendar-instructions'), 300);
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+          accessibilityLabel="Instructions to connect Google Calendar"
+        >
+          <MaterialIcons
+            name="info-outline"
+            size={21}
+            color={brandRed}
+            style={{ marginRight: 10 }}
+          />
+          <Text style={styles.menuRowText}>Instructions to connect Google Calendar</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
