@@ -223,7 +223,7 @@ export default function DirectionsModeScreen({
 
       {/* Bottom card */}
       <View style={[styles.bottomCard, { backgroundColor: cardColor }]}>
-        <View style={{  justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ justifyContent: 'center', alignItems: 'center' }}>
           <Text style={styles.positionText} testID="directions-mode-position">
             Step {totalSteps > 0 ? safeIndex + 1 : 0} of {totalSteps}
           </Text>
