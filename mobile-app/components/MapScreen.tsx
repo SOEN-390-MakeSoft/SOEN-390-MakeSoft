@@ -485,13 +485,7 @@ export default function MapScreen() {
     setIsDirectionsModeOpen(false);
   }, []);
 
-  const handleOffRoute = useCallback(
-    (coordinate: LatLng) => {
-      rerouteFromLocation(coordinate);
-    },
-    [rerouteFromLocation],
-  );
-
+  const handleOffRoute = rerouteFromLocation;
   const handleDirectionsLocationUpdate = useCallback(
     (coordinate: { latitude: number; longitude: number }, _stepIndex: number) => {
       mapRef.current?.animateToRegion(
