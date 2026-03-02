@@ -6,30 +6,8 @@ import { useTheme } from 'tamagui';
 import type { NavigationStep } from '../hooks/useNavigationBetweenBuildings';
 import { distanceToPolylineMeters, type LatLng } from '../utils/mapUtils';
 import { useSettings } from '../context/settings';
-
-const STEP_ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-  'turn-left': 'turn-left',
-  'turn-right': 'turn-right',
-  'turn-slight-left': 'turn-slight-left',
-  'turn-slight-right': 'turn-slight-right',
-  'turn-sharp-left': 'turn-left',
-  'turn-sharp-right': 'turn-right',
-  'uturn-left': 'u-turn-left',
-  'uturn-right': 'u-turn-right',
-  merge: 'merge',
-  'fork-left': 'fork-left',
-  'fork-right': 'fork-right',
-  'ramp-left': 'turn-slight-left',
-  'ramp-right': 'turn-slight-right',
-  'roundabout-left': 'roundabout-left',
-  'roundabout-right': 'roundabout-right',
-  straight: 'straight',
-};
-
-function getStepIcon(maneuver?: string): keyof typeof MaterialIcons.glyphMap {
-  if (!maneuver) return 'straight';
-  return STEP_ICON_MAP[maneuver] ?? 'straight';
-}
+import { navigationSharedStyles } from '../utils/navigationStyles';
+import StepInstructionPanel from './StepInstructionPanel';
 
 /** How far (metres) the user must stray from the route to trigger a reroute. */
 const OFF_ROUTE_THRESHOLD_METERS = 30;
@@ -251,124 +229,38 @@ export default function DirectionsModeScreen({
           </Text>
         </View>
 
-        <Text style={styles.instructionTitle}>Next action</Text>
-        <View style={styles.instructionRow}>
-          <View style={styles.instructionIconWrap}>
-            <MaterialIcons name={getStepIcon(currentStep?.maneuver)} size={18} color="#fff" />
-          </View>
-          <Text style={styles.instructionText} numberOfLines={3}>
-            {currentStep?.instruction ?? 'Waiting for location…'}
-          </Text>
-        </View>
-        <Text style={styles.metaText}>
-          {currentStep?.distanceText ?? ''}
-          {currentStep?.durationText ? ` · ${currentStep.durationText}` : ''}
-        </Text>
-
-        {totalSteps > 0 && safeIndex === totalSteps - 1 && (
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Done directions"
-            style={[styles.doneButton, { backgroundColor: actionBg }]}
-            testID="directions-mode-done"
-          >
-            <Text style={[styles.doneButtonText, { color: actionTextColor }]}>Done</Text>
-          </Pressable>
-        )}
+        <StepInstructionPanel
+          titleText="Next action"
+          maneuver={currentStep?.maneuver}
+          instruction={currentStep?.instruction ?? 'Waiting for location…'}
+          distanceText={currentStep?.distanceText}
+          durationText={currentStep?.durationText}
+          isLastStep={totalSteps > 0 && safeIndex === totalSteps - 1}
+          actionBg={actionBg}
+          actionTextColor={actionTextColor}
+          onDone={onClose}
+          doneAccessibilityLabel="Done directions"
+          doneTestID="directions-mode-done"
+        />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    paddingTop: 56,
-    paddingHorizontal: 14,
-    paddingBottom: 22,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  trackingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  trackingText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomCard: {
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  positionText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  instructionTitle: {
-    marginTop: 10,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '600',
-  },
-  instructionRow: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  instructionIconWrap: {
-    width: 26,
-    alignItems: 'center',
-    paddingTop: 1,
-    marginRight: 6,
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '700',
-    flex: 1,
-  },
-  metaText: {
-    marginTop: 4,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.72)',
-  },
-  doneButton: {
-    marginTop: 12,
-    alignSelf: 'center',
-    borderRadius: 18,
-    paddingHorizontal: 22,
-    paddingVertical: 9,
-  },
-  doneButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
+const styles = {
+  ...navigationSharedStyles,
+  ...StyleSheet.create({
+    trackingBadge: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      gap: 4,
+    },
+    trackingText: {
+      fontSize: 12,
+      fontWeight: '700' as const,
+    },
+  }),
+};
