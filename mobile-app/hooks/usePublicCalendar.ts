@@ -111,6 +111,45 @@ export function extractCalendarId(input: string): string | null {
   return info.type === 'public' ? info.calendarId : info.icalUrl;
 }
 
+/**
+ * Return the next class from a list of calendar events.
+ *
+ * Priority:
+ *  1. An event that is **currently in progress** (start ≤ now < end).
+ *  2. The next upcoming event (start > now) with the earliest start time.
+ *
+ * Returns `null` when the list is empty.
+ */
+export function getNextEvent(events: CalendarEvent[]): CalendarEvent | null {
+  if (!events || events.length === 0) return null;
+
+  const now = new Date();
+
+  // All-day events only have `start.date`, never `start.dateTime` — exclude them
+  const timedEvents = events.filter((e) => !!e.start.dateTime);
+
+  const getStart = (e: CalendarEvent): Date => new Date(e.start.dateTime!);
+  const getEnd = (e: CalendarEvent): Date => new Date(e.end.dateTime ?? e.end.date ?? 0);
+
+  // Events currently in progress
+  const inProgress = timedEvents.filter((e) => getStart(e) <= now && getEnd(e) > now);
+  if (inProgress.length > 0) {
+    return inProgress.reduce(
+      (latest, e) => (getStart(e) > getStart(latest) ? e : latest),
+      inProgress[0],
+    );
+  }
+
+  // Next upcoming event (earliest start after now)
+  const upcoming = timedEvents.filter((e) => getStart(e) > now);
+  if (upcoming.length === 0) return null;
+
+  return upcoming.reduce(
+    (earliest, e) => (getStart(e) < getStart(earliest) ? e : earliest),
+    upcoming[0],
+  );
+}
+
 // ---------------------------------------------------------------------------
 // iCal feed parser
 // ---------------------------------------------------------------------------

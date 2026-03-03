@@ -12,7 +12,7 @@ import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
 import { useSettings } from '../context/settings';
-import { usePublicCalendar } from '../hooks/usePublicCalendar';
+import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -247,6 +247,24 @@ export default function MapScreen() {
   const handleCalendarDisconnect = useCallback(async () => {
     await calendarDisconnect();
   }, [calendarDisconnect]);
+
+  const handleDirectionsToNextClass = useCallback(() => {
+    const nextEvent = getNextEvent(calendarEvents);
+    if (!nextEvent) {
+      console.log('[handleDirectionsToNextClass] No current or upcoming class found.');
+      return;
+    }
+    console.log(
+      '[handleDirectionsToNextClass] Next class details:\n' +
+        `  id:          ${nextEvent.id}\n` +
+        `  summary:     ${nextEvent.summary}\n` +
+        `  description: ${nextEvent.description ?? 'N/A'}\n` +
+        `  location:    ${nextEvent.location ?? 'N/A'}\n` +
+        `  start:       ${nextEvent.start.dateTime ?? nextEvent.start.date ?? 'N/A'}\n` +
+        `  end:         ${nextEvent.end.dateTime ?? nextEvent.end.date ?? 'N/A'}\n` +
+        `  htmlLink:    ${nextEvent.htmlLink ?? 'N/A'}`,
+    );
+  }, [calendarEvents]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -691,7 +709,7 @@ export default function MapScreen() {
           onHeightChange={setQuickPickContentHeight}
           onQuickPick={handleQuickPick}
           onLocationPress={handleLocationPress}
-          onDirectionsToNextClassPress={() => {}}
+          onDirectionsToNextClassPress={handleDirectionsToNextClass}
         />
       ) : null}
 
