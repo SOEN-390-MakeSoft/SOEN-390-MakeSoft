@@ -34,7 +34,7 @@ describe('ClassesCalendarRequired', () => {
   it('renders the warning message explaining the need for Classes calendar', () => {
     const { getByText } = render(<ClassesCalendarRequired onConnectCalendar={jest.fn()} />);
     expect(getByText(/You need to connect your Google Calendar named/)).toBeTruthy();
-    expect(getByText(/Classes/)).toBeTruthy();
+    expect(getByText(/to use this app/)).toBeTruthy();
   });
 
   it('renders setup instructions section', () => {

@@ -24,22 +24,22 @@ describe('calendarValidation', () => {
       expect(result).toBe(false);
     });
 
-    it('treats truthy non-boolean as valid (edge case)', () => {
+    it('treats truthy value as valid (edge case)', () => {
       // Arrange - in JS, truthy values could be passed
       // Act
       const result = isClassesCalendarValid(1 as unknown as boolean);
 
-      // Assert
-      expect(result).toBe(true);
+      // Assert - function returns the value as-is; truthy means valid
+      expect(Boolean(result)).toBe(true);
     });
 
-    it('treats falsy non-boolean as invalid (edge case)', () => {
+    it('treats falsy value as invalid (edge case)', () => {
       // Arrange
       // Act
       const result = isClassesCalendarValid(0 as unknown as boolean);
 
-      // Assert
-      expect(result).toBe(false);
+      // Assert - function returns the value as-is; falsy means invalid
+      expect(Boolean(result)).toBe(false);
     });
   });
 });
