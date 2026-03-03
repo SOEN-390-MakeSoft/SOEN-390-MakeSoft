@@ -46,6 +46,25 @@ jest.mock('../hooks/useSearch', () => ({
   useSearch: jest.fn(),
 }));
 
+const mockConnectCalendar = jest.fn().mockResolvedValue(undefined);
+const mockCalendarDisconnect = jest.fn().mockResolvedValue(undefined);
+const mockRefreshEvents = jest.fn().mockResolvedValue(undefined);
+let mockIsCalendarConnected = true;
+jest.mock('../hooks/usePublicCalendar', () => ({
+  usePublicCalendar: () => ({
+    connectCalendar: mockConnectCalendar,
+    disconnect: mockCalendarDisconnect,
+    refreshEvents: mockRefreshEvents,
+    get isConnected() {
+      return mockIsCalendarConnected;
+    },
+    events: [],
+    loading: false,
+    error: null,
+    calendarId: null,
+  }),
+}));
+
 jest.mock('@expo/vector-icons/MaterialIcons', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
@@ -231,6 +250,21 @@ describe('MapScreen', () => {
     const { getByTestId } = renderWithProviders(<MapScreen />);
     expect(getByTestId('campus-map')).toBeTruthy();
     (Platform as any).OS = originalOS;
+  });
+
+  describe('Classes calendar validation', () => {
+    it('shows ClassesCalendarRequired overlay when Classes calendar is not connected', () => {
+      mockIsCalendarConnected = false;
+      const { getByTestId } = renderWithProviders(<MapScreen />);
+      expect(getByTestId('classes-calendar-required')).toBeTruthy();
+      mockIsCalendarConnected = true;
+    });
+
+    it('does not show ClassesCalendarRequired when calendar is connected', () => {
+      mockIsCalendarConnected = true;
+      const { queryByTestId } = renderWithProviders(<MapScreen />);
+      expect(queryByTestId('classes-calendar-required')).toBeNull();
+    });
   });
 
   describe('Map tap listener', () => {

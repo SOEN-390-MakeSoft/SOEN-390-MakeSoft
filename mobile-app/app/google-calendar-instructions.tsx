@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { CALENDAR_INSTRUCTIONS_VIDEO_URL } from '../constants/calendar';
 
 const steps = [
   {
@@ -85,6 +86,16 @@ export default function GoogleCalendarInstructionsScreen() {
       <Text style={styles.intro}>
         Follow these steps to sync your Concordia schedule with the app.
       </Text>
+      {CALENDAR_INSTRUCTIONS_VIDEO_URL ? (
+        <Pressable
+          style={styles.videoCta}
+          onPress={() => Linking.openURL(CALENDAR_INSTRUCTIONS_VIDEO_URL)}
+          accessibilityLabel="Watch the instructions video"
+        >
+          <MaterialIcons name="play-circle-filled" size={24} color="#912338" />
+          <Text style={styles.videoCtaText}>Watch the instructions video</Text>
+        </Pressable>
+      ) : null}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {steps.map((step, idx) => (
           <View key={idx} style={styles.card}>
@@ -153,6 +164,25 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
     marginBottom: 10,
     marginTop: 8,
+  },
+  videoCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginHorizontal: 18,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  videoCtaText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#912338',
   },
   scrollContent: { padding: 18, paddingBottom: 40 },
   card: {
