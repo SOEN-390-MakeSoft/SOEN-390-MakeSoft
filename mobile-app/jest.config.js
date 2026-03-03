@@ -8,11 +8,18 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
+  collectCoverage: false,
   collectCoverageFrom: [
-    '**/*.{ts,tsx}',
-    '!**/coverage/**',
+    'hooks/**/*.{ts,tsx}',
+    'components/**/*.{ts,tsx}',
+    'utils/**/*.{ts,tsx}',
+    'services/**/*.{ts,tsx}',
+    'context/**/*.{ts,tsx}',
+    'constants/**/*.{ts,tsx}',
+    'app/**/*.{ts,tsx}',
+    '!data/**',
+    '!**/*.d.ts',
     '!**/node_modules/**',
-    '!**/babel.config.js',
-    '!**/jest.setup.js',
+    '!**/coverage/**',
   ],
 };
