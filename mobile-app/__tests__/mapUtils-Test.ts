@@ -10,6 +10,9 @@ import {
   coordsEqual,
   findBuildingAtOrNearCoordinate,
   isCrossCampusRoute,
+  distanceToPolylineMeters,
+  getCampusFromCoordinate,
+  nearestPolygonVertex,
   type LatLng,
   type BuildingWithPolygon,
 } from '../utils/mapUtils';
@@ -107,6 +110,19 @@ describe('mapUtils', () => {
       const result = pointInPolygon(point, []);
 
       expect(result).toBe(false);
+    });
+
+    it('should skip null vertices and still compute result (null-guard edge case)', () => {
+      // Insert a null vertex between two valid vertices; the guard should
+      // skip it without throwing and still produce a correct result.
+      const square: LatLng[] = makeRectangle(45.502, -73.568, 45.501, -73.566);
+      const withNull = [...square];
+      // @ts-expect-error — intentionally injecting null to exercise the guard
+      withNull.splice(1, 0, null);
+
+      const insidePoint: LatLng = { latitude: 45.5015, longitude: -73.567 };
+      // Should not throw even with the null vertex present.
+      expect(() => pointInPolygon(insidePoint, withNull)).not.toThrow();
     });
   });
 
@@ -253,6 +269,13 @@ describe('mapUtils', () => {
       expect(Math.abs(distance - expected)).toBeLessThan(2);
     });
 
+    it('returns Infinity when point has null latitude (null-guard edge case)', () => {
+      // @ts-expect-error — intentionally injecting null to exercise the guard
+      const nullPoint: LatLng = { latitude: null, longitude: -73.579 };
+
+      expect(distanceToCampusBorderMeters(nullPoint, SGW_BOUNDS)).toBe(Number.POSITIVE_INFINITY);
+    });
+
     it('returns closest campus border and threshold resolution', () => {
       const nearSgw: LatLng = { latitude: 45.4968, longitude: -73.5819 };
       const nearLoyola: LatLng = { latitude: 45.4588, longitude: -73.6331 };
@@ -297,6 +320,136 @@ describe('mapUtils', () => {
       const loyolaDestination: LatLng = { latitude: 45.4576, longitude: -73.6387 };
 
       expect(isCrossCampusRoute(southSgwOutlier, loyolaDestination)).toBe(true);
+    });
+  });
+
+  describe('distanceToPolylineMeters', () => {
+    // Vertical segment approx 111 m long along the longitude -73.579.
+    // At latitude 45 degrees: 1° lat ≈ 111 320 m, 1° lng ≈ 78 710 m.
+    const segment: LatLng[] = [
+      { latitude: 45.497, longitude: -73.579 },
+      { latitude: 45.498, longitude: -73.579 },
+    ];
+
+    it('returns Infinity for an empty polyline (edge case)', () => {
+      const point: LatLng = { latitude: 45.497, longitude: -73.579 };
+
+      expect(distanceToPolylineMeters(point, [])).toBe(Infinity);
+    });
+
+    it('returns distance to the single point when polyline has one coordinate (edge case)', () => {
+      const point: LatLng = { latitude: 45.497, longitude: -73.582 };
+      const singlePoint: LatLng[] = [{ latitude: 45.497, longitude: -73.579 }];
+
+      const result = distanceToPolylineMeters(point, singlePoint);
+      const expected = distanceMeters(point, singlePoint[0]);
+
+      expect(result).toBeCloseTo(expected, 0);
+    });
+
+    it('returns ~0 when point sits exactly on a segment endpoint (happy path)', () => {
+      const point: LatLng = { latitude: 45.497, longitude: -73.579 };
+
+      expect(distanceToPolylineMeters(point, segment)).toBeLessThan(1);
+    });
+
+    it('returns ~0 when point sits in the middle of a segment (happy path)', () => {
+      // Mid-point of the segment is exactly on the line.
+      const midPoint: LatLng = { latitude: 45.4975, longitude: -73.579 };
+
+      expect(distanceToPolylineMeters(midPoint, segment)).toBeLessThan(1);
+    });
+
+    it('returns perpendicular distance when point is beside segment interior (happy path)', () => {
+      // User is beside the mid-point of the segment, displaced ~31.5 m east.
+      // 0.0004° longitude ≈ 31.5 m at latitude 45°.
+      const point: LatLng = { latitude: 45.4975, longitude: -73.5794 };
+
+      const result = distanceToPolylineMeters(point, segment);
+
+      // Should be close to the east displacement (~31.5 m), well above 30 m threshold.
+      expect(result).toBeGreaterThan(20);
+      expect(result).toBeLessThan(50);
+    });
+
+    it('returns distance to nearest endpoint when point is past segment end (edge case)', () => {
+      // Point is south of the start endpoint, outside the segment range.
+      const point: LatLng = { latitude: 45.496, longitude: -73.579 };
+      const expected = distanceMeters(point, segment[0]);
+
+      const result = distanceToPolylineMeters(point, segment);
+
+      // Must equal the distance to the southernmost endpoint.
+      expect(result).toBeCloseTo(expected, 0);
+    });
+
+    it('picks the closest segment in a multi-segment polyline (happy path)', () => {
+      const multiSegment: LatLng[] = [
+        { latitude: 45.497, longitude: -73.579 },
+        { latitude: 45.498, longitude: -73.579 },
+        { latitude: 45.498, longitude: -73.578 }, // turns east
+      ];
+      // Perpendicular to the second segment (the east-going one), ~11 m north.
+      const nearSecond: LatLng = { latitude: 45.4981, longitude: -73.5785 };
+      // Perpendicular to first segment, ~31 m east.
+      const nearFirst: LatLng = { latitude: 45.4975, longitude: -73.5794 };
+
+      const distNearSecond = distanceToPolylineMeters(nearSecond, multiSegment);
+      const distNearFirst = distanceToPolylineMeters(nearFirst, multiSegment);
+
+      // nearSecond is closer to its segment than nearFirst is to its segment.
+      expect(distNearSecond).toBeLessThan(distNearFirst);
+    });
+
+    it('is consistent with distanceMeters for a single-segment endpoint projection', () => {
+      // For a point beyond the end of the segment the result should equal the
+      // haversine distance to that endpoint.
+      const beyondEnd: LatLng = { latitude: 45.499, longitude: -73.579 };
+      const expected = distanceMeters(beyondEnd, segment[1]);
+
+      const result = distanceToPolylineMeters(beyondEnd, segment);
+
+      expect(result).toBeCloseTo(expected, 0);
+    });
+  });
+
+  describe('getCampusFromCoordinate', () => {
+    it('returns SGW for a point inside SGW bounds (happy path)', () => {
+      const sgwPoint: LatLng = { latitude: 45.497, longitude: -73.578 };
+      expect(getCampusFromCoordinate(sgwPoint)).toBe('SGW');
+    });
+
+    it('returns Loyola for a point inside Loyola bounds (happy path)', () => {
+      const loyolaPoint: LatLng = { latitude: 45.458, longitude: -73.640 };
+      expect(getCampusFromCoordinate(loyolaPoint)).toBe('Loyola');
+    });
+
+    it('returns null for a point outside both campus bounds (edge case)', () => {
+      const outsidePoint: LatLng = { latitude: 46.0, longitude: -74.0 };
+      expect(getCampusFromCoordinate(outsidePoint)).toBeNull();
+    });
+  });
+
+  describe('nearestPolygonVertex', () => {
+    const square: LatLng[] = makeRectangle(45.502, -73.568, 45.500, -73.566);
+
+    it('returns the reference point unchanged for an empty polygon (edge case)', () => {
+      const ref: LatLng = { latitude: 45.501, longitude: -73.567 };
+      expect(nearestPolygonVertex(ref, [])).toEqual(ref);
+    });
+
+    it('returns the closest vertex to the reference point (happy path)', () => {
+      // Closest vertex should be top-left: { latitude: 45.502, longitude: -73.568 }
+      const ref: LatLng = { latitude: 45.503, longitude: -73.569 };
+      const result = nearestPolygonVertex(ref, square);
+      expect(result.latitude).toBeCloseTo(45.502);
+      expect(result.longitude).toBeCloseTo(-73.568);
+    });
+
+    it('returns the single vertex for a one-vertex polygon (edge case)', () => {
+      const single: LatLng[] = [{ latitude: 45.497, longitude: -73.579 }];
+      const ref: LatLng = { latitude: 45.500, longitude: -73.580 };
+      expect(nearestPolygonVertex(ref, single)).toEqual(single[0]);
     });
   });
 });
