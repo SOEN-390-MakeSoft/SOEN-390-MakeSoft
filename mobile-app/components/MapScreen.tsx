@@ -26,7 +26,7 @@ import {
   type BuildingWithPolygon,
   type LatLng,
 } from '../utils/mapUtils';
-import { normalizeLabel } from '../utils/stringUtils';
+import { normalizeLabel, parseLocationString, resolveBuilding } from '../utils/stringUtils';
 
 type QuickPick = {
   code: string;
@@ -247,23 +247,47 @@ export default function MapScreen() {
   const handleCalendarDisconnect = useCallback(async () => {
     await calendarDisconnect();
   }, [calendarDisconnect]);
-
   const handleDirectionsToNextClass = useCallback(() => {
     const nextEvent = getNextEvent(calendarEvents);
     if (!nextEvent) {
       console.log('[handleDirectionsToNextClass] No current or upcoming class found.');
       return;
     }
+
+    // ── Parse & resolve the location string ──────────────────────────────
+    const rawLocation = nextEvent.location ?? '';
+    const parsed = parseLocationString(rawLocation);
+    const resolved = resolveBuilding(parsed.building, parsed.campus);
+
     console.log(
       '[handleDirectionsToNextClass] Next class details:\n' +
         `  id:          ${nextEvent.id}\n` +
         `  summary:     ${nextEvent.summary}\n` +
         `  description: ${nextEvent.description ?? 'N/A'}\n` +
-        `  location:    ${nextEvent.location ?? 'N/A'}\n` +
+        `  location:    ${rawLocation || 'N/A'}\n` +
         `  start:       ${nextEvent.start.dateTime ?? nextEvent.start.date ?? 'N/A'}\n` +
         `  end:         ${nextEvent.end.dateTime ?? nextEvent.end.date ?? 'N/A'}\n` +
         `  htmlLink:    ${nextEvent.htmlLink ?? 'N/A'}`,
     );
+
+    console.log(
+      '[handleDirectionsToNextClass] Parsed location:\n' +
+        `  campus:      ${parsed.campus ?? '(unknown)'}\n` +
+        `  building:    ${parsed.building ?? '(none)'}\n` +
+        `  room:        ${parsed.room ?? '(none)'}`,
+    );
+
+    if (resolved) {
+      console.log(
+        '[handleDirectionsToNextClass] Resolved building:\n' +
+          `  id:          ${resolved.id}\n` +
+          `  code:        ${resolved.code ?? '(none)'}\n` +
+          `  name:        ${resolved.name}\n` +
+          `  address:     ${resolved.address ?? '(not in dataset)'}`,
+      );
+    } else {
+      console.log('[handleDirectionsToNextClass] Building could not be resolved from dataset.');
+    }
   }, [calendarEvents]);
 
   // Get selected building for info card

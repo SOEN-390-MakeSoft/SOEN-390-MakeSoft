@@ -20,7 +20,7 @@ const makeAnnex = (code: string, address: string): BuildingAddress =>
 export const BUILDING_ADDRESSES: BuildingAddress[] = [
   makeAnnex('B', '2160 Bishop St, Montreal, QC'),
   makeAnnex('CI', '2149 Mackay St, Montreal, QC'),
-  makeAnnex('CL', '1665 Ste-Catherine St W, Montreal, QC'),
+  makeBuilding('CL', 'CL Annex', '1665 Ste-Catherine St W, Montreal, QC', ['CL Building']),
   makeAnnex('D', '2140 Bishop St, Montreal, QC'),
   makeAnnex('EN', '2070 Mackay St, Montreal, QC'),
   makeBuilding('ER', 'ER Building', '2155 Guy St, Montreal, QC'),
@@ -50,7 +50,12 @@ export const BUILDING_ADDRESSES: BuildingAddress[] = [
     'Hall Building',
   ]),
   makeAnnex('K', '2150 Bishop St, Montreal, QC'),
-  makeBuilding('LB', 'J.W. McConnell Building', '1400 De Maisonneuve Blvd W, Montreal, QC'),
+  makeBuilding('LB', 'J.W. McConnell Building', '1400 De Maisonneuve Blvd W, Montreal, QC', [
+    'Library Building',
+    'LB Building',
+    'McConnell Building',
+    'J. W. McConnell Building',
+  ]),
   makeBuilding('LD', 'LD Building', '1424 Bishop St, Montreal, QC'),
   makeBuilding('LS', 'Learning Square', '1535 De Maisonneuve Blvd W, Montreal, QC'),
   makeAnnex('M', '2135 Mackay St, Montreal, QC'),
