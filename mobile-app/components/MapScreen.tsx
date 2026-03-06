@@ -889,7 +889,8 @@ const styles = StyleSheet.create({
   courseInfoButton: {
     position: 'absolute',
     bottom: 116,
-    left: 96,
+    left: '50%',
+    marginLeft: -25,
     width: 50,
     height: 50,
     borderRadius: 25,
