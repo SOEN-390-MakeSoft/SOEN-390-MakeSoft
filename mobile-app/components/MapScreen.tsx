@@ -14,7 +14,7 @@ import CalendarModal from './CalendarModal';
 import ClassesCalendarRequired from './ClassesCalendarRequired';
 import { useSettings } from '../context/settings';
 import { isClassesCalendarValid } from '../utils/calendarValidation';
-import { usePublicCalendar } from '../hooks/usePublicCalendar';
+import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -28,7 +28,7 @@ import {
   type BuildingWithPolygon,
   type LatLng,
 } from '../utils/mapUtils';
-import { normalizeLabel } from '../utils/stringUtils';
+import { normalizeLabel, resolveEventLocation, type LocationConflict } from '../utils/stringUtils';
 
 type QuickPick = {
   code: string;
@@ -249,6 +249,62 @@ export default function MapScreen() {
   const handleCalendarDisconnect = useCallback(async () => {
     await calendarDisconnect();
   }, [calendarDisconnect]);
+  const handleDirectionsToNextClass = useCallback(() => {
+    const nextEvent = getNextEvent(calendarEvents);
+    if (!nextEvent) {
+      console.log('[handleDirectionsToNextClass] No current or upcoming class found.');
+      return;
+    }
+
+    // Log event details
+    const rawLocation = nextEvent.location ?? '';
+    console.log(
+      '[handleDirectionsToNextClass] Next class details:\n' +
+        `  id:          ${nextEvent.id}\n` +
+        `  summary:     ${nextEvent.summary}\n` +
+        `  description: ${nextEvent.description ?? 'N/A'}\n` +
+        `  location:    ${rawLocation || 'N/A'}\n` +
+        `  start:       ${nextEvent.start.dateTime ?? nextEvent.start.date ?? 'N/A'}\n` +
+        `  end:         ${nextEvent.end.dateTime ?? nextEvent.end.date ?? 'N/A'}\n` +
+        `  htmlLink:    ${nextEvent.htmlLink ?? 'N/A'}`,
+    );
+
+    // Resolve location against polygon datasets
+    const resolution = resolveEventLocation(rawLocation, sgwBuildings, loyolaBuildings);
+    const { building: resolvedBuilding, campus: resolvedCampus, conflict } = resolution;
+
+    // Log conflict / warning
+    if (conflict) {
+      const conflictLabel = (c: LocationConflict): string => {
+        switch (c.type) {
+          case 'unresolvable_location':
+            return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
+          case 'building_not_in_polygons':
+            return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
+          case 'campus_inferred':
+            return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
+          case 'campus_mismatch':
+            return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
+        }
+      };
+      console.warn(
+        `[handleDirectionsToNextClass] Location conflict detected:\n  ${conflictLabel(conflict)}`,
+      );
+    }
+
+    //  Log resolved building
+    if (resolvedBuilding && resolvedCampus) {
+      console.log(
+        '[handleDirectionsToNextClass] Resolved building:\n' +
+          `  id:          ${resolvedBuilding.id}\n` +
+          `  code:        ${resolvedBuilding.code ?? '(none)'}\n` +
+          `  name:        ${resolvedBuilding.name}\n` +
+          `  campus:      ${resolvedCampus}`,
+      );
+    } else {
+      console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
+    }
+  }, [calendarEvents, sgwBuildings, loyolaBuildings]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -698,6 +754,7 @@ export default function MapScreen() {
           onHeightChange={setQuickPickContentHeight}
           onQuickPick={handleQuickPick}
           onLocationPress={handleLocationPress}
+          onDirectionsToNextClassPress={handleDirectionsToNextClass}
         />
       ) : null}
 
