@@ -240,6 +240,116 @@ export function resolveBuilding(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Location conflict resolution
+// ---------------------------------------------------------------------------
+
+export type Campus = 'SGW' | 'Loyola';
+
+export type LocationConflict =
+  | { type: 'campus_mismatch'; parsedCampus: Campus; actualCampus: Campus; buildingId: string }
+  | { type: 'campus_inferred'; inferredCampus: Campus; buildingId: string }
+  | { type: 'building_not_in_polygons'; resolvedId: string }
+  | { type: 'unresolvable_location'; rawLocation: string };
+
+export type LocationResolution = {
+  building: {
+    id: string;
+    code: string | null;
+    name: string;
+    polygon: readonly { latitude: number; longitude: number }[];
+  } | null;
+  campus: Campus | null;
+  conflict: LocationConflict | null;
+};
+
+type RuntimeBuilding = {
+  id: string;
+  code: string | null;
+  name: string;
+  polygon: readonly { latitude: number; longitude: number }[];
+};
+
+/**
+ * Resolves a raw calendar location string against the runtime polygon arrays
+ * (`sgwBuildings` / `loyolaBuildings`) and detects campus/building mismatches.
+ *
+ * Conflict priorities (first match wins):
+ *  1. `unresolvable_location` – string could not be parsed or matched.
+ *  2. `building_not_in_polygons` – matched by name but missing from runtime arrays.
+ *  3. `campus_inferred` – no campus in string; guessed from polygon set.
+ *  4. `campus_mismatch` – string said one campus but polygon is on another.
+ *  5. No conflict – everything consistent.
+ *
+ * @param rawLocation   Raw location string from a calendar event.
+ * @param sgwBuildings  Runtime SGW building list (from `useCampusContext`).
+ * @param loyolaBuildings Runtime Loyola building list.
+ */
+export function resolveEventLocation(
+  rawLocation: string,
+  sgwBuildings: readonly RuntimeBuilding[],
+  loyolaBuildings: readonly RuntimeBuilding[],
+): LocationResolution {
+  const parsed = parseLocationString(rawLocation);
+  const resolved = resolveBuilding(parsed.building, parsed.campus);
+
+  // Conflict 1: completely unresolvable based on current algorithm
+  if (!resolved) {
+    return {
+      building: null,
+      campus: null,
+      conflict: { type: 'unresolvable_location', rawLocation },
+    };
+  }
+
+  // Find which runtime polygon set actually has this building
+  const inSGW = sgwBuildings.find(
+    (b) => b.id === resolved.id || (resolved.code !== null && b.code === resolved.code),
+  );
+  const inLoyola = loyolaBuildings.find(
+    (b) => b.id === resolved.id || (resolved.code !== null && b.code === resolved.code),
+  );
+
+  // Conflict 2: resolved by name-match but absent from runtime arrays
+  if (!inSGW && !inLoyola) {
+    return {
+      building: null,
+      campus: null,
+      conflict: { type: 'building_not_in_polygons', resolvedId: resolved.id },
+    };
+  }
+
+  const actualCampus: Campus = inSGW ? 'SGW' : 'Loyola';
+  const actualBuilding = (inSGW ?? inLoyola)!;
+
+  // Conflict 3: campus missing from location string — infer it
+  if (!parsed.campus) {
+    return {
+      building: actualBuilding,
+      campus: actualCampus,
+      conflict: { type: 'campus_inferred', inferredCampus: actualCampus, buildingId: resolved.id },
+    };
+  }
+
+  // Conflict 4: campus in string contradicts polygon data
+  const parsedCampusNorm: Campus = /loyola/i.test(parsed.campus) ? 'Loyola' : 'SGW';
+  if (parsedCampusNorm !== actualCampus) {
+    return {
+      building: actualBuilding,
+      campus: actualCampus,
+      conflict: {
+        type: 'campus_mismatch',
+        parsedCampus: parsedCampusNorm,
+        actualCampus,
+        buildingId: resolved.id,
+      },
+    };
+  }
+
+  // No conflict
+  return { building: actualBuilding, campus: actualCampus, conflict: null };
+}
+
 // ── helper ────────────────────────────────────────────────────────────────
 type BUILDING_ADDRESSES_TYPE = (typeof BUILDING_ADDRESSES)[number];
 

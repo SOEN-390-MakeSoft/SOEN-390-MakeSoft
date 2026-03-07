@@ -26,7 +26,7 @@ import {
   type BuildingWithPolygon,
   type LatLng,
 } from '../utils/mapUtils';
-import { normalizeLabel, parseLocationString, resolveBuilding } from '../utils/stringUtils';
+import { normalizeLabel, resolveEventLocation, type LocationConflict } from '../utils/stringUtils';
 
 type QuickPick = {
   code: string;
@@ -254,11 +254,8 @@ export default function MapScreen() {
       return;
     }
 
-    // ── Parse & resolve the location string ──────────────────────────────
+    // Log event details
     const rawLocation = nextEvent.location ?? '';
-    const parsed = parseLocationString(rawLocation);
-    const resolved = resolveBuilding(parsed.building, parsed.campus);
-
     console.log(
       '[handleDirectionsToNextClass] Next class details:\n' +
         `  id:          ${nextEvent.id}\n` +
@@ -270,25 +267,42 @@ export default function MapScreen() {
         `  htmlLink:    ${nextEvent.htmlLink ?? 'N/A'}`,
     );
 
-    console.log(
-      '[handleDirectionsToNextClass] Parsed location:\n' +
-        `  campus:      ${parsed.campus ?? '(unknown)'}\n` +
-        `  building:    ${parsed.building ?? '(none)'}\n` +
-        `  room:        ${parsed.room ?? '(none)'}`,
-    );
+    // Resolve location against polygon datasets
+    const resolution = resolveEventLocation(rawLocation, sgwBuildings, loyolaBuildings);
+    const { building: resolvedBuilding, campus: resolvedCampus, conflict } = resolution;
 
-    if (resolved) {
+    // Log conflict / warning
+    if (conflict) {
+      const conflictLabel = (c: LocationConflict): string => {
+        switch (c.type) {
+          case 'unresolvable_location':
+            return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
+          case 'building_not_in_polygons':
+            return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
+          case 'campus_inferred':
+            return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
+          case 'campus_mismatch':
+            return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
+        }
+      };
+      console.warn(
+        `[handleDirectionsToNextClass] Location conflict detected:\n  ${conflictLabel(conflict)}`,
+      );
+    }
+
+    //  Log resolved building
+    if (resolvedBuilding && resolvedCampus) {
       console.log(
         '[handleDirectionsToNextClass] Resolved building:\n' +
-          `  id:          ${resolved.id}\n` +
-          `  code:        ${resolved.code ?? '(none)'}\n` +
-          `  name:        ${resolved.name}\n` +
-          `  address:     ${resolved.address ?? '(not in dataset)'}`,
+          `  id:          ${resolvedBuilding.id}\n` +
+          `  code:        ${resolvedBuilding.code ?? '(none)'}\n` +
+          `  name:        ${resolvedBuilding.name}\n` +
+          `  campus:      ${resolvedCampus}`,
       );
     } else {
-      console.log('[handleDirectionsToNextClass] Building could not be resolved from dataset.');
+      console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
     }
-  }, [calendarEvents]);
+  }, [calendarEvents, sgwBuildings, loyolaBuildings]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
