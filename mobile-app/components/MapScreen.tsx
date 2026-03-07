@@ -11,7 +11,9 @@ import NavigationScreen from './NavigationScreen';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
+import ClassesCalendarRequired from './ClassesCalendarRequired';
 import { useSettings } from '../context/settings';
+import { isClassesCalendarValid } from '../utils/calendarValidation';
 import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
@@ -574,8 +576,13 @@ export default function MapScreen() {
     }
   }, [isNavigationOpen]);
 
+  const showCalendarRequired = !isClassesCalendarValid(isCalendarConnected);
+
   return (
     <View style={styles.container} testID="map-screen">
+      {showCalendarRequired ? (
+        <ClassesCalendarRequired onConnectCalendar={() => setCalendarModalVisible(true)} />
+      ) : null}
       <MapView
         ref={mapRef}
         style={styles.map}
