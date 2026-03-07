@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, View, Text } from 'react-native';
+import { Alert, Dimensions, Platform, Pressable, StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
@@ -14,7 +14,7 @@ import CalendarModal from './CalendarModal';
 import ClassesCalendarRequired from './ClassesCalendarRequired';
 import { useSettings } from '../context/settings';
 import { isClassesCalendarValid } from '../utils/calendarValidation';
-import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
+import { usePublicCalendar, getNextEvent, type CalendarEvent } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -41,7 +41,14 @@ type QuickPick = {
 type Campus = 'sgw' | 'loyola';
 type ResolvedCampusBuilding = { building: BuildingWithPolygon; campus: Campus };
 type PendingMapBuilding = { id: string; campus: Campus };
-type PendingStartBuilding = { campus: Campus; building: BuildingWithPolygon };
+type PendingStartBuilding = { campus: Campus; building: BuildingWithPolygon; coordinate: LatLng };
+type NextClassPreview = {
+  event: CalendarEvent;
+  building: BuildingWithPolygon | null;
+  campus: Campus | null;
+  rawLocation: string;
+  conflict: LocationConflict | null;
+};
 
 const POLYGON_STROKE = 'rgba(178, 27, 44, 0.9)';
 const POLYGON_FILL = 'rgba(178, 27, 44, 0.25)';
@@ -130,6 +137,8 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
+const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
+const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
@@ -153,6 +162,7 @@ export default function MapScreen() {
   const [pendingStartBuilding, setPendingStartBuilding] = useState<PendingStartBuilding | null>(
     null,
   );
+  const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
   const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
   useEffect(() => {
     if (!buildingNotFoundToast) return;
@@ -164,6 +174,7 @@ export default function MapScreen() {
     isNavigationOpen,
     navigationStart,
     navigationDestination,
+    navigationOrigin,
     routeSummary,
     modeDurations,
     isRouteLoading,
@@ -255,6 +266,12 @@ export default function MapScreen() {
     const nextEvent = getNextEvent(calendarEvents);
     if (!nextEvent) {
       console.log('[handleDirectionsToNextClass] No current or upcoming class found.');
+      setNextClassPreview(null);
+      return;
+    }
+
+    if (nextClassPreview?.event.id === nextEvent.id) {
+      setNextClassPreview(null);
       return;
     }
 
@@ -303,22 +320,21 @@ export default function MapScreen() {
           `  name:        ${resolvedBuilding.name}\n` +
           `  campus:      ${resolvedCampus}`,
       );
-      const campusKey: Campus = resolvedCampus === 'SGW' ? 'sgw' : 'loyola';
-      if (campusKey !== activeCampus) {
-        handleSelectCampus(campusKey, mapRef);
-      }
-      openNavigationForResolvedDestination(resolvedBuilding);
     } else {
       console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
     }
-  }, [
-    activeCampus,
-    calendarEvents,
-    handleSelectCampus,
-    loyolaBuildings,
-    openNavigationForResolvedDestination,
-    sgwBuildings,
-  ]);
+
+    const campusKey: Campus | null =
+      resolvedCampus === 'SGW' ? 'sgw' : resolvedCampus === 'Loyola' ? 'loyola' : null;
+
+    setNextClassPreview({
+      event: nextEvent,
+      building: resolvedBuilding ?? null,
+      campus: campusKey,
+      rawLocation,
+      conflict: conflict ?? null,
+    });
+  }, [calendarEvents, nextClassPreview, loyolaBuildings, sgwBuildings]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -338,6 +354,7 @@ export default function MapScreen() {
     Platform.OS === 'ios'
       ? Math.max(10, Math.round(width * 0.04))
       : Math.max(8, Math.round(width * 0.02));
+  const nextClassCardTop = menuTop + (Platform.OS === 'ios' ? 140 : 120);
 
   const isColorBlind = colourBlindMode;
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';
@@ -421,17 +438,17 @@ export default function MapScreen() {
   );
 
   const setDirectionsStartToBuilding = useCallback(
-    (resolved: ResolvedCampusBuilding) => {
+    (resolved: ResolvedCampusBuilding, coordinate: LatLng) => {
       if (resolved.campus !== activeCampus) {
         setPendingStartBuilding({
           campus: resolved.campus,
           building: resolved.building,
+          coordinate,
         });
         handleSelectCampus(resolved.campus, mapRef);
         return;
       }
-      const centroid = polygonCentroid(resolved.building.polygon);
-      setStartToCurrentLocationBuilding(resolved.building.name, resolved.building.code, centroid);
+      setStartToCurrentLocationBuilding(resolved.building.name, resolved.building.code, coordinate);
     },
     [activeCampus, handleSelectCampus, setStartToCurrentLocationBuilding],
   );
@@ -440,7 +457,7 @@ export default function MapScreen() {
     (coordinate: LatLng) => {
       const insideMatch = resolveInsideBuilding(coordinate);
       if (insideMatch) {
-        setDirectionsStartToBuilding(insideMatch);
+        setDirectionsStartToBuilding(insideMatch, coordinate);
         return;
       }
 
@@ -458,10 +475,13 @@ export default function MapScreen() {
         );
 
         if (nearBorderBuilding) {
-          setDirectionsStartToBuilding({
-            building: nearBorderBuilding,
-            campus: campusKey,
-          });
+          setDirectionsStartToBuilding(
+            {
+              building: nearBorderBuilding,
+              campus: campusKey,
+            },
+            coordinate,
+          );
           return;
         }
       }
@@ -497,6 +517,29 @@ export default function MapScreen() {
     [goToUserLocation, handleSearchSelect, resolveDirectionsStartFromCoordinate],
   );
 
+  const normalizedNavigationStart = normalizeLabel(navigationStart);
+  const isCurrentLocationStart =
+    normalizedNavigationStart === NORMALIZED_YOUR_LOCATION ||
+    normalizedNavigationStart.startsWith(NORMALIZED_CURRENT_LOCATION);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return;
+    if (!isCurrentLocationStart) return;
+    if (navigationOrigin) return;
+    if (isLocating) return;
+    void goToUserLocation({
+      animateToUser: false,
+      onResolved: resolveDirectionsStartFromCoordinate,
+    });
+  }, [
+    goToUserLocation,
+    isCurrentLocationStart,
+    isLocating,
+    isNavigationOpen,
+    navigationOrigin,
+    resolveDirectionsStartFromCoordinate,
+  ]);
+
   const handleLocationPress = useCallback(async () => {
     await goToUserLocation({
       animateToUser: false,
@@ -520,6 +563,43 @@ export default function MapScreen() {
     });
   }, [goToUserLocation, resolveInsideBuilding, selectResolvedBuildingOnMap]);
 
+  const formatEventTimeRange = useCallback((event: CalendarEvent): string => {
+    const start = event.start.dateTime ?? event.start.date;
+    const end = event.end.dateTime ?? event.end.date;
+    if (!start) return '';
+    const startTime = new Date(start).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    if (!end) return startTime;
+    const endTime = new Date(end).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return `${startTime} - ${endTime}`;
+  }, []);
+
+  const handleNextClassGo = useCallback(() => {
+    if (!nextClassPreview) return;
+    const { building, campus } = nextClassPreview;
+    if (building && campus) {
+      if (campus !== activeCampus) {
+        handleSelectCampus(campus, mapRef);
+      }
+      openNavigationForResolvedDestination(building);
+      setNextClassPreview(null);
+      return;
+    }
+    console.warn(
+      '[handleNextClassGo] Unable to resolve destination from calendar location:',
+      nextClassPreview.rawLocation,
+    );
+    Alert.alert(
+      'Unable to open directions',
+      `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
+    );
+  }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+
   useEffect(() => {
     if (!pendingMapBuilding) return;
     if (activeCampus !== pendingMapBuilding.campus) return;
@@ -530,11 +610,10 @@ export default function MapScreen() {
   useEffect(() => {
     if (!pendingStartBuilding) return;
     if (activeCampus !== pendingStartBuilding.campus) return;
-    const centroid = polygonCentroid(pendingStartBuilding.building.polygon);
     setStartToCurrentLocationBuilding(
       pendingStartBuilding.building.name,
       pendingStartBuilding.building.code,
-      centroid,
+      pendingStartBuilding.coordinate,
     );
     setPendingStartBuilding(null);
   }, [activeCampus, pendingStartBuilding, setStartToCurrentLocationBuilding]);
@@ -591,6 +670,10 @@ export default function MapScreen() {
   }, [isNavigationOpen]);
 
   const showCalendarRequired = !isClassesCalendarValid(isCalendarConnected);
+  const nextClassTime = nextClassPreview ? formatEventTimeRange(nextClassPreview.event) : '';
+  const nextClassTitle = nextClassPreview?.event.summary ?? '';
+  const nextClassLocationLabel =
+    nextClassPreview?.building?.name ?? nextClassPreview?.event.location ?? 'Location unavailable';
 
   return (
     <View style={styles.container} testID="map-screen">
@@ -755,6 +838,27 @@ export default function MapScreen() {
         onClose={handleCloseRoutePreview}
         destinationLabel={navigationDestination}
       />
+      {nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen ? (
+        <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
+          <Text style={styles.nextClassTitle}>Directions to my next class</Text>
+          <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
+          <View style={styles.nextClassRow}>
+            <View style={styles.nextClassRowLeft}>
+              <MaterialIcons name="event" size={18} color="#6e6e6e" />
+              <Text style={styles.nextClassName} numberOfLines={1}>
+                {nextClassTitle}
+              </Text>
+            </View>
+            <Text style={styles.nextClassTime}>{nextClassTime}</Text>
+          </View>
+          <Text style={styles.nextClassLocation} numberOfLines={1}>
+            {nextClassLocationLabel}
+          </Text>
+          <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
+            <Text style={styles.nextClassGoText}>Go</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {/* Quick Pick Panel and Location Button */}
       {!isMenuOpen && !isNavigationOpen ? (
         <QuickPickPanel
@@ -827,6 +931,71 @@ const styles = StyleSheet.create({
   },
   toastText: {
     color: '#fff',
+    fontSize: 14,
+  },
+  nextClassCard: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  nextClassTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2a2a2a',
+  },
+  nextClassSubtitle: {
+    fontSize: 12,
+    color: '#7a7a7a',
+    marginTop: 2,
+  },
+  nextClassRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  nextClassRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    flex: 1,
+    marginRight: 10,
+  },
+  nextClassName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f1f1f',
+    flexShrink: 1,
+  },
+  nextClassTime: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4a4a4a',
+  },
+  nextClassLocation: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#6a6a6a',
+  },
+  nextClassGoButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    backgroundColor: '#8e2334',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  nextClassGoText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 14,
   },
 });

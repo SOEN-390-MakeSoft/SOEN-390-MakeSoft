@@ -1,9 +1,7 @@
 ﻿import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { Platform } from 'react-native';
-import * as Location from 'expo-location';
 
-jest.mock('expo-location');
 jest.mock('../services/api', () => ({
   getNextShuttles: jest.fn().mockResolvedValue({
     threeNextShuttles: ['2026-02-21T10:00:00', '2026-02-21T10:30:00', null],
@@ -75,12 +73,6 @@ function setupDirectionsMocks() {
   jest.clearAllMocks();
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = 'test-api-key';
   (Platform as any).OS = 'android';
-  (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-    status: 'granted',
-  });
-  (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
-    coords: { latitude: 45.505, longitude: -73.572 },
-  });
 }
 
 function teardownDirectionsMocks() {
@@ -118,6 +110,15 @@ function openNavAndSetStart(result: { current: any }, startBuildingId: string) {
   });
   act(() => {
     result.current.handleMapBuildingPress(startBuildingId);
+  });
+}
+
+function openNavAndSetCurrentLocation(result: { current: any }) {
+  act(() => {
+    result.current.openNavigationForBuilding(mockBuildings[0], null);
+  });
+  act(() => {
+    result.current.setStartToCurrentLocation({ latitude: 45.505, longitude: -73.572 });
   });
 }
 
@@ -326,76 +327,13 @@ describe('useNavigationBetweenBuildings', () => {
     it('should clear navigationSteps when navigation is closed', () => {
       const { result } = renderNavHook();
 
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
+      openNavAndSetCurrentLocation(result);
 
       act(() => {
         result.current.closeNavigation();
       });
 
       expect(result.current.navigationSteps).toEqual([]);
-    });
-  });
-
-  describe('location resolution effect', () => {
-    it("should resolve user location when navigation opens with 'Your location'", async () => {
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-        status: 'granted',
-      });
-      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
-        coords: { latitude: 45.505, longitude: -73.572 },
-      });
-
-      const { result } = renderNavHook();
-
-      // Open navigation â€” default start is "Your location"
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      await waitFor(() => {
-        expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
-      });
-    });
-
-    it('should not resolve location when permission is denied', async () => {
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-        status: 'denied',
-      });
-      (Location.getCurrentPositionAsync as jest.Mock).mockClear();
-
-      const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      await waitFor(() => {
-        expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalled();
-      });
-      // getCurrentPositionAsync should not be called after the denied permission response
-      // (it may have been called from a prior test; check calls after our mock was cleared)
-    });
-
-    it('should handle location errors gracefully', async () => {
-      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
-        status: 'granted',
-      });
-      (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValue(
-        new Error('Location unavailable'),
-      );
-
-      const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      // Should not throw
-      await waitFor(() => {
-        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-      });
     });
   });
 
@@ -441,16 +379,7 @@ describe('useNavigationBetweenBuildings', () => {
       globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
-
-      // Open nav and set origin + destination on different buildings
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      // Wait for location to resolve
-      await waitFor(() => {
-        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-      });
+      openNavAndSetCurrentLocation(result);
 
       // Wait for fetch to be called (driving + walking = 2 calls)
       await waitFor(() => {
@@ -490,14 +419,7 @@ describe('useNavigationBetweenBuildings', () => {
       });
 
       const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      await waitFor(() => {
-        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-      });
+      openNavAndSetCurrentLocation(result);
 
       await waitFor(() => {
         expect(globalThis.fetch).toHaveBeenCalled();
@@ -521,10 +443,7 @@ describe('useNavigationBetweenBuildings', () => {
       });
 
       const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
+      openNavAndSetCurrentLocation(result);
 
       await waitFor(() => {
         expect(globalThis.fetch).toHaveBeenCalled();
@@ -544,10 +463,7 @@ describe('useNavigationBetweenBuildings', () => {
       globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
+      openNavAndSetCurrentLocation(result);
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalled();
@@ -566,14 +482,7 @@ describe('useNavigationBetweenBuildings', () => {
       globalThis.fetch = mockFetch;
 
       const { result } = renderNavHook();
-
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
-
-      await waitFor(() => {
-        expect(Location.getCurrentPositionAsync).toHaveBeenCalled();
-      });
+      openNavAndSetCurrentLocation(result);
 
       // Give it a tick â€” fetch should NOT have been called
       await act(async () => {
@@ -637,9 +546,7 @@ describe('useNavigationBetweenBuildings', () => {
 
       const { result } = renderNavHook();
 
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
+      openNavAndSetCurrentLocation(result);
 
       await waitFor(() => {
         expect(getCallCount()).toBe(2);
@@ -676,9 +583,7 @@ describe('useNavigationBetweenBuildings', () => {
 
       const { result } = renderNavHook();
 
-      act(() => {
-        result.current.openNavigationForBuilding(mockBuildings[0], null);
-      });
+      openNavAndSetCurrentLocation(result);
 
       await waitFor(() => {
         expect(getCallCount()).toBe(2);

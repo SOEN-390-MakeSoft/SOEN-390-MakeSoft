@@ -1,4 +1,3 @@
-import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
@@ -277,34 +276,6 @@ export function useNavigationBetweenBuildings({
     }
     return process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
   };
-
-  useEffect(() => {
-    if (!isNavigationOpen) return;
-    if (navigationStart !== 'Your location') return;
-    if (navigationOrigin) return;
-
-    let cancelled = false;
-    const resolveLocation = async () => {
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (permission.status !== 'granted') return;
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (cancelled) return;
-        setNavigationOrigin({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-      } catch {
-        // Ignore location errors for now.
-      }
-    };
-    void resolveLocation();
-    return () => {
-      cancelled = true;
-    };
-  }, [isNavigationOpen, navigationStart, navigationOrigin]);
 
   useEffect(() => {
     if (!isNavigationOpen) return;
@@ -733,12 +704,17 @@ export function useNavigationBetweenBuildings({
   const handleSearchSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
       if (field === 'destination' && isDestinationLocked) return;
-      const label = formatBuildingLabel(name, code);
+      const resolvedCode = code ?? extractCodeFromName(name);
+      const label = formatBuildingLabel(name, resolvedCode);
+      const normalizedName = normalizeLabel(name);
       // Search across ALL campus buildings so cross-campus selections
       // always resolve coordinates correctly.
       const building = allBuildings.find((b) => {
-        if (code && b.code?.toUpperCase() === code.toUpperCase()) return true;
-        return normalizeLabel(b.name).includes(normalizeLabel(name));
+        if (resolvedCode && b.code?.toUpperCase() === resolvedCode.toUpperCase()) return true;
+        const normalizedBuilding = normalizeLabel(b.name);
+        return (
+          normalizedBuilding.includes(normalizedName) || normalizedName.includes(normalizedBuilding)
+        );
       });
 
       if (field === 'start') {
@@ -801,6 +777,7 @@ export function useNavigationBetweenBuildings({
     isNavigationOpen,
     navigationStart,
     navigationDestination,
+    navigationOrigin,
     routeSummary,
     activeMode,
     modeDurations,
