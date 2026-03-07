@@ -13,6 +13,7 @@ interface NavigationScreenProps {
   visible: boolean;
   startLabel: string;
   destinationLabel: string;
+  destinationLocked?: boolean;
   onClose: () => void;
   onActiveFieldChange?: (field: 'start' | 'destination' | null) => void;
   onBuildingSelect?: (field: 'start' | 'destination', name: string, code: string | null) => void;
@@ -343,6 +344,7 @@ export default function NavigationScreen({
   visible,
   startLabel,
   destinationLabel,
+  destinationLocked = false,
   onClose,
   onActiveFieldChange,
   onBuildingSelect,
@@ -419,6 +421,7 @@ export default function NavigationScreen({
       <NavigationMenu
         startLabel={startLabel}
         destinationLabel={destinationLabel}
+        destinationLocked={destinationLocked}
         onActiveFieldChange={onActiveFieldChange}
         onBuildingSelect={onBuildingSelect}
       />

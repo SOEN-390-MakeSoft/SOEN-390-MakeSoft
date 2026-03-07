@@ -111,7 +111,7 @@ From the `backend-api` directory, run:
 mvn spring-boot:run
 ```
 
-Ensure the backend is running on port `8081`.
+Ensure the backend is running on port `8080`.
 
 ### Step 5: Start the Mobile App
 
@@ -143,4 +143,3 @@ Wait for the QR code to appear in the terminal.
 
 LAN testing is intended for **trusted networks only**.  
 Do **not** open firewall ports or enable inbound access on public networks.
-

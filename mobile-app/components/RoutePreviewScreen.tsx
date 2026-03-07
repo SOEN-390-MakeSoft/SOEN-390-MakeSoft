@@ -35,6 +35,7 @@ interface RoutePreviewScreenProps {
   selectedStepIndex: number;
   onSelectStep: (index: number) => void;
   onClose: () => void;
+  destinationLabel?: string;
 }
 
 export default function RoutePreviewScreen({
@@ -43,6 +44,7 @@ export default function RoutePreviewScreen({
   selectedStepIndex,
   onSelectStep,
   onClose,
+  destinationLabel = '',
 }: Readonly<RoutePreviewScreenProps>) {
   const { colourBlindMode } = useSettings();
   const theme = useTheme();
@@ -106,6 +108,11 @@ export default function RoutePreviewScreen({
             <MaterialIcons name="keyboard-arrow-right" size={24} color="#fff" />
           </Pressable>
         </View>
+        {!!destinationLabel && (
+          <Text style={styles.destinationText} testID="route-preview-destination">
+            Destination: {destinationLabel}
+          </Text>
+        )}
 
         <Text style={styles.instructionTitle}>Current action</Text>
         <View style={styles.instructionRow}>
@@ -188,6 +195,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 13,
     color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+  },
+  destinationText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: '600',
   },
   instructionRow: {

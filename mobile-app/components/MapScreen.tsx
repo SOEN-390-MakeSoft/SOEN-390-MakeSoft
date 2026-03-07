@@ -189,6 +189,8 @@ export default function MapScreen() {
     shuttleInfo,
     isWeekend,
     routeSegments,
+    openNavigationForResolvedDestination,
+    isDestinationLocked,
   } = useNavigationBetweenBuildings({
     buildings,
     onSelectBuilding: handleSelectBuilding,
@@ -292,7 +294,7 @@ export default function MapScreen() {
       );
     }
 
-    //  Log resolved building
+    //  Log resolved building + open navigation
     if (resolvedBuilding && resolvedCampus) {
       console.log(
         '[handleDirectionsToNextClass] Resolved building:\n' +
@@ -301,10 +303,22 @@ export default function MapScreen() {
           `  name:        ${resolvedBuilding.name}\n` +
           `  campus:      ${resolvedCampus}`,
       );
+      const campusKey: Campus = resolvedCampus === 'SGW' ? 'sgw' : 'loyola';
+      if (campusKey !== activeCampus) {
+        handleSelectCampus(campusKey, mapRef);
+      }
+      openNavigationForResolvedDestination(resolvedBuilding);
     } else {
       console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
     }
-  }, [calendarEvents, sgwBuildings, loyolaBuildings]);
+  }, [
+    activeCampus,
+    calendarEvents,
+    handleSelectCampus,
+    loyolaBuildings,
+    openNavigationForResolvedDestination,
+    sgwBuildings,
+  ]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -714,6 +728,7 @@ export default function MapScreen() {
         visible={isNavigationOpen && !isRoutePreviewOpen}
         startLabel={navigationStart}
         destinationLabel={navigationDestination}
+        destinationLocked={isDestinationLocked}
         onClose={closeNavigation}
         onActiveFieldChange={setNavigationActiveField}
         onBuildingSelect={handleNavigationBuildingSelect}
@@ -738,6 +753,7 @@ export default function MapScreen() {
         selectedStepIndex={previewStepIndex}
         onSelectStep={handleSelectPreviewStep}
         onClose={handleCloseRoutePreview}
+        destinationLabel={navigationDestination}
       />
       {/* Quick Pick Panel and Location Button */}
       {!isMenuOpen && !isNavigationOpen ? (

@@ -204,9 +204,10 @@ export function useNavigationBetweenBuildings({
   const [modeDurations, setModeDurations] = useState<ModeDurations>({});
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<RouteMode>('driving');
-  const [navigationActiveField, setNavigationActiveField] = useState<
+  const [navigationActiveField, setNavigationActiveFieldState] = useState<
     'start' | 'destination' | null
   >(null);
+  const [isDestinationLocked, setIsDestinationLocked] = useState(false);
   const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
   const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});
   const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
@@ -261,6 +262,14 @@ export function useNavigationBetweenBuildings({
     if (!code) return name;
     return name.includes(`(${code})`) ? name : `${name} (${code})`;
   }, []);
+
+  const setNavigationActiveField = useCallback(
+    (field: 'start' | 'destination' | null) => {
+      if (isDestinationLocked && field === 'destination') return;
+      setNavigationActiveFieldState(field);
+    },
+    [isDestinationLocked],
+  );
 
   const getDirectionsKey = () => {
     if (Platform.OS === 'ios') {
@@ -619,6 +628,7 @@ export function useNavigationBetweenBuildings({
     (selectedBuilding: Building | null, remoteBuilding: RemoteBuilding) => {
       const destinationName = remoteBuilding?.name ?? selectedBuilding?.name ?? 'Destination';
       const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code ?? null;
+      setIsDestinationLocked(false);
       setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
       setActiveMode('driving');
       if (selectedBuilding) {
@@ -626,6 +636,27 @@ export function useNavigationBetweenBuildings({
         setNavigationDestinationCoord(destCentroid);
         setTapMarkerCoordinate(destCentroid);
       }
+      resetRouteState();
+      setIsNavigationOpen(true);
+    },
+    [formatBuildingLabel, resetRouteState],
+  );
+
+  const openNavigationForResolvedDestination = useCallback(
+    (destinationBuilding: Building) => {
+      const destinationLabel = formatBuildingLabel(
+        destinationBuilding.name,
+        destinationBuilding.code,
+      );
+      const destCentroid = polygonCentroid(destinationBuilding.polygon);
+      setNavigationStart('Your location');
+      setNavigationOrigin(null);
+      setNavigationDestination(destinationLabel);
+      setNavigationDestinationCoord(destCentroid);
+      setTapMarkerCoordinate(destCentroid);
+      setNavigationActiveFieldState(null);
+      setActiveMode('driving');
+      setIsDestinationLocked(true);
       resetRouteState();
       setIsNavigationOpen(true);
     },
@@ -650,6 +681,8 @@ export function useNavigationBetweenBuildings({
         return;
       }
       if (navigationActiveField === 'destination') {
+        if (isDestinationLocked) return;
+        setIsDestinationLocked(false);
         setNavigationDestination(label);
         setNavigationDestinationCoord(centroid);
         setTapMarkerCoordinate(centroid);
@@ -657,7 +690,8 @@ export function useNavigationBetweenBuildings({
         return;
       }
       // Default: if destination is already set, assign start; otherwise assign destination
-      if (navigationDestination.trim() === '') {
+      if (navigationDestination.trim() === '' && !isDestinationLocked) {
+        setIsDestinationLocked(false);
         setNavigationDestination(label);
         setNavigationDestinationCoord(centroid);
         setTapMarkerCoordinate(centroid);
@@ -671,6 +705,7 @@ export function useNavigationBetweenBuildings({
       buildings,
       formatBuildingLabel,
       isNavigationOpen,
+      isDestinationLocked,
       navigationActiveField,
       navigationDestination,
       onSelectBuilding,
@@ -697,6 +732,7 @@ export function useNavigationBetweenBuildings({
 
   const handleSearchSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
+      if (field === 'destination' && isDestinationLocked) return;
       const label = formatBuildingLabel(name, code);
       // Search across ALL campus buildings so cross-campus selections
       // always resolve coordinates correctly.
@@ -713,6 +749,7 @@ export function useNavigationBetweenBuildings({
           setNavigationOrigin(polygonCentroid(building.polygon));
         }
       } else {
+        setIsDestinationLocked(false);
         setNavigationDestination(label);
         if (building) {
           const destCentroid = polygonCentroid(building.polygon);
@@ -722,7 +759,7 @@ export function useNavigationBetweenBuildings({
       }
       resetRouteState();
     },
-    [allBuildings, formatBuildingLabel, resetRouteState],
+    [allBuildings, formatBuildingLabel, isDestinationLocked, resetRouteState],
   );
 
   const setStartToCurrentLocation = useCallback(
@@ -746,7 +783,7 @@ export function useNavigationBetweenBuildings({
 
   const closeNavigation = useCallback(() => {
     setIsNavigationOpen(false);
-    setNavigationActiveField(null);
+    setNavigationActiveFieldState(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);
     setAllModeRoutes({});
@@ -758,6 +795,7 @@ export function useNavigationBetweenBuildings({
     setShuttleInfo(null);
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
+    setIsDestinationLocked(false);
   }, []);
   return {
     isNavigationOpen,
@@ -772,6 +810,7 @@ export function useNavigationBetweenBuildings({
     setNavigationActiveField,
     setActiveMode,
     openNavigationForBuilding,
+    openNavigationForResolvedDestination,
     handleMapBuildingPress,
     handleMapCoordinatePress,
     handleSearchSelect,
@@ -785,6 +824,7 @@ export function useNavigationBetweenBuildings({
     routePolyline,
     routeRegion,
     navigationSteps,
+    isDestinationLocked,
     // Shuttle
     isShuttleRoute,
     isShuttleLoading,
