@@ -19,6 +19,7 @@ import {
   usePublicCalendar,
   getNextClassForToday,
   type CalendarEvent,
+  getNextEvent,
 } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
@@ -902,54 +903,54 @@ export default function MapScreen() {
         onClose={handleCloseRoutePreview}
         destinationLabel={navigationDestination}
       />
-{nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen ? (
-  <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
-    <Text style={styles.nextClassTitle}>Directions to my next class</Text>
-    <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
-    <View style={styles.nextClassRow}>
-      <View style={styles.nextClassRowLeft}>
-        <MaterialIcons name="event" size={18} color="#6e6e6e" />
-        <Text style={styles.nextClassName} numberOfLines={1}>
-          {nextClassTitle}
-        </Text>
-      </View>
-      <Text style={styles.nextClassTime}>{nextClassTime}</Text>
-    </View>
-    <Text style={styles.nextClassLocation} numberOfLines={1}>
-      {nextClassLocationLabel}
-    </Text>
-    <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
-      <Text style={styles.nextClassGoText}>Go</Text>
-    </Pressable>
-  </View>
-) : null}
+      {nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen ? (
+        <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
+          <Text style={styles.nextClassTitle}>Directions to my next class</Text>
+          <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
+          <View style={styles.nextClassRow}>
+            <View style={styles.nextClassRowLeft}>
+              <MaterialIcons name="event" size={18} color="#6e6e6e" />
+              <Text style={styles.nextClassName} numberOfLines={1}>
+                {nextClassTitle}
+              </Text>
+            </View>
+            <Text style={styles.nextClassTime}>{nextClassTime}</Text>
+          </View>
+          <Text style={styles.nextClassLocation} numberOfLines={1}>
+            {nextClassLocationLabel}
+          </Text>
+          <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
+            <Text style={styles.nextClassGoText}>Go</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
-<NextClassPanel
-  isVisible={!isMenuOpen && !isNavigationOpen}
-  isCalendarConnected={isCalendarConnected}
-  nextEvent={nextClassEvent}
-  onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
->
-  {(openNextClassPanel) =>
-    !isMenuOpen && !isNavigationOpen ? (
-      <QuickPickPanel
-        activeCampus={activeCampus}
-        isColorBlind={isColorBlind}
-        isQuickPickOpen={isQuickPickOpen}
-        quickPickMaxHeight={quickPickMaxHeight}
-        quickPickVisibleHeight={quickPickVisibleHeight}
-        quickPickContentHeight={quickPickContentHeight}
-        featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
-        isLocating={isLocating}
-        onToggleOpen={handleToggleQuickPick}
-        onHeightChange={setQuickPickContentHeight}
-        onQuickPick={handleQuickPick}
-        onLocationPress={handleLocationPress}
-        onDirectionsToNextClassPress={handleDirectionsToNextClass}
-      />
-    ) : null
-  }
-</NextClassPanel>
+      <NextClassPanel
+        isVisible={!isMenuOpen && !isNavigationOpen}
+        isCalendarConnected={isCalendarConnected}
+        nextEvent={nextClassEvent}
+        onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
+      >
+        {(openNextClassPanel) =>
+          !isMenuOpen && !isNavigationOpen ? (
+            <QuickPickPanel
+              activeCampus={activeCampus}
+              isColorBlind={isColorBlind}
+              isQuickPickOpen={isQuickPickOpen}
+              quickPickMaxHeight={quickPickMaxHeight}
+              quickPickVisibleHeight={quickPickVisibleHeight}
+              quickPickContentHeight={quickPickContentHeight}
+              featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
+              isLocating={isLocating}
+              onToggleOpen={handleToggleQuickPick}
+              onHeightChange={setQuickPickContentHeight}
+              onQuickPick={handleQuickPick}
+              onLocationPress={handleLocationPress}
+              onDirectionsToNextClassPress={handleDirectionsToNextClass}
+            />
+          ) : null
+        }
+      </NextClassPanel>
 
       {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
 
