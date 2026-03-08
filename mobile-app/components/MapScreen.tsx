@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, View, Text } from 'react-native';
+import { Alert, Dimensions, Platform, Pressable, StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
@@ -12,8 +12,14 @@ import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
 import NextClassPanel from './NextClassPanel';
+import ClassesCalendarRequired from './ClassesCalendarRequired';
 import { useSettings } from '../context/settings';
-import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
+import { isClassesCalendarValid } from '../utils/calendarValidation';
+import {
+  usePublicCalendar,
+  getNextClassForToday,
+  type CalendarEvent,
+} from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -27,7 +33,7 @@ import {
   type BuildingWithPolygon,
   type LatLng,
 } from '../utils/mapUtils';
-import { normalizeLabel } from '../utils/stringUtils';
+import { normalizeLabel, resolveEventLocation, type LocationConflict } from '../utils/stringUtils';
 
 type QuickPick = {
   code: string;
@@ -40,7 +46,14 @@ type QuickPick = {
 type Campus = 'sgw' | 'loyola';
 type ResolvedCampusBuilding = { building: BuildingWithPolygon; campus: Campus };
 type PendingMapBuilding = { id: string; campus: Campus };
-type PendingStartBuilding = { campus: Campus; building: BuildingWithPolygon };
+type PendingStartBuilding = { campus: Campus; building: BuildingWithPolygon; coordinate: LatLng };
+type NextClassPreview = {
+  event: CalendarEvent;
+  building: BuildingWithPolygon | null;
+  campus: Campus | null;
+  rawLocation: string;
+  conflict: LocationConflict | null;
+};
 
 const POLYGON_STROKE = 'rgba(178, 27, 44, 0.9)';
 const POLYGON_FILL = 'rgba(178, 27, 44, 0.25)';
@@ -129,6 +142,8 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
+const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
+const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
@@ -152,6 +167,9 @@ export default function MapScreen() {
   const [pendingStartBuilding, setPendingStartBuilding] = useState<PendingStartBuilding | null>(
     null,
   );
+  const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
+  const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
+  const { colourBlindMode, simulatedNow } = useSettings();
   const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
   useEffect(() => {
     if (!buildingNotFoundToast) return;
@@ -163,6 +181,7 @@ export default function MapScreen() {
     isNavigationOpen,
     navigationStart,
     navigationDestination,
+    navigationOrigin,
     routeSummary,
     modeDurations,
     isRouteLoading,
@@ -187,11 +206,16 @@ export default function MapScreen() {
     isShuttleLoading,
     shuttleInfo,
     isWeekend,
+    lateTransportModes = [],
     routeSegments,
+    openNavigationForResolvedDestination,
+    isDestinationLocked,
   } = useNavigationBetweenBuildings({
     buildings,
     onSelectBuilding: handleSelectBuilding,
     onBuildingNotFound: showBuildingNotFoundToast,
+    currentTime: simulatedNow,
+    arriveBy: arriveByClassEnd,
   });
   const {
     searchQuery,
@@ -220,7 +244,6 @@ export default function MapScreen() {
     quickPickMaxHeight,
     handleToggleQuickPick,
   } = useMapUI();
-  const { colourBlindMode } = useSettings();
   const theme = useTheme();
   const { isLocating, goToUserLocation } = useUserLocation(
     mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>,
@@ -253,6 +276,89 @@ export default function MapScreen() {
   const handleOpenCalendarFromCourseModal = useCallback(() => {
     setCalendarModalVisible(true);
   }, []);
+  const handleDirectionsToNextClass = useCallback(() => {
+    const effectiveNow = simulatedNow ?? new Date();
+    const nextClassState = getNextClassForToday(calendarEvents, effectiveNow);
+    if (nextClassState.status === 'no_classes_today') {
+      console.log('[handleDirectionsToNextClass] No classes scheduled today.');
+      setNextClassPreview(null);
+      Alert.alert('No classes today', 'You have no classes scheduled for today.');
+      return;
+    }
+    if (nextClassState.status === 'classes_over_today') {
+      console.log('[handleDirectionsToNextClass] Classes are over today.');
+      setNextClassPreview(null);
+      Alert.alert('Classes are over today', 'You are done for today.');
+      return;
+    }
+
+    const nextEvent = nextClassState.event;
+
+    if (nextClassPreview?.event.id === nextEvent.id) {
+      setNextClassPreview(null);
+      return;
+    }
+
+    // Log event details
+    const rawLocation = nextEvent.location ?? '';
+    console.log(
+      '[handleDirectionsToNextClass] Next class details:\n' +
+        `  id:          ${nextEvent.id}\n` +
+        `  summary:     ${nextEvent.summary}\n` +
+        `  description: ${nextEvent.description ?? 'N/A'}\n` +
+        `  location:    ${rawLocation || 'N/A'}\n` +
+        `  start:       ${nextEvent.start.dateTime ?? nextEvent.start.date ?? 'N/A'}\n` +
+        `  end:         ${nextEvent.end.dateTime ?? nextEvent.end.date ?? 'N/A'}\n` +
+        `  htmlLink:    ${nextEvent.htmlLink ?? 'N/A'}`,
+    );
+
+    // Resolve location against polygon datasets
+    const resolution = resolveEventLocation(rawLocation, sgwBuildings, loyolaBuildings);
+    const { building: resolvedBuilding, campus: resolvedCampus, conflict } = resolution;
+
+    // Log conflict / warning
+    if (conflict) {
+      const conflictLabel = (c: LocationConflict): string => {
+        switch (c.type) {
+          case 'unresolvable_location':
+            return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
+          case 'building_not_in_polygons':
+            return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
+          case 'campus_inferred':
+            return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
+          case 'campus_mismatch':
+            return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
+        }
+      };
+      console.warn(
+        `[handleDirectionsToNextClass] Location conflict detected:\n  ${conflictLabel(conflict)}`,
+      );
+    }
+
+    //  Log resolved building + open navigation
+    if (resolvedBuilding && resolvedCampus) {
+      console.log(
+        '[handleDirectionsToNextClass] Resolved building:\n' +
+          `  id:          ${resolvedBuilding.id}\n` +
+          `  code:        ${resolvedBuilding.code ?? '(none)'}\n` +
+          `  name:        ${resolvedBuilding.name}\n` +
+          `  campus:      ${resolvedCampus}`,
+      );
+    } else {
+      console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
+    }
+
+    const campusKey: Campus | null =
+      resolvedCampus === 'SGW' ? 'sgw' : resolvedCampus === 'Loyola' ? 'loyola' : null;
+
+    setNextClassPreview({
+      event: nextEvent,
+      building: resolvedBuilding ?? null,
+      campus: campusKey,
+      rawLocation,
+      conflict: conflict ?? null,
+    });
+  }, [calendarEvents, simulatedNow, nextClassPreview, loyolaBuildings, sgwBuildings]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -272,6 +378,7 @@ export default function MapScreen() {
     Platform.OS === 'ios'
       ? Math.max(10, Math.round(width * 0.04))
       : Math.max(8, Math.round(width * 0.02));
+  const nextClassCardTop = menuTop + (Platform.OS === 'ios' ? 140 : 120);
 
   const isColorBlind = colourBlindMode;
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';
@@ -355,17 +462,17 @@ export default function MapScreen() {
   );
 
   const setDirectionsStartToBuilding = useCallback(
-    (resolved: ResolvedCampusBuilding) => {
+    (resolved: ResolvedCampusBuilding, coordinate: LatLng) => {
       if (resolved.campus !== activeCampus) {
         setPendingStartBuilding({
           campus: resolved.campus,
           building: resolved.building,
+          coordinate,
         });
         handleSelectCampus(resolved.campus, mapRef);
         return;
       }
-      const centroid = polygonCentroid(resolved.building.polygon);
-      setStartToCurrentLocationBuilding(resolved.building.name, resolved.building.code, centroid);
+      setStartToCurrentLocationBuilding(resolved.building.name, resolved.building.code, coordinate);
     },
     [activeCampus, handleSelectCampus, setStartToCurrentLocationBuilding],
   );
@@ -374,7 +481,7 @@ export default function MapScreen() {
     (coordinate: LatLng) => {
       const insideMatch = resolveInsideBuilding(coordinate);
       if (insideMatch) {
-        setDirectionsStartToBuilding(insideMatch);
+        setDirectionsStartToBuilding(insideMatch, coordinate);
         return;
       }
 
@@ -392,10 +499,13 @@ export default function MapScreen() {
         );
 
         if (nearBorderBuilding) {
-          setDirectionsStartToBuilding({
-            building: nearBorderBuilding,
-            campus: campusKey,
-          });
+          setDirectionsStartToBuilding(
+            {
+              building: nearBorderBuilding,
+              campus: campusKey,
+            },
+            coordinate,
+          );
           return;
         }
       }
@@ -431,6 +541,29 @@ export default function MapScreen() {
     [goToUserLocation, handleSearchSelect, resolveDirectionsStartFromCoordinate],
   );
 
+  const normalizedNavigationStart = normalizeLabel(navigationStart);
+  const isCurrentLocationStart =
+    normalizedNavigationStart === NORMALIZED_YOUR_LOCATION ||
+    normalizedNavigationStart.startsWith(NORMALIZED_CURRENT_LOCATION);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return;
+    if (!isCurrentLocationStart) return;
+    if (navigationOrigin) return;
+    if (isLocating) return;
+    void goToUserLocation({
+      animateToUser: false,
+      onResolved: resolveDirectionsStartFromCoordinate,
+    });
+  }, [
+    goToUserLocation,
+    isCurrentLocationStart,
+    isLocating,
+    isNavigationOpen,
+    navigationOrigin,
+    resolveDirectionsStartFromCoordinate,
+  ]);
+
   const handleLocationPress = useCallback(async () => {
     await goToUserLocation({
       animateToUser: false,
@@ -454,6 +587,61 @@ export default function MapScreen() {
     });
   }, [goToUserLocation, resolveInsideBuilding, selectResolvedBuildingOnMap]);
 
+  const formatEventTimeRange = useCallback((event: CalendarEvent): string => {
+    const start = event.start.dateTime ?? event.start.date;
+    const end = event.end.dateTime ?? event.end.date;
+    if (!start) return '';
+    const startTime = new Date(start).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    if (!end) return startTime;
+    const endTime = new Date(end).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return `${startTime} - ${endTime}`;
+  }, []);
+
+  const handleNextClassGo = useCallback(() => {
+    if (!nextClassPreview) return;
+    const { building, campus } = nextClassPreview;
+    if (building && campus) {
+      const classEndRaw = nextClassPreview.event.end.dateTime ?? nextClassPreview.event.end.date;
+      const classEnd = classEndRaw ? new Date(classEndRaw) : null;
+      setArriveByClassEnd(classEnd && Number.isFinite(classEnd.getTime()) ? classEnd : null);
+      if (campus !== activeCampus) {
+        handleSelectCampus(campus, mapRef);
+      }
+      openNavigationForResolvedDestination(building);
+      setNextClassPreview(null);
+      return;
+    }
+    console.warn(
+      '[handleNextClassGo] Unable to resolve destination from calendar location:',
+      nextClassPreview.rawLocation,
+    );
+    Alert.alert(
+      'Unable to open directions',
+      `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
+    );
+  }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+
+  const handleTransportModeChange = useCallback(
+    (mode: 'driving' | 'walking' | 'shuttle') => {
+      if (lateTransportModes.includes(mode)) {
+        Alert.alert('Route arrives too late', "You'll arrive after class ends");
+        return;
+      }
+      setSelectedTransportMode(mode);
+    },
+    [lateTransportModes, setSelectedTransportMode],
+  );
+
+  const handleDisabledTransportModePress = useCallback(() => {
+    Alert.alert('Route arrives too late', "You'll arrive after class ends");
+  }, []);
+
   useEffect(() => {
     if (!pendingMapBuilding) return;
     if (activeCampus !== pendingMapBuilding.campus) return;
@@ -464,17 +652,32 @@ export default function MapScreen() {
   useEffect(() => {
     if (!pendingStartBuilding) return;
     if (activeCampus !== pendingStartBuilding.campus) return;
-    const centroid = polygonCentroid(pendingStartBuilding.building.polygon);
     setStartToCurrentLocationBuilding(
       pendingStartBuilding.building.name,
       pendingStartBuilding.building.code,
-      centroid,
+      pendingStartBuilding.coordinate,
     );
     setPendingStartBuilding(null);
   }, [activeCampus, pendingStartBuilding, setStartToCurrentLocationBuilding]);
 
   const handlePreviewStepChange = useCallback(
-    (step: { focusCoordinate?: { latitude: number; longitude: number } }, index: number) => {
+    (
+      step: {
+        focusCoordinate?: { latitude: number; longitude: number };
+        focusRegion?: {
+          latitude: number;
+          longitude: number;
+          latitudeDelta: number;
+          longitudeDelta: number;
+        };
+      },
+      index: number,
+    ) => {
+      if (index < 0) return;
+      if (step.focusRegion) {
+        mapRef.current?.animateToRegion(step.focusRegion, 450);
+        return;
+      }
       const coordinate = step.focusCoordinate;
       if (!coordinate) return;
       mapRef.current?.animateToRegion(
@@ -521,11 +724,21 @@ export default function MapScreen() {
     if (!isNavigationOpen) {
       setIsRoutePreviewOpen(false);
       setPreviewStepIndex(0);
+      setArriveByClassEnd(null);
     }
   }, [isNavigationOpen]);
 
+  const showCalendarRequired = !isClassesCalendarValid(isCalendarConnected);
+  const nextClassTime = nextClassPreview ? formatEventTimeRange(nextClassPreview.event) : '';
+  const nextClassTitle = nextClassPreview?.event.summary ?? '';
+  const nextClassLocationLabel =
+    nextClassPreview?.building?.name ?? nextClassPreview?.event.location ?? 'Location unavailable';
+
   return (
     <View style={styles.container} testID="map-screen">
+      {showCalendarRequired ? (
+        <ClassesCalendarRequired onConnectCalendar={() => setCalendarModalVisible(true)} />
+      ) : null}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -548,6 +761,7 @@ export default function MapScreen() {
         {routePolyline.length > 0 && selectedTransportMode === 'driving' && (
           <Polyline
             key="route-driving"
+            testID="route-driving-polyline"
             coordinates={routePolyline}
             strokeColor="#4A89F3"
             strokeWidth={5}
@@ -556,6 +770,7 @@ export default function MapScreen() {
         {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
           <Polyline
             key="route-walking"
+            testID="route-walking-polyline"
             coordinates={routePolyline}
             strokeColor={routeColor}
             strokeWidth={5}
@@ -649,6 +864,7 @@ export default function MapScreen() {
         }}
         isColorBlind={isColorBlind}
         onDirections={() => {
+          setArriveByClassEnd(null);
           openNavigationForBuilding(selectedBuilding, remoteBuilding);
           handleCloseCard();
         }}
@@ -657,6 +873,7 @@ export default function MapScreen() {
         visible={isNavigationOpen && !isRoutePreviewOpen}
         startLabel={navigationStart}
         destinationLabel={navigationDestination}
+        destinationLocked={isDestinationLocked}
         onClose={closeNavigation}
         onActiveFieldChange={setNavigationActiveField}
         onBuildingSelect={handleNavigationBuildingSelect}
@@ -666,7 +883,9 @@ export default function MapScreen() {
         directionsError={directionsError}
         isGetDirectionsDisabled={isGetDirectionsDisabled}
         selectedTransportMode={selectedTransportMode}
-        onTransportModeChange={setSelectedTransportMode}
+        onTransportModeChange={handleTransportModeChange}
+        disabledTransportModes={lateTransportModes}
+        onDisabledTransportModePress={handleDisabledTransportModePress}
         navigationSteps={navigationSteps}
         isShuttleRoute={isShuttleRoute}
         isShuttleLoading={isShuttleLoading}
@@ -681,33 +900,56 @@ export default function MapScreen() {
         selectedStepIndex={previewStepIndex}
         onSelectStep={handleSelectPreviewStep}
         onClose={handleCloseRoutePreview}
+        destinationLabel={navigationDestination}
       />
-      <NextClassPanel
-        isVisible={!isMenuOpen && !isNavigationOpen}
-        isCalendarConnected={isCalendarConnected}
-        nextEvent={nextClassEvent}
-        onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
-      >
-        {(openNextClassPanel) =>
-          !isMenuOpen && !isNavigationOpen ? (
-            <QuickPickPanel
-              activeCampus={activeCampus}
-              isColorBlind={isColorBlind}
-              isQuickPickOpen={isQuickPickOpen}
-              quickPickMaxHeight={quickPickMaxHeight}
-              quickPickVisibleHeight={quickPickVisibleHeight}
-              quickPickContentHeight={quickPickContentHeight}
-              featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
-              isLocating={isLocating}
-              onToggleOpen={handleToggleQuickPick}
-              onHeightChange={setQuickPickContentHeight}
-              onQuickPick={handleQuickPick}
-              onLocationPress={handleLocationPress}
-              onDirectionsToNextClassPress={openNextClassPanel}
-            />
-          ) : null
-        }
-      </NextClassPanel>
+{nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen ? (
+  <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
+    <Text style={styles.nextClassTitle}>Directions to my next class</Text>
+    <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
+    <View style={styles.nextClassRow}>
+      <View style={styles.nextClassRowLeft}>
+        <MaterialIcons name="event" size={18} color="#6e6e6e" />
+        <Text style={styles.nextClassName} numberOfLines={1}>
+          {nextClassTitle}
+        </Text>
+      </View>
+      <Text style={styles.nextClassTime}>{nextClassTime}</Text>
+    </View>
+    <Text style={styles.nextClassLocation} numberOfLines={1}>
+      {nextClassLocationLabel}
+    </Text>
+    <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
+      <Text style={styles.nextClassGoText}>Go</Text>
+    </Pressable>
+  </View>
+) : null}
+
+<NextClassPanel
+  isVisible={!isMenuOpen && !isNavigationOpen}
+  isCalendarConnected={isCalendarConnected}
+  nextEvent={nextClassEvent}
+  onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
+>
+  {(openNextClassPanel) =>
+    !isMenuOpen && !isNavigationOpen ? (
+      <QuickPickPanel
+        activeCampus={activeCampus}
+        isColorBlind={isColorBlind}
+        isQuickPickOpen={isQuickPickOpen}
+        quickPickMaxHeight={quickPickMaxHeight}
+        quickPickVisibleHeight={quickPickVisibleHeight}
+        quickPickContentHeight={quickPickContentHeight}
+        featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
+        isLocating={isLocating}
+        onToggleOpen={handleToggleQuickPick}
+        onHeightChange={setQuickPickContentHeight}
+        onQuickPick={handleQuickPick}
+        onLocationPress={handleLocationPress}
+        onDirectionsToNextClassPress={handleDirectionsToNextClass}
+      />
+    ) : null
+  }
+</NextClassPanel>
 
       {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
 
@@ -762,6 +1004,71 @@ const styles = StyleSheet.create({
   },
   toastText: {
     color: '#fff',
+    fontSize: 14,
+  },
+  nextClassCard: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  nextClassTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2a2a2a',
+  },
+  nextClassSubtitle: {
+    fontSize: 12,
+    color: '#7a7a7a',
+    marginTop: 2,
+  },
+  nextClassRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  nextClassRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    flex: 1,
+    marginRight: 10,
+  },
+  nextClassName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f1f1f',
+    flexShrink: 1,
+  },
+  nextClassTime: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4a4a4a',
+  },
+  nextClassLocation: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#6a6a6a',
+  },
+  nextClassGoButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    backgroundColor: '#8e2334',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  nextClassGoText: {
+    color: '#fff',
+    fontWeight: '700',
     fontSize: 14,
   },
 });

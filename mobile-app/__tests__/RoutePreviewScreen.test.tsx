@@ -63,12 +63,15 @@ describe('RoutePreviewScreen', () => {
           selectedStepIndex={0}
           onSelectStep={noop}
           onClose={noop}
+          destinationLabel="Hall Building (H)"
         />
       </SettingsProvider>,
     );
     expect(getByTestId('route-preview-screen')).toBeTruthy();
     expect(getByText('Head north on Rue Guy')).toBeTruthy();
     expect(getByText('0.3 km · 1 min')).toBeTruthy();
+    expect(getByTestId('route-preview-destination')).toBeTruthy();
+    expect(getByText('Destination: Hall Building (H)')).toBeTruthy();
     expect(getByTestId('route-preview-position').props.children.join('')).toContain('Step 1 of 2');
   });
 

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BUILDING_ADDRESSES } from '../data/building-addresses';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
 import { formatAddress } from '../utils/mapUtils';
 import MapMenu from './MapMenu';
+import NavigationInputRow from './NavigationInputRow';
 import { useSettings } from '../context/settings';
 
 type ActiveField = 'start' | 'destination' | null;
@@ -13,6 +14,7 @@ type ActiveField = 'start' | 'destination' | null;
 interface NavigationMenuProps {
   startLabel?: string;
   destinationLabel?: string;
+  destinationLocked?: boolean;
   onActiveFieldChange?: (field: ActiveField) => void;
   onBuildingSelect?: (field: 'start' | 'destination', name: string, code: string | null) => void;
 }
@@ -32,6 +34,7 @@ const buildLabel = (name: string, code: string | null) => {
 export default function NavigationMenu({
   startLabel = 'Your location',
   destinationLabel = '',
+  destinationLocked = false,
   onActiveFieldChange,
   onBuildingSelect,
 }: Readonly<NavigationMenuProps>) {
@@ -61,6 +64,16 @@ export default function NavigationMenu({
   useEffect(() => {
     onActiveFieldChange?.(activeField);
   }, [activeField, onActiveFieldChange]);
+
+  useEffect(() => {
+    if (!destinationLocked || activeField !== 'destination') return;
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
+    }
+    activeFieldRef.current = null;
+    setActiveField(null);
+  }, [activeField, destinationLocked]);
 
   const activateField = useCallback((field: ActiveField) => {
     if (blurTimer.current) {
@@ -141,41 +154,6 @@ export default function NavigationMenu({
     setActiveField(null);
   };
 
-  const renderInputRow = (
-    field: ActiveField,
-    value: string,
-    setValue: (text: string) => void,
-    icon: keyof typeof MaterialIcons.glyphMap,
-    iconColor: string,
-    placeholder: string,
-    clearLabel: string,
-  ) => (
-    <View style={styles.routeRow}>
-      <MaterialIcons name={icon} size={20} color={iconColor} />
-      <View style={styles.inputWrap}>
-        <TextInput
-          value={value}
-          onChangeText={setValue}
-          onFocus={() => activateField(field)}
-          onBlur={deactivateField}
-          placeholder={placeholder}
-          placeholderTextColor="#6b6b6b"
-          style={styles.routeInput}
-        />
-        {!!value && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={clearLabel}
-            onPress={() => setValue('')}
-            style={[styles.clearButton, { backgroundColor: routeCardColor }]}
-          >
-            <MaterialIcons name="close" size={16} color={clearIconColor} />
-          </Pressable>
-        )}
-      </View>
-    </View>
-  );
-
   return (
     <View style={[styles.topBar, { backgroundColor: topBarColor }]}>
       <Pressable
@@ -189,25 +167,32 @@ export default function NavigationMenu({
 
       <View style={styles.searchColumn}>
         <View style={[styles.routeCard, { backgroundColor: routeCardColor }]}>
-          {renderInputRow(
-            'start',
-            startQuery,
-            setStartQuery,
-            'radio-button-unchecked',
-            '#1c1c1e',
-            'Start',
-            'Clear start',
-          )}
+          <NavigationInputRow
+            value={startQuery}
+            onChangeText={setStartQuery}
+            onFocus={() => activateField('start')}
+            onBlur={deactivateField}
+            icon="radio-button-unchecked"
+            iconColor="#1c1c1e"
+            placeholder="Start"
+            clearLabel="Clear start"
+            clearIconColor={clearIconColor}
+            clearButtonBg={routeCardColor}
+          />
           <View style={[styles.routeDivider, { backgroundColor: dividerColor }]} />
-          {renderInputRow(
-            'destination',
-            destinationQuery,
-            setDestinationQuery,
-            'location-on',
-            destinationIconColor,
-            'Destination',
-            'Clear destination',
-          )}
+          <NavigationInputRow
+            value={destinationQuery}
+            onChangeText={setDestinationQuery}
+            onFocus={() => activateField('destination')}
+            onBlur={deactivateField}
+            icon="location-on"
+            iconColor={destinationIconColor}
+            placeholder="Destination"
+            clearLabel="Clear destination"
+            clearIconColor={clearIconColor}
+            clearButtonBg={routeCardColor}
+            locked={destinationLocked}
+          />
         </View>
 
         {activeField && (
@@ -283,41 +268,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  routeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 10,
-  },
-  inputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
   routeDivider: {
     borderStyle: 'dotted',
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(0,0,0,0.2)',
     marginVertical: 8,
     marginLeft: 28,
-  },
-  routeInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1c1c1e',
-    fontWeight: '600',
-    paddingVertical: 0,
-    paddingRight: 40,
-  },
-  clearButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 0,
-    zIndex: 2,
   },
   resultsCard: {
     marginTop: 8,

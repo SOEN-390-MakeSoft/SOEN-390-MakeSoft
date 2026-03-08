@@ -1,4 +1,4 @@
-import { getNextEvent, CalendarEvent } from '../hooks/usePublicCalendar';
+import { getNextEvent, getNextClassForToday, CalendarEvent } from '../hooks/usePublicCalendar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -173,5 +173,50 @@ describe('getNextEvent', () => {
       expect(result?.location).toBe('Hall Building Rm 535');
       expect(result?.htmlLink).toBe('https://calendar.google.com/event?eid=abc123');
     });
+  });
+});
+
+describe('getNextClassForToday', () => {
+  const baseNow = new Date('2026-03-07T15:00:00.000Z');
+
+  const makeTodayAt = (hour: number, minute: number) => {
+    const d = new Date(baseNow);
+    d.setUTCHours(hour, minute, 0, 0);
+    return d.toISOString();
+  };
+
+  it('returns no_classes_today when there are no events today', () => {
+    const tomorrowStart = new Date(baseNow);
+    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+    tomorrowStart.setUTCHours(13, 0, 0, 0);
+    const tomorrowEnd = new Date(tomorrowStart.getTime() + HOUR);
+
+    const result = getNextClassForToday(
+      [makeEvent('tmw', 'Tomorrow Class', tomorrowStart.toISOString(), tomorrowEnd.toISOString())],
+      baseNow,
+    );
+
+    expect(result).toEqual({ status: 'no_classes_today' });
+  });
+
+  it('returns next_class when a class later today exists', () => {
+    const result = getNextClassForToday(
+      [makeEvent('later', 'Later Class', makeTodayAt(18, 0), makeTodayAt(19, 0))],
+      baseNow,
+    );
+
+    expect(result.status).toBe('next_class');
+    if (result.status === 'next_class') {
+      expect(result.event.id).toBe('later');
+    }
+  });
+
+  it('returns classes_over_today when all today classes have ended', () => {
+    const result = getNextClassForToday(
+      [makeEvent('done', 'Morning Class', makeTodayAt(8, 0), makeTodayAt(10, 0))],
+      baseNow,
+    );
+
+    expect(result).toEqual({ status: 'classes_over_today' });
   });
 });
