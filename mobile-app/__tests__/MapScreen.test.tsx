@@ -50,20 +50,25 @@ const mockConnectCalendar = jest.fn().mockResolvedValue(undefined);
 const mockCalendarDisconnect = jest.fn().mockResolvedValue(undefined);
 const mockRefreshEvents = jest.fn().mockResolvedValue(undefined);
 let mockIsCalendarConnected = true;
-jest.mock('../hooks/usePublicCalendar', () => ({
-  usePublicCalendar: () => ({
-    connectCalendar: mockConnectCalendar,
-    disconnect: mockCalendarDisconnect,
-    refreshEvents: mockRefreshEvents,
-    get isConnected() {
-      return mockIsCalendarConnected;
-    },
-    events: [],
-    loading: false,
-    error: null,
-    calendarId: null,
-  }),
-}));
+jest.mock('../hooks/usePublicCalendar', () => {
+  // Keep real named exports (e.g., getNextEvent) while mocking only the hook.
+  const actual = jest.requireActual('../hooks/usePublicCalendar');
+  return {
+    ...actual,
+    usePublicCalendar: () => ({
+      connectCalendar: mockConnectCalendar,
+      disconnect: mockCalendarDisconnect,
+      refreshEvents: mockRefreshEvents,
+      get isConnected() {
+        return mockIsCalendarConnected;
+      },
+      events: [],
+      loading: false,
+      error: null,
+      calendarId: null,
+    }),
+  };
+});
 
 jest.mock('@expo/vector-icons/MaterialIcons', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
