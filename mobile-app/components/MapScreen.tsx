@@ -9,6 +9,7 @@ import QuickPickPanel from './QuickPickPanel';
 import MapMenu from './MapMenu';
 import NavigationScreen from './NavigationScreen';
 import RoutePreviewScreen from './RoutePreviewScreen';
+import DirectionsModeScreen from './DirectionsModeScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
 import NextClassPanel from './NextClassPanel';
@@ -163,6 +164,7 @@ export default function MapScreen() {
   } = useSelectedBuilding(buildings, mapRef);
   const [buildingNotFoundToast, setBuildingNotFoundToast] = useState(false);
   const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
+  const [isDirectionsModeOpen, setIsDirectionsModeOpen] = useState(false);
   const [previewStepIndex, setPreviewStepIndex] = useState(0);
   const [pendingMapBuilding, setPendingMapBuilding] = useState<PendingMapBuilding | null>(null);
   const [pendingStartBuilding, setPendingStartBuilding] = useState<PendingStartBuilding | null>(
@@ -211,6 +213,7 @@ export default function MapScreen() {
     routeSegments,
     openNavigationForResolvedDestination,
     isDestinationLocked,
+    rerouteFromLocation,
   } = useNavigationBetweenBuildings({
     buildings,
     onSelectBuilding: handleSelectBuilding,
@@ -708,6 +711,31 @@ export default function MapScreen() {
     setIsRoutePreviewOpen(false);
   }, []);
 
+  const handleOpenDirectionsMode = useCallback(() => {
+    if (navigationSteps.length === 0) return;
+    setIsDirectionsModeOpen(true);
+  }, [navigationSteps]);
+
+  const handleCloseDirectionsMode = useCallback(() => {
+    setIsDirectionsModeOpen(false);
+  }, []);
+
+  const handleOffRoute = rerouteFromLocation;
+  const handleDirectionsLocationUpdate = useCallback(
+    (coordinate: { latitude: number; longitude: number }, _stepIndex: number) => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          latitudeDelta: 0.003,
+          longitudeDelta: 0.003,
+        },
+        400,
+      );
+    },
+    [],
+  );
+
   const handleSelectPreviewStep = useCallback(
     (index: number) => {
       if (navigationSteps.length === 0) return;
@@ -726,6 +754,7 @@ export default function MapScreen() {
       setIsRoutePreviewOpen(false);
       setPreviewStepIndex(0);
       setArriveByClassEnd(null);
+      setIsDirectionsModeOpen(false);
     }
   }, [isNavigationOpen]);
 
@@ -823,7 +852,7 @@ export default function MapScreen() {
       </MapView>
 
       {/* Top Controls: Search, Menu, Brand Badge */}
-      {!isRoutePreviewOpen && (
+      {!isRoutePreviewOpen && !isDirectionsModeOpen && (
         <View
           style={[styles.topControls, { top: menuTop, paddingHorizontal: menuLeft }]}
           pointerEvents="box-none"
@@ -871,7 +900,7 @@ export default function MapScreen() {
         }}
       />
       <NavigationScreen
-        visible={isNavigationOpen && !isRoutePreviewOpen}
+        visible={isNavigationOpen && !isRoutePreviewOpen && !isDirectionsModeOpen}
         startLabel={navigationStart}
         destinationLabel={navigationDestination}
         destinationLocked={isDestinationLocked}
@@ -893,6 +922,7 @@ export default function MapScreen() {
         shuttleInfo={shuttleInfo}
         isWeekend={isWeekend}
         onOpenPreview={handleOpenRoutePreview}
+        onOpenDirections={handleOpenDirectionsMode}
       />
 
       <RoutePreviewScreen
@@ -903,7 +933,18 @@ export default function MapScreen() {
         onClose={handleCloseRoutePreview}
         destinationLabel={navigationDestination}
       />
-      {nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen ? (
+      <DirectionsModeScreen
+        visible={isDirectionsModeOpen}
+        steps={navigationSteps}
+        routePolyline={routePolyline}
+        onOffRoute={handleOffRoute}
+        onRecenterToUser={goToUserLocation}
+        isRerouting={isRouteLoading && isDirectionsModeOpen}
+        onClose={handleCloseDirectionsMode}
+        onLocationUpdate={handleDirectionsLocationUpdate}
+      />
+
+      {nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen && !isDirectionsModeOpen ? (
         <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
           <Text style={styles.nextClassTitle}>Directions to my next class</Text>
           <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
@@ -952,7 +993,9 @@ export default function MapScreen() {
         }
       </NextClassPanel>
 
-      {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
+      {!isRoutePreviewOpen && !isDirectionsModeOpen && (
+        <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+      )}
 
       {buildingNotFoundToast ? (
         <View style={styles.toast} testID="building-not-found-toast">
