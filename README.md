@@ -111,7 +111,7 @@ From the `backend-api` directory, run:
 mvn spring-boot:run
 ```
 
-Ensure the backend is running on port `8080`.
+Ensure the backend is running on port `8081`.
 
 ### Step 5: Start the Mobile App
 

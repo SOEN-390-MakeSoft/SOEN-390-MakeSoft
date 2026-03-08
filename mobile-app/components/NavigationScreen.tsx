@@ -32,6 +32,8 @@ interface NavigationScreenProps {
   isGetDirectionsDisabled?: boolean;
   selectedTransportMode?: TransportMode;
   onTransportModeChange?: (mode: TransportMode) => void;
+  disabledTransportModes?: TransportMode[];
+  onDisabledTransportModePress?: (mode: TransportMode) => void;
   navigationSteps?: NavigationStep[];
   /** Whether the route is a cross-campus route (SGW <-> Loyola) */
   isShuttleRoute?: boolean;
@@ -56,6 +58,7 @@ function ModeChip({
   icon,
   label,
   isSelected,
+  isDisabled = false,
   chipColor,
   chipMutedColor,
   onPress,
@@ -64,18 +67,21 @@ function ModeChip({
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
   isSelected: boolean;
+  isDisabled?: boolean;
   chipColor: string;
   chipMutedColor: string;
-  onPress: (mode: TransportMode) => void;
+  onPress: () => void;
 }>) {
   return (
     <Pressable
-      onPress={() => onPress(mode)}
+      onPress={onPress}
       testID={`mode-chip-${mode}`}
       style={
-        isSelected
-          ? [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }]
-          : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
+        isDisabled
+          ? [styles.modeChipMuted, styles.modeChipLate, { backgroundColor: chipMutedColor }]
+          : isSelected
+            ? [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }]
+            : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
       }
     >
       <MaterialIcons name={icon} size={18} color="#fff" />
@@ -87,17 +93,21 @@ function ModeChip({
 function renderShuttleChip({
   isShuttleRoute,
   isWeekend,
+  isDisabled,
   selectedTransportMode,
   chipColor,
   chipMutedColor,
   onTransportModeChange,
+  onDisabledTransportModePress,
 }: Readonly<{
   isShuttleRoute: boolean;
   isWeekend: boolean;
+  isDisabled: boolean;
   selectedTransportMode: TransportMode;
   chipColor: string;
   chipMutedColor: string;
   onTransportModeChange?: (mode: TransportMode) => void;
+  onDisabledTransportModePress?: (mode: TransportMode) => void;
 }>) {
   if (isShuttleRoute && isWeekend) {
     return (
@@ -118,9 +128,16 @@ function renderShuttleChip({
         icon="directions-bus"
         label="Shuttle"
         isSelected={selectedTransportMode === 'shuttle'}
+        isDisabled={isDisabled}
         chipColor={chipColor}
         chipMutedColor={chipMutedColor}
-        onPress={onTransportModeChange ?? (() => {})}
+        onPress={() => {
+          if (isDisabled) {
+            onDisabledTransportModePress?.('shuttle');
+            return;
+          }
+          onTransportModeChange?.('shuttle');
+        }}
       />
     );
   }
@@ -222,31 +239,67 @@ function ShuttleDeparturesPanel({
 }>) {
   if (!show || !shuttleInfo) return null;
 
+  const formatHoursMinutes = (totalMinutes: number): string => {
+    const safeMinutes = Math.max(0, Math.round(totalMinutes));
+    const hours = Math.floor(safeMinutes / 60);
+    const minutes = safeMinutes % 60;
+    if (hours > 0 && minutes > 0) return `${hours} h ${minutes} min`;
+    if (hours > 0) return `${hours} h`;
+    return `${minutes} min`;
+  };
+
   const departureHubLabel =
     shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)';
-  const noMoreShuttles = shuttleInfo.departureTimes.every((t) => t === null);
+  const firstDeparture =
+    shuttleInfo.departureTimes.find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    ) ?? null;
+  const noMoreShuttles = firstDeparture === null;
+  const hasDirections = shuttleInfo.hasDirections !== false;
+  const waitTimeText =
+    shuttleInfo.waitDurationMin != null && shuttleInfo.waitDurationMin > 0
+      ? formatHoursMinutes(shuttleInfo.waitDurationMin)
+      : null;
 
   return (
     <View style={styles.shuttlePanel} testID="shuttle-departures-panel">
       <Text style={styles.shuttleHubText}>{`Departs from ${departureHubLabel}`}</Text>
       <View style={styles.shuttleTimesRow}>
-        {shuttleInfo.departureTimes.map((t, i) =>
-          t ? (
-            <View key={`dep-${t}`} style={styles.shuttleTimeChip} testID={`shuttle-time-${i}`}>
-              <MaterialIcons name="directions-bus" size={14} color="#fff" />
-              <Text style={styles.shuttleTimeText}>
-                {new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-              </Text>
-            </View>
-          ) : null,
-        )}
+        {firstDeparture ? (
+          <View
+            key={`dep-${firstDeparture}`}
+            style={styles.shuttleTimeChip}
+            testID="shuttle-time-0"
+          >
+            <MaterialIcons name="directions-bus" size={14} color="#fff" />
+            <Text style={styles.shuttleTimeText}>
+              {new Date(firstDeparture).toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+        ) : null}
         {noMoreShuttles ? (
           <Text style={styles.shuttleNoMore} testID="shuttle-no-more">
             No more shuttles today
           </Text>
         ) : null}
       </View>
-      <Text style={styles.shuttleRideTime}>{`~${shuttleInfo.tripDurationMin} min ride`}</Text>
+      {!noMoreShuttles && waitTimeText ? (
+        <Text
+          style={styles.shuttleRideTime}
+          testID="shuttle-wait-time"
+        >{`Wait: ${waitTimeText}`}</Text>
+      ) : null}
+      {!noMoreShuttles && !hasDirections ? (
+        <Text style={styles.shuttleNoMore} testID="shuttle-long-wait-notice">
+          Wait exceeds 2 h. Showing next shuttle only (no directions).
+        </Text>
+      ) : null}
+      {!noMoreShuttles && hasDirections ? (
+        <Text style={styles.shuttleRideTime}>{`~${shuttleInfo.tripDurationMin} min ride`}</Text>
+      ) : null}
     </View>
   );
 }
@@ -355,6 +408,8 @@ export default function NavigationScreen({
   isGetDirectionsDisabled = true,
   selectedTransportMode = 'driving',
   onTransportModeChange,
+  disabledTransportModes = [],
+  onDisabledTransportModePress,
   navigationSteps = [],
   isShuttleRoute = false,
   isShuttleLoading = false,
@@ -380,6 +435,8 @@ export default function NavigationScreen({
     selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && !!shuttleInfo;
   const showShuttleWeekendNotice =
     selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute;
+
+  const isModeDisabled = (mode: TransportMode) => disabledTransportModes.includes(mode);
 
   useEffect(() => {
     isMinimizedRef.current = isMinimized;
@@ -450,26 +507,42 @@ export default function NavigationScreen({
               icon="directions-car"
               label={modeDurations?.driving ?? '--'}
               isSelected={selectedTransportMode === 'driving'}
+              isDisabled={isModeDisabled('driving')}
               chipColor={themeColors.chipColor}
               chipMutedColor={themeColors.chipMutedColor}
-              onPress={onTransportModeChange ?? (() => {})}
+              onPress={() => {
+                if (isModeDisabled('driving')) {
+                  onDisabledTransportModePress?.('driving');
+                  return;
+                }
+                onTransportModeChange?.('driving');
+              }}
             />
             <ModeChip
               mode="walking"
               icon="directions-walk"
               label={modeDurations?.walking ?? '--'}
               isSelected={selectedTransportMode === 'walking'}
+              isDisabled={isModeDisabled('walking')}
               chipColor={themeColors.chipColor}
               chipMutedColor={themeColors.chipMutedColor}
-              onPress={onTransportModeChange ?? (() => {})}
+              onPress={() => {
+                if (isModeDisabled('walking')) {
+                  onDisabledTransportModePress?.('walking');
+                  return;
+                }
+                onTransportModeChange?.('walking');
+              }}
             />
             {renderShuttleChip({
               isShuttleRoute,
               isWeekend,
+              isDisabled: isModeDisabled('shuttle'),
               selectedTransportMode,
               chipColor: themeColors.chipColor,
               chipMutedColor: themeColors.chipMutedColor,
               onTransportModeChange,
+              onDisabledTransportModePress,
             })}
           </View>
           <Pressable
@@ -559,6 +632,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
+  },
+  modeChipLate: {
+    opacity: 0.55,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   modeChipDisabled: {
     flexDirection: 'row',

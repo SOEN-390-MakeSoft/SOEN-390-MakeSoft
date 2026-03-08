@@ -14,7 +14,11 @@ import CalendarModal from './CalendarModal';
 import ClassesCalendarRequired from './ClassesCalendarRequired';
 import { useSettings } from '../context/settings';
 import { isClassesCalendarValid } from '../utils/calendarValidation';
-import { usePublicCalendar, getNextEvent, type CalendarEvent } from '../hooks/usePublicCalendar';
+import {
+  usePublicCalendar,
+  getNextClassForToday,
+  type CalendarEvent,
+} from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { useSelectedBuilding } from '../hooks/useSelectedBuilding';
 import { useSearch } from '../hooks/useSearch';
@@ -163,6 +167,8 @@ export default function MapScreen() {
     null,
   );
   const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
+  const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
+  const { colourBlindMode, simulatedNow } = useSettings();
   const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
   useEffect(() => {
     if (!buildingNotFoundToast) return;
@@ -199,6 +205,7 @@ export default function MapScreen() {
     isShuttleLoading,
     shuttleInfo,
     isWeekend,
+    lateTransportModes = [],
     routeSegments,
     openNavigationForResolvedDestination,
     isDestinationLocked,
@@ -206,6 +213,8 @@ export default function MapScreen() {
     buildings,
     onSelectBuilding: handleSelectBuilding,
     onBuildingNotFound: showBuildingNotFoundToast,
+    currentTime: simulatedNow,
+    arriveBy: arriveByClassEnd,
   });
   const {
     searchQuery,
@@ -234,7 +243,6 @@ export default function MapScreen() {
     quickPickMaxHeight,
     handleToggleQuickPick,
   } = useMapUI();
-  const { colourBlindMode } = useSettings();
   const theme = useTheme();
   const { isLocating, goToUserLocation } = useUserLocation(
     mapRef as React.RefObject<{ animateToRegion: (region: any, duration: number) => void }>,
@@ -263,12 +271,22 @@ export default function MapScreen() {
     await calendarDisconnect();
   }, [calendarDisconnect]);
   const handleDirectionsToNextClass = useCallback(() => {
-    const nextEvent = getNextEvent(calendarEvents);
-    if (!nextEvent) {
-      console.log('[handleDirectionsToNextClass] No current or upcoming class found.');
+    const effectiveNow = simulatedNow ?? new Date();
+    const nextClassState = getNextClassForToday(calendarEvents, effectiveNow);
+    if (nextClassState.status === 'no_classes_today') {
+      console.log('[handleDirectionsToNextClass] No classes scheduled today.');
       setNextClassPreview(null);
+      Alert.alert('No classes today', 'You have no classes scheduled for today.');
       return;
     }
+    if (nextClassState.status === 'classes_over_today') {
+      console.log('[handleDirectionsToNextClass] Classes are over today.');
+      setNextClassPreview(null);
+      Alert.alert('Classes are over today', 'You are done for today.');
+      return;
+    }
+
+    const nextEvent = nextClassState.event;
 
     if (nextClassPreview?.event.id === nextEvent.id) {
       setNextClassPreview(null);
@@ -334,7 +352,7 @@ export default function MapScreen() {
       rawLocation,
       conflict: conflict ?? null,
     });
-  }, [calendarEvents, nextClassPreview, loyolaBuildings, sgwBuildings]);
+  }, [calendarEvents, simulatedNow, nextClassPreview, loyolaBuildings, sgwBuildings]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -583,6 +601,9 @@ export default function MapScreen() {
     if (!nextClassPreview) return;
     const { building, campus } = nextClassPreview;
     if (building && campus) {
+      const classEndRaw = nextClassPreview.event.end.dateTime ?? nextClassPreview.event.end.date;
+      const classEnd = classEndRaw ? new Date(classEndRaw) : null;
+      setArriveByClassEnd(classEnd && Number.isFinite(classEnd.getTime()) ? classEnd : null);
       if (campus !== activeCampus) {
         handleSelectCampus(campus, mapRef);
       }
@@ -599,6 +620,21 @@ export default function MapScreen() {
       `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
     );
   }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+
+  const handleTransportModeChange = useCallback(
+    (mode: 'driving' | 'walking' | 'shuttle') => {
+      if (lateTransportModes.includes(mode)) {
+        Alert.alert('Route arrives too late', "You'll arrive after class ends");
+        return;
+      }
+      setSelectedTransportMode(mode);
+    },
+    [lateTransportModes, setSelectedTransportMode],
+  );
+
+  const handleDisabledTransportModePress = useCallback(() => {
+    Alert.alert('Route arrives too late', "You'll arrive after class ends");
+  }, []);
 
   useEffect(() => {
     if (!pendingMapBuilding) return;
@@ -619,7 +655,23 @@ export default function MapScreen() {
   }, [activeCampus, pendingStartBuilding, setStartToCurrentLocationBuilding]);
 
   const handlePreviewStepChange = useCallback(
-    (step: { focusCoordinate?: { latitude: number; longitude: number } }, index: number) => {
+    (
+      step: {
+        focusCoordinate?: { latitude: number; longitude: number };
+        focusRegion?: {
+          latitude: number;
+          longitude: number;
+          latitudeDelta: number;
+          longitudeDelta: number;
+        };
+      },
+      index: number,
+    ) => {
+      if (index < 0) return;
+      if (step.focusRegion) {
+        mapRef.current?.animateToRegion(step.focusRegion, 450);
+        return;
+      }
       const coordinate = step.focusCoordinate;
       if (!coordinate) return;
       mapRef.current?.animateToRegion(
@@ -666,6 +718,7 @@ export default function MapScreen() {
     if (!isNavigationOpen) {
       setIsRoutePreviewOpen(false);
       setPreviewStepIndex(0);
+      setArriveByClassEnd(null);
     }
   }, [isNavigationOpen]);
 
@@ -702,6 +755,7 @@ export default function MapScreen() {
         {routePolyline.length > 0 && selectedTransportMode === 'driving' && (
           <Polyline
             key="route-driving"
+            testID="route-driving-polyline"
             coordinates={routePolyline}
             strokeColor="#4A89F3"
             strokeWidth={5}
@@ -710,6 +764,7 @@ export default function MapScreen() {
         {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
           <Polyline
             key="route-walking"
+            testID="route-walking-polyline"
             coordinates={routePolyline}
             strokeColor={routeColor}
             strokeWidth={5}
@@ -803,6 +858,7 @@ export default function MapScreen() {
         }}
         isColorBlind={isColorBlind}
         onDirections={() => {
+          setArriveByClassEnd(null);
           openNavigationForBuilding(selectedBuilding, remoteBuilding);
           handleCloseCard();
         }}
@@ -821,7 +877,9 @@ export default function MapScreen() {
         directionsError={directionsError}
         isGetDirectionsDisabled={isGetDirectionsDisabled}
         selectedTransportMode={selectedTransportMode}
-        onTransportModeChange={setSelectedTransportMode}
+        onTransportModeChange={handleTransportModeChange}
+        disabledTransportModes={lateTransportModes}
+        onDisabledTransportModePress={handleDisabledTransportModePress}
         navigationSteps={navigationSteps}
         isShuttleRoute={isShuttleRoute}
         isShuttleLoading={isShuttleLoading}
