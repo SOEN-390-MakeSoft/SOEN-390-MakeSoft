@@ -1,8 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Dimensions, Platform, StyleSheet, View, Text, Pressable } from 'react-native';
+import { Dimensions, Platform, StyleSheet, View, Text } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import Entypo from '@expo/vector-icons/Entypo';
 import { useTheme } from 'tamagui';
 import CampusSwitch from './CampusSwitch';
 import BuildingInfoCard from './BuildingInfoCard';
@@ -12,7 +11,7 @@ import NavigationScreen from './NavigationScreen';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import SearchBar from './SearchBar';
 import CalendarModal from './CalendarModal';
-import NextClassModal from './NextClassModal';
+import NextClassPanel from './NextClassPanel';
 import { useSettings } from '../context/settings';
 import { usePublicCalendar, getNextEvent } from '../hooks/usePublicCalendar';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
@@ -238,7 +237,6 @@ export default function MapScreen() {
     error: calendarError,
   } = usePublicCalendar();
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
-  const [courseInfoModalVisible, setCourseInfoModalVisible] = useState(false);
   const nextClassEvent = getNextEvent(calendarEvents);
 
   const handleLogoPress = useCallback(() => {
@@ -252,12 +250,7 @@ export default function MapScreen() {
     await calendarDisconnect();
   }, [calendarDisconnect]);
 
-  const handleDirectionsToNextClass = useCallback(() => {
-    setCourseInfoModalVisible(true);
-  }, []);
-
   const handleOpenCalendarFromCourseModal = useCallback(() => {
-    setCourseInfoModalVisible(false);
     setCalendarModalVisible(true);
   }, []);
 
@@ -689,24 +682,32 @@ export default function MapScreen() {
         onSelectStep={handleSelectPreviewStep}
         onClose={handleCloseRoutePreview}
       />
-      {/* Quick Pick Panel and Location Button */}
-      {!isMenuOpen && !isNavigationOpen ? (
-        <QuickPickPanel
-          activeCampus={activeCampus}
-          isColorBlind={isColorBlind}
-          isQuickPickOpen={isQuickPickOpen}
-          quickPickMaxHeight={quickPickMaxHeight}
-          quickPickVisibleHeight={quickPickVisibleHeight}
-          quickPickContentHeight={quickPickContentHeight}
-          featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
-          isLocating={isLocating}
-          onToggleOpen={handleToggleQuickPick}
-          onHeightChange={setQuickPickContentHeight}
-          onQuickPick={handleQuickPick}
-          onLocationPress={handleLocationPress}
-          onDirectionsToNextClassPress={handleDirectionsToNextClass}
-        />
-      ) : null}
+      <NextClassPanel
+        isVisible={!isMenuOpen && !isNavigationOpen}
+        isCalendarConnected={isCalendarConnected}
+        nextEvent={nextClassEvent}
+        onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
+      >
+        {(openNextClassPanel) =>
+          !isMenuOpen && !isNavigationOpen ? (
+            <QuickPickPanel
+              activeCampus={activeCampus}
+              isColorBlind={isColorBlind}
+              isQuickPickOpen={isQuickPickOpen}
+              quickPickMaxHeight={quickPickMaxHeight}
+              quickPickVisibleHeight={quickPickVisibleHeight}
+              quickPickContentHeight={quickPickContentHeight}
+              featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
+              isLocating={isLocating}
+              onToggleOpen={handleToggleQuickPick}
+              onHeightChange={setQuickPickContentHeight}
+              onQuickPick={handleQuickPick}
+              onLocationPress={handleLocationPress}
+              onDirectionsToNextClassPress={openNextClassPanel}
+            />
+          ) : null
+        }
+      </NextClassPanel>
 
       {!isRoutePreviewOpen && <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
 
@@ -715,25 +716,6 @@ export default function MapScreen() {
           <Text style={styles.toastText}>Building not found</Text>
         </View>
       ) : null}
-
-      {/* Course Info Button */}
-      {!isMenuOpen && !isNavigationOpen && nextClassEvent ? (
-        <Pressable
-          style={styles.courseInfoButton}
-          onPress={() => setCourseInfoModalVisible(true)}
-          accessibilityLabel="Show next class information"
-        >
-          <Entypo name="info-with-circle" color="#c41230" size={24} />
-        </Pressable>
-      ) : null}
-
-      <NextClassModal
-        visible={courseInfoModalVisible}
-        isCalendarConnected={isCalendarConnected}
-        nextEvent={nextClassEvent}
-        onClose={() => setCourseInfoModalVisible(false)}
-        onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
-      />
 
       {/* Google Calendar Modal */}
       <CalendarModal
@@ -781,24 +763,5 @@ const styles = StyleSheet.create({
   toastText: {
     color: '#fff',
     fontSize: 14,
-  },
-  courseInfoButton: {
-    position: 'absolute',
-    bottom: 230,
-    left: '50%',
-    marginLeft: -110,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d8d8d8',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 10,
   },
 });
