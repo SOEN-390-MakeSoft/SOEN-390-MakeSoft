@@ -31,7 +31,8 @@ const host = (() => {
     return normalizedEnvHost;
   }
   if (Platform.OS === 'android' && !isDevice) return ANDROID_EMULATOR_HOST;
-  if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST; // Fallback: env host if present, otherwise localhost:8081
+  if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST;
+  // Fallback: env host if present, otherwise localhost:8081
   return normalizedEnvHost ?? 'localhost:8081';
 })();
 

@@ -134,6 +134,23 @@ export function resolveBuilding(
 ): ResolvedBuilding | null {
   if (!buildingName?.trim()) return null;
 
+  const extractedCode = extractCodeFromName(buildingName);
+  if (extractedCode) {
+    const normalized = normalizeLabel(buildingName.trim());
+    const normalizedCode = normalizeLabel(extractedCode);
+    if (normalized !== normalizedCode) {
+      return resolveBuilding(extractedCode, campus);
+    }
+  }
+
+  const hingstonMatch = buildingName.match(
+    /hingston\s*(?:hall\s*)?([abc])\s*(?:building|bldg|hall)?/i,
+  );
+  if (hingstonMatch) {
+    const forcedCode = `H${hingstonMatch[1].toUpperCase()}`;
+    return resolveBuilding(forcedCode, campus);
+  }
+
   const needle = normalizeLabel(buildingName.trim());
 
   // ── Build candidate rows from the polygon datasets ──────────────────────
