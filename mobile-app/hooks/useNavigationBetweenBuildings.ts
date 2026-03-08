@@ -737,6 +737,19 @@ export function useNavigationBetweenBuildings({
     setIsShuttleRoute(false);
   }, []);
 
+  /**
+   * Re-fetch directions from a new origin (called when the user drifts off route).
+   * Updates the origin coordinate without touching the displayed start label so
+   * the navigation panel looks unchanged.
+   */
+  const rerouteFromLocation = useCallback(
+    (newOrigin: LatLng) => {
+      setNavigationOrigin(newOrigin);
+      resetRouteState();
+    },
+    [resetRouteState],
+  );
+
   const clearTapMarker = useCallback(() => {
     setTapMarkerCoordinate(null);
   }, []);
@@ -980,6 +993,7 @@ export function useNavigationBetweenBuildings({
     setStartToCurrentLocationBuilding,
     closeNavigation,
     clearTapMarker,
+    rerouteFromLocation,
     tapMarkerCoordinate,
     selectedTransportMode,
     setSelectedTransportMode,

@@ -44,6 +44,7 @@ interface NavigationScreenProps {
   /** Whether today is a weekend (shuttle not available) */
   isWeekend?: boolean;
   onOpenPreview?: () => void;
+  onOpenDirections?: () => void;
 }
 
 const DRAG_THRESHOLD = 40;
@@ -339,6 +340,7 @@ function PreviewAndSteps({
   previewBg,
   previewTextColor,
   onOpenPreview,
+  onOpenDirections,
   navigationSteps,
 }: Readonly<{
   hasSteps: boolean;
@@ -346,6 +348,7 @@ function PreviewAndSteps({
   previewBg: string;
   previewTextColor: string;
   onOpenPreview: () => void;
+  onOpenDirections?: () => void;
   navigationSteps: NavigationStep[];
 }>) {
   if (!hasSteps) return null;
@@ -354,21 +357,40 @@ function PreviewAndSteps({
 
   return (
     <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator nestedScrollEnabled>
-      <Pressable
-        style={[
-          styles.getDirectionsButton,
-          { backgroundColor: previewBg },
-          isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
-        ]}
-        disabled={isPreviewButtonDisabled}
-        onPress={onOpenPreview}
-        accessibilityRole="button"
-        accessibilityLabel="Preview route"
-        testID="preview-route-button"
-      >
-        <MaterialIcons name="arrow-forward" size={16} color={buttonTextColor} />
-        <Text style={[styles.getDirectionsText, { color: buttonTextColor }]}>Preview</Text>
-      </Pressable>
+      <View style={styles.actionButtonsRow}>
+        <Pressable
+          style={[
+            styles.getDirectionsButton,
+            styles.getDirectionsButtonFlex,
+            { backgroundColor: previewBg },
+            isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
+          ]}
+          disabled={isPreviewButtonDisabled}
+          onPress={onOpenPreview}
+          accessibilityRole="button"
+          accessibilityLabel="Preview route"
+          testID="preview-route-button"
+        >
+          <MaterialIcons name="arrow-forward" size={16} color={buttonTextColor} />
+          <Text style={[styles.getDirectionsText, { color: buttonTextColor }]}>Preview</Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.getDirectionsButton,
+            styles.getDirectionsButtonFlex,
+            { backgroundColor: previewBg },
+            isPreviewButtonDisabled && styles.getDirectionsButtonDisabled,
+          ]}
+          disabled={isPreviewButtonDisabled}
+          onPress={onOpenDirections}
+          accessibilityRole="button"
+          accessibilityLabel="Start turn-by-turn directions"
+          testID="directions-mode-button"
+        >
+          <MaterialIcons name="navigation" size={16} color={buttonTextColor} />
+          <Text style={[styles.getDirectionsText, { color: buttonTextColor }]}>Directions</Text>
+        </Pressable>
+      </View>
       <View testID="navigation-steps-list" style={styles.stepsList}>
         {navigationSteps.map((step, index) => {
           const stepKey = [
@@ -416,6 +438,7 @@ export default function NavigationScreen({
   shuttleInfo = null,
   isWeekend = false,
   onOpenPreview,
+  onOpenDirections,
 }: Readonly<NavigationScreenProps>) {
   const { colourBlindMode } = useSettings();
   const [isMinimized, setIsMinimized] = useState(false);
@@ -450,6 +473,12 @@ export default function NavigationScreen({
     if (isPreviewButtonDisabled) return;
     setIsMinimized(false);
     onOpenPreview?.();
+  };
+
+  const handleOpenDirections = () => {
+    if (isPreviewButtonDisabled) return;
+    setIsMinimized(false);
+    onOpenDirections?.();
   };
 
   const handlePanRelease = (_: unknown, dy: number) => {
@@ -565,6 +594,7 @@ export default function NavigationScreen({
           previewBg={themeColors.previewBg}
           previewTextColor={themeColors.previewTextColor}
           onOpenPreview={handleOpenPreview}
+          onOpenDirections={handleOpenDirections}
           navigationSteps={navigationSteps}
         />
       </View>
@@ -674,16 +704,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
-  getDirectionsButton: {
+  actionButtonsRow: {
     marginTop: 14,
-    alignSelf: 'center',
+    flexDirection: 'row',
+    columnGap: 10,
+    justifyContent: 'center',
+  },
+  getDirectionsButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     columnGap: 6,
     backgroundColor: '#f6dce0',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 18,
+  },
+  getDirectionsButtonFlex: {
+    flex: 1,
   },
   getDirectionsButtonDisabled: {
     opacity: 0.6,
