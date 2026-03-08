@@ -78,6 +78,7 @@ export default function GoogleCalendarInstructionsScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
           accessibilityLabel="Go back"
+          testID="back-button"
         >
           <MaterialIcons name="chevron-left" size={28} color="#912338" />
         </Pressable>
@@ -91,6 +92,7 @@ export default function GoogleCalendarInstructionsScreen() {
           style={styles.videoCta}
           onPress={() => Linking.openURL(CALENDAR_INSTRUCTIONS_VIDEO_URL)}
           accessibilityLabel="Watch the instructions video"
+          testID="video-cta-button"
         >
           <MaterialIcons name="play-circle-filled" size={24} color="#912338" />
           <Text style={styles.videoCtaText}>Watch the instructions video</Text>
@@ -111,7 +113,7 @@ export default function GoogleCalendarInstructionsScreen() {
               </View>
             )}
             {step.image && (
-              <Pressable onPress={() => openImage(step.image)}>
+              <Pressable onPress={() => openImage(step.image)} testID={`step-image-${idx}`}>
                 <Image source={step.image} style={styles.image} resizeMode="contain" />
               </Pressable>
             )}
@@ -131,6 +133,7 @@ export default function GoogleCalendarInstructionsScreen() {
               onPress={closeImage}
               style={styles.modalClose}
               accessibilityLabel="Close image"
+              testID="modal-close-button"
             >
               <MaterialIcons name="close" size={32} color="#fff" />
             </Pressable>
