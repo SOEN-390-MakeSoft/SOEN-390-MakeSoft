@@ -327,9 +327,10 @@ describe('MapScreen - user story 3.4.1 next class destination', () => {
   });
 
   it('shows "Classes are over today" and does not open routes when all classes ended', async () => {
-    const now = new Date();
-    const classStart = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-    const classEnd = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const simulatedNow = new Date(2026, 2, 9, 15, 0, 0, 0); // Mar 9, 2026 3:00 PM local
+    const classStart = new Date(2026, 2, 9, 9, 0, 0, 0); // Same day, already ended
+    const classEnd = new Date(2026, 2, 9, 10, 0, 0, 0);
+    mockSimulatedNow = simulatedNow;
     mockCalendarEvents = [
       {
         id: 'evt-ended',

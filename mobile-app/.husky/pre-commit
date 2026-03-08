@@ -1,3 +1,27 @@
+#!/usr/bin/env sh
+set -e
+
 cd mobile-app || exit 1
-node ./node_modules/lint-staged/bin/lint-staged.js
+
+# Ensure Node is available in Git hook subprocesses on Windows.
+NODE_BIN=""
+if command -v node >/dev/null 2>&1; then
+  NODE_BIN="$(command -v node)"
+elif [ -x "/c/Program Files/nodejs/node.exe" ]; then
+  NODE_BIN="/c/Program Files/nodejs/node.exe"
+elif [ -x "/c/Program Files (x86)/nodejs/node.exe" ]; then
+  NODE_BIN="/c/Program Files (x86)/nodejs/node.exe"
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  echo "husky - Node.js executable not found. Install Node or add it to PATH." >&2
+  exit 1
+fi
+
+NODE_DIR="$(dirname "$NODE_BIN")"
+PATH="$NODE_DIR:$PATH"
+export PATH
+
+# Avoid intermittent lint-staged stash git errors in some Windows GUI setups.
+"$NODE_BIN" ./node_modules/lint-staged/bin/lint-staged.js --no-stash
 
