@@ -51,23 +51,6 @@ const SOUTH_BUILDING = createTestBuilding('B2', 'Beta Hall', {
 
 const mockBuildings: Building[] = [NORTH_BUILDING, SOUTH_BUILDING];
 
-type HookArgs = {
-  buildings: Building[];
-  onSelectBuilding: (id: string) => void;
-  onBuildingNotFound?: () => void;
-};
-
-const setup = (overrides?: Partial<HookArgs>) => {
-  const args: HookArgs = {
-    buildings: mockBuildings,
-    onSelectBuilding: jest.fn(),
-    ...overrides,
-  };
-
-  const hook = renderHook(() => useNavigationBetweenBuildings(args));
-  return { ...hook, args };
-};
-
 const MOCK_POLYLINE = '_p~iF~ps|U_ulLnnqC_mqNvxq`@';
 
 function setupDirectionsMocks() {
@@ -524,7 +507,7 @@ describe('useNavigationBetweenBuildings', () => {
       await waitFor(() => {
         expect(result.current.routeSummary).not.toBeNull();
       });
-      expect(result.current.routeSummary.arrivalText).toBe(expectedArrivalText);
+      expect(result.current.routeSummary!.arrivalText).toBe(expectedArrivalText);
     });
 
     it('should flag driving and walking as late when arriveBy is earlier than projected arrival', async () => {
@@ -902,6 +885,35 @@ describe('useNavigationBetweenBuildings', () => {
   });
 
   describe('shuttle feature', () => {
+    // Shared building used across shuttle tests.
+    const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
+      latitude: 45.459,
+      longitude: -73.64,
+    });
+
+    // Default simulated time for most shuttle tests (Monday 1:00 PM local).
+    const defaultSimulatedNow = new Date(2026, 2, 9, 13, 0, 0, 0);
+
+    /** Builds a minimal Directions-API-shaped response for shuttle test fetches. */
+    function makeShuttleDirectionsResponse(durationText = '10 mins', durationValue = 600) {
+      return {
+        status: 'OK',
+        routes: [
+          {
+            summary: 'Route',
+            overview_polyline: { points: MOCK_POLYLINE },
+            legs: [
+              {
+                duration: { text: durationText, value: durationValue },
+                distance: { text: '1 km', value: 1000 },
+                steps: [],
+              },
+            ],
+          },
+        ],
+      };
+    }
+
     it('should expose isShuttleRoute as false initially', () => {
       const { result } = renderNavHook();
       expect(result.current.isShuttleRoute).toBe(false);
@@ -948,11 +960,7 @@ describe('useNavigationBetweenBuildings', () => {
     });
 
     it('should pass simulated currentTime to shuttle API dateTime override', async () => {
-      const simulatedNow = new Date(2026, 2, 9, 13, 0, 0, 0); // Monday 1:00 PM (local time)
-      const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
-        latitude: 45.459,
-        longitude: -73.64,
-      });
+      const simulatedNow = defaultSimulatedNow;
       const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
       mockedGetNextShuttles.mockClear();
 
@@ -982,284 +990,206 @@ describe('useNavigationBetweenBuildings', () => {
       );
     });
 
-    it('should keep only the first catchable shuttle after walk-to-hub arrival', async () => {
-      setupDirectionsMocks();
-      const simulatedNow = new Date(2026, 2, 9, 13, 0, 0, 0);
-      const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
-        latitude: 45.459,
-        longitude: -73.64,
-      });
-      const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
-      mockedGetNextShuttles.mockResolvedValueOnce({
-        threeNextShuttles: ['2026-03-09T13:05:00', '2026-03-09T13:20:00', null],
-        tripDuration: 30,
+    describe('shuttle direction-fetching tests', () => {
+      beforeEach(setupDirectionsMocks);
+      afterEach(teardownDirectionsMocks);
+
+      it('should keep only the first catchable shuttle after walk-to-hub arrival', async () => {
+        const simulatedNow = defaultSimulatedNow;
+        const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<
+          typeof getNextShuttles
+        >;
+        mockedGetNextShuttles.mockResolvedValueOnce({
+          threeNextShuttles: ['2026-03-09T13:05:00', '2026-03-09T13:20:00', null],
+          tripDuration: 30,
+        });
+
+        globalThis.fetch = jest.fn().mockResolvedValue({
+          json: () => Promise.resolve(makeShuttleDirectionsResponse()),
+        });
+
+        const { result } = renderHook(() =>
+          useNavigationBetweenBuildings({
+            buildings: [SOUTH_BUILDING, loyBuilding],
+            onSelectBuilding: jest.fn(),
+            currentTime: simulatedNow,
+          }),
+        );
+
+        act(() => {
+          result.current.openNavigationForBuilding(loyBuilding, null);
+        });
+        act(() => {
+          result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
+        });
+
+        await waitFor(() => {
+          expect(result.current.shuttleInfo).not.toBeNull();
+        });
+
+        expect(result.current.shuttleInfo!.departureTimes).toEqual(['2026-03-09T13:20:00']);
       });
 
-      const mockDirections = {
-        status: 'OK',
-        routes: [
-          {
-            summary: 'Route',
-            overview_polyline: { points: MOCK_POLYLINE },
-            legs: [
-              {
-                duration: { text: '10 mins', value: 600 },
-                distance: { text: '1 km', value: 1000 },
-                steps: [],
-              },
-            ],
-          },
-        ],
-      };
-      globalThis.fetch = jest.fn().mockResolvedValue({
-        json: () => Promise.resolve(mockDirections),
+      it('should suppress shuttle directions when required waiting time exceeds 2 hours', async () => {
+        const simulatedNow = defaultSimulatedNow;
+        const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<
+          typeof getNextShuttles
+        >;
+        mockedGetNextShuttles.mockResolvedValueOnce({
+          threeNextShuttles: ['2026-03-09T15:20:00', null, null], // 2h10 after 13:10 walk arrival
+          tripDuration: 30,
+        });
+
+        globalThis.fetch = jest.fn().mockResolvedValue({
+          json: () => Promise.resolve(makeShuttleDirectionsResponse()),
+        });
+
+        const { result } = renderHook(() =>
+          useNavigationBetweenBuildings({
+            buildings: [SOUTH_BUILDING, loyBuilding],
+            onSelectBuilding: jest.fn(),
+            currentTime: simulatedNow,
+          }),
+        );
+
+        act(() => {
+          result.current.openNavigationForBuilding(loyBuilding, null);
+        });
+        act(() => {
+          result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
+        });
+
+        await waitFor(() => {
+          expect(result.current.shuttleInfo).not.toBeNull();
+        });
+
+        expect(result.current.shuttleInfo!.hasDirections).toBe(false);
+        expect(result.current.shuttleInfo!.departureTimes).toEqual(['2026-03-09T15:20:00']);
+
+        act(() => {
+          result.current.setSelectedTransportMode('shuttle');
+        });
+
+        await waitFor(() => {
+          expect(result.current.navigationSteps).toEqual([]);
+        });
+        expect(result.current.routeSegments).toEqual([]);
       });
 
-      const { result } = renderHook(() =>
-        useNavigationBetweenBuildings({
-          buildings: [SOUTH_BUILDING, loyBuilding],
-          onSelectBuilding: jest.fn(),
-          currentTime: simulatedNow,
-        }),
-      );
-
-      act(() => {
-        result.current.openNavigationForBuilding(loyBuilding, null);
-      });
-      act(() => {
-        result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
-      });
-
-      await waitFor(() => {
-        expect(result.current.shuttleInfo).not.toBeNull();
-      });
-
-      expect(result.current.shuttleInfo.departureTimes).toEqual(['2026-03-09T13:20:00']);
-      teardownDirectionsMocks();
-    });
-
-    it('should suppress shuttle directions when required waiting time exceeds 2 hours', async () => {
-      setupDirectionsMocks();
-      const simulatedNow = new Date(2026, 2, 9, 13, 0, 0, 0);
-      const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
-        latitude: 45.459,
-        longitude: -73.64,
-      });
-      const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
-      mockedGetNextShuttles.mockResolvedValueOnce({
-        threeNextShuttles: ['2026-03-09T15:20:00', null, null], // 2h10 after 13:10 walk arrival
-        tripDuration: 30,
-      });
-
-      const mockDirections = {
-        status: 'OK',
-        routes: [
-          {
-            summary: 'Route',
-            overview_polyline: { points: MOCK_POLYLINE },
-            legs: [
-              {
-                duration: { text: '10 mins', value: 600 },
-                distance: { text: '1 km', value: 1000 },
-                steps: [],
-              },
-            ],
-          },
-        ],
-      };
-      globalThis.fetch = jest.fn().mockResolvedValue({
-        json: () => Promise.resolve(mockDirections),
-      });
-
-      const { result } = renderHook(() =>
-        useNavigationBetweenBuildings({
-          buildings: [SOUTH_BUILDING, loyBuilding],
-          onSelectBuilding: jest.fn(),
-          currentTime: simulatedNow,
-        }),
-      );
-
-      act(() => {
-        result.current.openNavigationForBuilding(loyBuilding, null);
-      });
-      act(() => {
-        result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
-      });
-
-      await waitFor(() => {
-        expect(result.current.shuttleInfo).not.toBeNull();
-      });
-
-      expect(result.current.shuttleInfo.hasDirections).toBe(false);
-      expect(result.current.shuttleInfo.departureTimes).toEqual(['2026-03-09T15:20:00']);
-
-      act(() => {
-        result.current.setSelectedTransportMode('shuttle');
-      });
-
-      await waitFor(() => {
-        expect(result.current.navigationSteps).toEqual([]);
-      });
-      expect(result.current.routeSegments).toEqual([]);
-      teardownDirectionsMocks();
-    });
-
-    it('should populate shuttle steps when shuttle mode is selected before shuttle info loads', async () => {
-      setupDirectionsMocks();
-      const simulatedNow = new Date(2026, 2, 9, 9, 15, 0, 0);
-      const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
-        latitude: 45.459,
-        longitude: -73.64,
-      });
-      const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
-      mockedGetNextShuttles.mockImplementationOnce(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  threeNextShuttles: ['2026-03-09T09:30:00', null, null],
-                  tripDuration: 30,
-                }),
-              60,
+      it('should populate shuttle steps when shuttle mode is selected before shuttle info loads', async () => {
+        const simulatedNow = new Date(2026, 2, 9, 9, 15, 0, 0);
+        const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<
+          typeof getNextShuttles
+        >;
+        mockedGetNextShuttles.mockImplementationOnce(
+          () =>
+            new Promise((resolve) =>
+              setTimeout(
+                () =>
+                  resolve({
+                    threeNextShuttles: ['2026-03-09T09:30:00', null, null],
+                    tripDuration: 30,
+                  }),
+                60,
+              ),
             ),
-          ),
-      );
+        );
 
-      const mockDirections = {
-        status: 'OK',
-        routes: [
-          {
-            summary: 'Route',
-            overview_polyline: { points: MOCK_POLYLINE },
-            legs: [
-              {
-                duration: { text: '7 mins', value: 420 },
-                distance: { text: '0.8 km', value: 800 },
-                steps: [],
-              },
-            ],
-          },
-        ],
-      };
-      globalThis.fetch = jest.fn().mockResolvedValue({
-        json: () => Promise.resolve(mockDirections),
+        globalThis.fetch = jest.fn().mockResolvedValue({
+          json: () => Promise.resolve(makeShuttleDirectionsResponse('7 mins', 420)),
+        });
+
+        const { result } = renderHook(() =>
+          useNavigationBetweenBuildings({
+            buildings: [SOUTH_BUILDING, loyBuilding],
+            onSelectBuilding: jest.fn(),
+            currentTime: simulatedNow,
+          }),
+        );
+
+        act(() => {
+          result.current.openNavigationForBuilding(loyBuilding, null);
+        });
+        act(() => {
+          result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
+        });
+        act(() => {
+          result.current.setSelectedTransportMode('shuttle');
+        });
+
+        await waitFor(() => {
+          expect(result.current.shuttleInfo).not.toBeNull();
+        });
+        await waitFor(() => {
+          expect(result.current.navigationSteps.length).toBe(3);
+        });
       });
 
-      const { result } = renderHook(() =>
-        useNavigationBetweenBuildings({
-          buildings: [SOUTH_BUILDING, loyBuilding],
-          onSelectBuilding: jest.fn(),
-          currentTime: simulatedNow,
-        }),
-      );
+      it('should compute shuttle step arrival times and focus coordinates for preview', async () => {
+        const simulatedNow = defaultSimulatedNow;
+        const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<
+          typeof getNextShuttles
+        >;
+        mockedGetNextShuttles.mockResolvedValueOnce({
+          threeNextShuttles: ['2026-03-09T13:20:00', null, null],
+          tripDuration: 30,
+        });
 
-      act(() => {
-        result.current.openNavigationForBuilding(loyBuilding, null);
+        globalThis.fetch = jest.fn().mockResolvedValue({
+          json: () => Promise.resolve(makeShuttleDirectionsResponse()),
+        });
+
+        const { result } = renderHook(() =>
+          useNavigationBetweenBuildings({
+            buildings: [SOUTH_BUILDING, loyBuilding],
+            onSelectBuilding: jest.fn(),
+            currentTime: simulatedNow,
+          }),
+        );
+
+        act(() => {
+          result.current.openNavigationForBuilding(loyBuilding, null);
+        });
+        act(() => {
+          result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
+        });
+
+        await waitFor(() => {
+          expect(result.current.shuttleInfo).not.toBeNull();
+        });
+
+        act(() => {
+          result.current.setSelectedTransportMode('shuttle');
+        });
+
+        await waitFor(() => {
+          expect(result.current.navigationSteps.length).toBe(3);
+        });
+
+        const expectedWalkHubArrival = new Date(
+          simulatedNow.getTime() + 10 * 60_000,
+        ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const expectedShuttleArrival = new Date(
+          new Date('2026-03-09T13:20:00').getTime() + 30 * 60_000,
+        ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const expectedFinalArrival = new Date(
+          new Date('2026-03-09T13:20:00').getTime() + 40 * 60_000,
+        ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+        const [walkToHub, shuttleRide, walkToDestination] = result.current.navigationSteps;
+        expect(walkToHub.distanceText).toContain(expectedWalkHubArrival);
+        expect(shuttleRide.distanceText).toContain(expectedShuttleArrival);
+        expect(walkToDestination.distanceText).toContain(expectedFinalArrival);
+        expect(walkToHub.durationText).toContain('~10 min walk');
+        expect(walkToHub.durationText).toContain('wait 10 min');
+        expect(shuttleRide.durationText).toBe('~30 min ride');
+        expect(walkToHub.focusCoordinate).toBeTruthy();
+        expect(shuttleRide.focusCoordinate).toBeTruthy();
+        expect(shuttleRide.focusRegion).toBeTruthy();
+        expect((shuttleRide.focusRegion?.latitudeDelta ?? 0) > 0.01).toBe(true);
+        expect((shuttleRide.focusRegion?.longitudeDelta ?? 0) > 0.01).toBe(true);
+        expect(walkToDestination.focusCoordinate).toBeTruthy();
       });
-      act(() => {
-        result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
-      });
-      act(() => {
-        result.current.setSelectedTransportMode('shuttle');
-      });
-
-      await waitFor(() => {
-        expect(result.current.shuttleInfo).not.toBeNull();
-      });
-      await waitFor(() => {
-        expect(result.current.navigationSteps.length).toBe(3);
-      });
-      teardownDirectionsMocks();
-    });
-
-    it('should compute shuttle step arrival times and focus coordinates for preview', async () => {
-      setupDirectionsMocks();
-      const simulatedNow = new Date(2026, 2, 9, 13, 0, 0, 0); // Monday 1:00 PM (local time)
-      const loyBuilding: Building = createTestBuilding('L1', 'Loyola Hall', {
-        latitude: 45.459,
-        longitude: -73.64,
-      });
-
-      const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
-      mockedGetNextShuttles.mockResolvedValueOnce({
-        threeNextShuttles: ['2026-03-09T13:20:00', null, null],
-        tripDuration: 30,
-      });
-
-      const mockDirections = {
-        status: 'OK',
-        routes: [
-          {
-            summary: 'Route',
-            overview_polyline: { points: MOCK_POLYLINE },
-            legs: [
-              {
-                duration: { text: '10 mins', value: 600 },
-                distance: { text: '1 km', value: 1000 },
-                steps: [],
-              },
-            ],
-          },
-        ],
-      };
-
-      globalThis.fetch = jest.fn().mockResolvedValue({
-        json: () => Promise.resolve(mockDirections),
-      });
-
-      const { result } = renderHook(() =>
-        useNavigationBetweenBuildings({
-          buildings: [SOUTH_BUILDING, loyBuilding],
-          onSelectBuilding: jest.fn(),
-          currentTime: simulatedNow,
-        }),
-      );
-
-      act(() => {
-        result.current.openNavigationForBuilding(loyBuilding, null);
-      });
-      act(() => {
-        result.current.setStartToCurrentLocation({ latitude: 45.4975, longitude: -73.579 });
-      });
-
-      await waitFor(() => {
-        expect(result.current.shuttleInfo).not.toBeNull();
-      });
-
-      act(() => {
-        result.current.setSelectedTransportMode('shuttle');
-      });
-
-      await waitFor(() => {
-        expect(result.current.navigationSteps.length).toBe(3);
-      });
-
-      const expectedWalkHubArrival = new Date(
-        simulatedNow.getTime() + 10 * 60_000,
-      ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const expectedShuttleArrival = new Date(
-        new Date('2026-03-09T13:20:00').getTime() + 30 * 60_000,
-      ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const expectedFinalArrival = new Date(
-        new Date('2026-03-09T13:20:00').getTime() + 40 * 60_000,
-      ).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
-      const [walkToHub, shuttleRide, walkToDestination] = result.current.navigationSteps;
-      expect(walkToHub.distanceText).toContain(expectedWalkHubArrival);
-      expect(shuttleRide.distanceText).toContain(expectedShuttleArrival);
-      expect(walkToDestination.distanceText).toContain(expectedFinalArrival);
-      expect(walkToHub.durationText).toContain('~10 min walk');
-      expect(walkToHub.durationText).toContain('wait 10 min');
-      expect(shuttleRide.durationText).toBe('~30 min ride');
-      expect(walkToHub.focusCoordinate).toBeTruthy();
-      expect(shuttleRide.focusCoordinate).toBeTruthy();
-      expect(shuttleRide.focusRegion).toBeTruthy();
-      expect((shuttleRide.focusRegion?.latitudeDelta ?? 0) > 0.01).toBe(true);
-      expect((shuttleRide.focusRegion?.longitudeDelta ?? 0) > 0.01).toBe(true);
-      expect(walkToDestination.focusCoordinate).toBeTruthy();
-
-      teardownDirectionsMocks();
     });
   });
 });
