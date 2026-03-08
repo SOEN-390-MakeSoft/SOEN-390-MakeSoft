@@ -657,6 +657,9 @@ describe('useNavigationBetweenBuildings', () => {
       act(() => {
         result.current.openNavigationForBuilding(mockBuildings[0], null);
       });
+      act(() => {
+        result.current.setStartToCurrentLocation({ latitude: 45.505, longitude: -73.572 });
+      });
 
       await waitFor(() => {
         expect(result.current.navigationSteps.length).toBeGreaterThan(0);
@@ -1689,7 +1692,7 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.openNavigationForBuilding(mockBuildings[0], null);
       });
 
-      const newOrigin = { latitude: 45.4960, longitude: -73.5770 };
+      const newOrigin = { latitude: 45.496, longitude: -73.577 };
       act(() => {
         result.current.rerouteFromLocation(newOrigin);
       });
@@ -1761,7 +1764,7 @@ describe('useNavigationBetweenBuildings', () => {
 
       // Both calls should clear route state without throwing.
       act(() => {
-        result.current.rerouteFromLocation({ latitude: 45.490, longitude: -73.570 });
+        result.current.rerouteFromLocation({ latitude: 45.49, longitude: -73.57 });
       });
       act(() => {
         result.current.rerouteFromLocation({ latitude: 45.495, longitude: -73.575 });
@@ -1842,7 +1845,7 @@ describe('useNavigationBetweenBuildings', () => {
     it('sets navigationStart to "Your location" and updates origin (L743-745)', () => {
       const { result } = renderNavHook();
 
-      const coord = { latitude: 45.4970, longitude: -73.5780 };
+      const coord = { latitude: 45.497, longitude: -73.578 };
 
       act(() => {
         result.current.setStartToCurrentLocation(coord);
@@ -1856,7 +1859,7 @@ describe('useNavigationBetweenBuildings', () => {
     it('sets navigationStart to "Current location - <label>" (L752-755)', () => {
       const { result } = renderNavHook();
 
-      const coord = { latitude: 45.4970, longitude: -73.5780 };
+      const coord = { latitude: 45.497, longitude: -73.578 };
 
       act(() => {
         result.current.setStartToCurrentLocationBuilding('Alpha Hall', 'A1', coord);
@@ -1868,7 +1871,7 @@ describe('useNavigationBetweenBuildings', () => {
     it('omits code suffix when code is null', () => {
       const { result } = renderNavHook();
 
-      const coord = { latitude: 45.4970, longitude: -73.5780 };
+      const coord = { latitude: 45.497, longitude: -73.578 };
 
       act(() => {
         result.current.setStartToCurrentLocationBuilding('Some Place', null, coord);
