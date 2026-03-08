@@ -3,13 +3,14 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 import MapScreen from '../components/MapScreen';
+import {
+  mockUseMapUIReturn,
+  mockUseSearchReturn,
+  mockUseSelectedBuildingReturn,
+} from './testUtils/mapScreenMocks';
 
-const mockAnimateToRegion = jest.fn();
 const mockHandleSelectCampus = jest.fn();
-const mockHandleSelectBuilding = jest.fn();
-const mockHandleCloseCard = jest.fn();
-const mockSetSearchQuery = jest.fn();
-const mockSetIsSearchFocused = jest.fn();
+const mockAnimateToRegion = jest.fn();
 const mockGoToUserLocation = jest.fn(async (options?: { onResolved?: (c: any) => void }) => {
   if (options?.onResolved) {
     await options.onResolved({ latitude: 45.4971, longitude: -73.5791 });
@@ -47,14 +48,15 @@ const mockRuntimeBuildings = [
 ];
 
 jest.mock('react-native-maps', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native');
   const MockMapView = React.forwardRef((props: any, ref: any) => {
-    React.useImperativeHandle(ref, () => ({
-      animateToRegion: mockAnimateToRegion,
-    }));
+    React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimateToRegion }));
     return React.createElement(View, { ...props, testID: props.testID || 'map-view' });
   });
+  MockMapView.displayName = 'MockMapView';
   return {
     __esModule: true,
     default: MockMapView,
@@ -65,11 +67,13 @@ jest.mock('react-native-maps', () => {
 });
 
 jest.mock('@expo/vector-icons/MaterialIcons', () => {
-  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ReactMock = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native');
   return {
     __esModule: true,
-    default: (props: any) => React.createElement(View, { ...props, testID: 'icon' }),
+    default: (props: any) => ReactMock.createElement(View, { ...props, testID: 'icon' }),
   };
 });
 
@@ -101,27 +105,11 @@ jest.mock('../hooks/useCampusContext', () => ({
 }));
 
 jest.mock('../hooks/useSelectedBuilding', () => ({
-  useSelectedBuilding: () => ({
-    selectedBuildingId: null,
-    remoteBuilding: null,
-    isLoading: false,
-    errorMessage: null,
-    handleSelectBuilding: mockHandleSelectBuilding,
-    handleCloseCard: mockHandleCloseCard,
-  }),
+  useSelectedBuilding: () => mockUseSelectedBuildingReturn(),
 }));
 
 jest.mock('../hooks/useSearch', () => ({
-  useSearch: () => ({
-    searchQuery: '',
-    setSearchQuery: mockSetSearchQuery,
-    isSearchFocused: false,
-    setIsSearchFocused: mockSetIsSearchFocused,
-    searchInputRef: { current: { blur: jest.fn() } },
-    searchResults: [],
-    handleSearchSubmit: jest.fn(),
-    handleSelectSearchResult: jest.fn(),
-  }),
+  useSearch: () => mockUseSearchReturn(),
 }));
 
 jest.mock('../hooks/useUserLocation', () => ({
@@ -132,16 +120,7 @@ jest.mock('../hooks/useUserLocation', () => ({
 }));
 
 jest.mock('../hooks/useMapUI', () => ({
-  useMapUI: () => ({
-    isMenuOpen: false,
-    setIsMenuOpen: jest.fn(),
-    isQuickPickOpen: false,
-    quickPickContentHeight: 0,
-    setQuickPickContentHeight: jest.fn(),
-    quickPickVisibleHeight: 0,
-    quickPickMaxHeight: 300,
-    handleToggleQuickPick: jest.fn(),
-  }),
+  useMapUI: () => mockUseMapUIReturn(),
 }));
 
 jest.mock('../hooks/usePublicCalendar', () => {
@@ -160,49 +139,53 @@ jest.mock('../hooks/usePublicCalendar', () => {
   };
 });
 
-jest.mock('../components/CampusSwitch', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
-
-jest.mock('../components/BuildingInfoCard', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
-
-jest.mock('../components/MapMenu', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
-
-jest.mock('../components/SearchBar', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
-
-jest.mock('../components/CalendarModal', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
-
-jest.mock('../components/ClassesCalendarRequired', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View);
-});
+jest.mock(
+  '../components/CampusSwitch',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
+jest.mock(
+  '../components/BuildingInfoCard',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
+jest.mock(
+  '../components/MapMenu',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
+jest.mock(
+  '../components/SearchBar',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
+jest.mock(
+  '../components/CalendarModal',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
+jest.mock(
+  '../components/ClassesCalendarRequired',
+  () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./testUtils/mapScreenMocks').MockStubView,
+);
 
 jest.mock('../components/RoutePreviewScreen', () => {
-  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native');
-  return (props: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ReactMock = require('react');
+  function MockRoutePreviewScreen(props: any) {
     mockRoutePreviewProps = props;
-    return React.createElement(View, { testID: 'mock-route-preview' });
-  };
+    return ReactMock.createElement(View, { testID: 'mock-route-preview' });
+  }
+  return MockRoutePreviewScreen;
 });
 
 describe('MapScreen - user story 3.4.1 next class destination', () => {
