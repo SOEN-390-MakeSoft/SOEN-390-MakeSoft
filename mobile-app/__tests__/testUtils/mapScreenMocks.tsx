@@ -66,10 +66,11 @@ export function mockUseSelectedBuildingReturn() {
 export function mockUseUserLocationReturn() {
   return {
     isLocating: false,
-    goToUserLocation: jest.fn(async (options?: { onResolved?: (c: any) => void }) => {
+    goToUserLocation: jest.fn((options?: { onResolved?: (c: any) => void }) => {
       if (options?.onResolved) {
-        await options.onResolved({ latitude: 45.4971, longitude: -73.5791 });
+        options.onResolved({ latitude: 45.4971, longitude: -73.5791 });
       }
+      return Promise.resolve();
     }),
   };
 }

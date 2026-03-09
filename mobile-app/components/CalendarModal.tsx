@@ -50,6 +50,38 @@ function formatEventTime(event: CalendarEvent): string {
 }
 
 // ---------------------------------------------------------------------------
+// Event row (extracted to avoid nested component)
+// ---------------------------------------------------------------------------
+interface CalendarEventRowProps {
+  event: CalendarEvent;
+}
+
+function CalendarEventRow({ event }: Readonly<CalendarEventRowProps>) {
+  return (
+    <View style={styles.eventRow}>
+      <View style={styles.eventDot} />
+      <View style={styles.eventInfo}>
+        <Text style={styles.eventName} numberOfLines={2}>
+          {event.summary}
+        </Text>
+        <Text style={styles.eventTime} numberOfLines={1}>
+          {formatEventTime(event)}
+        </Text>
+        {event.location ? (
+          <Text style={styles.eventLocation} numberOfLines={1}>
+            📍 {event.location}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function CalendarListSeparator() {
+  return <View style={styles.separator} />;
+}
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 interface CalendarModalProps {
@@ -87,6 +119,31 @@ export default function CalendarModal({
     setLink('');
     await onDisconnect();
   };
+
+  let connectedEventsContent: React.ReactNode = null;
+  if (isConnected && !loading) {
+    if (events.length === 0) {
+      connectedEventsContent = (
+        <View style={styles.centered}>
+          <MaterialIcons name="event-busy" size={48} color="#999" />
+          <Text style={styles.emptyText}>No upcoming events.</Text>
+        </View>
+      );
+    } else {
+      connectedEventsContent = (
+        <FlatList
+          data={events}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          // TODO: Display event description (item.description) and allow tapping
+          // to view full event details. Currently only titles are rendered as placeholders.
+          renderItem={({ item }) => <CalendarEventRow event={item} />}
+          ItemSeparatorComponent={CalendarListSeparator}
+        />
+      );
+    }
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -167,42 +224,7 @@ export default function CalendarModal({
               ) : null}
 
               {/* Connected — show events */}
-              {isConnected && !loading ? (
-                events.length === 0 ? (
-                  <View style={styles.centered}>
-                    <MaterialIcons name="event-busy" size={48} color="#999" />
-                    <Text style={styles.emptyText}>No upcoming events.</Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={events}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.list}
-                    keyboardShouldPersistTaps="handled"
-                    // TODO: Display event description (item.description) and allow tapping
-                    // to view full event details. Currently only titles are rendered as placeholders.
-                    renderItem={({ item }) => (
-                      <View style={styles.eventRow}>
-                        <View style={styles.eventDot} />
-                        <View style={styles.eventInfo}>
-                          <Text style={styles.eventName} numberOfLines={2}>
-                            {item.summary}
-                          </Text>
-                          <Text style={styles.eventTime} numberOfLines={1}>
-                            {formatEventTime(item)}
-                          </Text>
-                          {item.location ? (
-                            <Text style={styles.eventLocation} numberOfLines={1}>
-                              📍 {item.location}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    )}
-                    ItemSeparatorComponent={() => <View style={styles.separator} />}
-                  />
-                )
-              ) : null}
+              {connectedEventsContent}
 
               {/* Disconnect button */}
               {isConnected ? (

@@ -61,6 +61,31 @@ const POLYGON_STROKE = 'rgba(178, 27, 44, 0.9)';
 const POLYGON_FILL = 'rgba(178, 27, 44, 0.25)';
 const POLYGON_FILL_SELECTED = 'rgba(178, 27, 44, 0.7)';
 
+function getPolygonThemeColors(
+  theme: ReturnType<typeof useTheme> | undefined,
+  colourBlindMode: boolean,
+  defaultColor: string,
+): { polygonFillBase: string; polygonStrokeBase: string; polygonFillSelected: string } {
+  let polygonFillBase = POLYGON_FILL;
+  let polygonStrokeBase = POLYGON_STROKE;
+  let polygonFillSelected = POLYGON_FILL_SELECTED;
+  if (colourBlindMode) {
+    if (theme?.colourBlind1?.get) {
+      polygonFillBase = theme.colourBlind1.get() || defaultColor;
+      polygonFillSelected = polygonFillBase;
+    }
+    if (theme?.colourBlind2?.get) {
+      polygonStrokeBase = theme.colourBlind2.get() || defaultColor;
+    }
+  } else if (theme?.buildingPrimary?.get) {
+    const primaryColor = theme.buildingPrimary.get() || defaultColor;
+    polygonFillBase = primaryColor;
+    polygonStrokeBase = primaryColor;
+    polygonFillSelected = primaryColor;
+  }
+  return { polygonFillBase, polygonStrokeBase, polygonFillSelected };
+}
+
 const DEFAULT_REGION = {
   latitude: 45.4973,
   longitude: -73.5789,
@@ -352,8 +377,12 @@ export default function MapScreen() {
       console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
     }
 
-    const campusKey: Campus | null =
-      resolvedCampus === 'SGW' ? 'sgw' : resolvedCampus === 'Loyola' ? 'loyola' : null;
+    let campusKey: Campus | null = null;
+    if (resolvedCampus === 'SGW') {
+      campusKey = 'sgw';
+    } else if (resolvedCampus === 'Loyola') {
+      campusKey = 'loyola';
+    }
 
     setNextClassPreview({
       event: nextEvent,
@@ -389,25 +418,11 @@ export default function MapScreen() {
   const colourBlindAccent = theme?.colourBlind2?.get?.() ?? '#1F4E8C';
   const routeColor = isColorBlind ? colourBlindAccent : brandRed;
   const defaultColor = theme?.cred?.get?.() ?? POLYGON_STROKE;
-  let polygonFillBase = POLYGON_FILL;
-  let polygonStrokeBase = POLYGON_STROKE;
-  let polygonFillSelected = POLYGON_FILL_SELECTED;
-
-  if (colourBlindMode) {
-    if (theme?.colourBlind1?.get) {
-      polygonFillBase = theme.colourBlind1.get() || defaultColor;
-      polygonFillSelected = polygonFillBase;
-    }
-    if (theme?.colourBlind2?.get) {
-      polygonStrokeBase = theme.colourBlind2.get() || defaultColor;
-    }
-  } else if (theme?.buildingPrimary?.get) {
-    const primaryColor = theme.buildingPrimary.get() || defaultColor;
-    polygonFillBase = primaryColor;
-    polygonStrokeBase = primaryColor;
-    polygonFillSelected = primaryColor;
-  }
-
+  const { polygonFillBase, polygonStrokeBase, polygonFillSelected } = getPolygonThemeColors(
+    theme,
+    colourBlindMode,
+    defaultColor,
+  );
   const polygonStroke = polygonStrokeBase;
   const polygonFill = polygonFillBase;
 

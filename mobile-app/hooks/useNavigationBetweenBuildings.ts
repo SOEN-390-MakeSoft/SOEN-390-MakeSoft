@@ -233,6 +233,182 @@ export type ShuttleInfo = {
   hasDirections?: boolean;
 };
 
+/** Build the three shuttle leg steps when directions are allowed. */
+function buildShuttleNavigationSteps(
+  shuttleInfo: ShuttleInfo,
+  ctx: {
+    directionsAllowed: boolean;
+    departureHubLabel: string;
+    arrivalHubLabel: string;
+    walkToHubDurationText: string;
+    walkToHubArrivalMs: number;
+    shuttleArrivalMs: number;
+    finalArrivalMs: number;
+    departureHub: LatLng | undefined;
+    arrivalHub: LatLng | undefined;
+    destinationFocus: LatLng | null;
+    walkFromHubMin: number;
+  },
+): NavigationStep[] {
+  if (!ctx.directionsAllowed) return [];
+  return [
+    {
+      instruction: `Walk to ${ctx.departureHubLabel}`,
+      distanceText: `Arrive at ${formatTime(new Date(ctx.walkToHubArrivalMs))}`,
+      durationText: ctx.walkToHubDurationText,
+      focusCoordinate: ctx.departureHub
+        ? midpointOrFallback(shuttleInfo.walkToHubPolyline, ctx.departureHub)
+        : undefined,
+    },
+    {
+      instruction: `Take shuttle to ${ctx.arrivalHubLabel}`,
+      distanceText: `Arrive at ${formatTime(new Date(ctx.shuttleArrivalMs))}`,
+      durationText: `~${shuttleInfo.tripDurationMin} min ride`,
+      focusCoordinate: ctx.arrivalHub
+        ? midpointOrFallback(shuttleInfo.shuttleSegmentPolyline, ctx.arrivalHub)
+        : undefined,
+      focusRegion:
+        shuttleInfo.shuttleSegmentPolyline.length > 0
+          ? boundsToRegion(calculateBounds(shuttleInfo.shuttleSegmentPolyline))
+          : undefined,
+    },
+    {
+      instruction: 'Walk to your destination',
+      distanceText: `Arrive at ${formatTime(new Date(ctx.finalArrivalMs))}`,
+      durationText: ctx.walkFromHubMin > 0 ? `~${ctx.walkFromHubMin} min walk` : '',
+      focusCoordinate: ctx.destinationFocus
+        ? midpointOrFallback(shuttleInfo.walkFromHubPolyline, ctx.destinationFocus)
+        : undefined,
+    },
+  ];
+}
+
+/** Pure helper: compute route region and navigation steps for shuttle mode. */
+function computeShuttleDisplayState(
+  shuttleInfo: ShuttleInfo,
+  baseNowMs: number,
+  destinationCoord: LatLng | null,
+): { routeRegion: MapRegion | null; navigationSteps: NavigationStep[] } {
+  const allPoints = [
+    ...shuttleInfo.walkToHubPolyline,
+    ...shuttleInfo.shuttleSegmentPolyline,
+    ...shuttleInfo.walkFromHubPolyline,
+  ];
+  const routeRegion = allPoints.length > 0 ? boundsToRegion(calculateBounds(allPoints)) : null;
+
+  const walkToHubMin = shuttleInfo.walkToHubDurationMin ?? 0;
+  const walkFromHubMin = shuttleInfo.walkFromHubDurationMin ?? 0;
+  const walkToHubArrivalMs = baseNowMs + walkToHubMin * 60_000;
+  const firstDepartureIso = shuttleInfo.departureTimes.find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  const parsedDepartureMs = firstDepartureIso ? new Date(firstDepartureIso).getTime() : Number.NaN;
+  const hasDeparture = Number.isFinite(parsedDepartureMs);
+  const waitDurationMin =
+    hasDeparture && parsedDepartureMs > walkToHubArrivalMs
+      ? minutesBetween(walkToHubArrivalMs, parsedDepartureMs)
+      : 0;
+  const directionsAllowed =
+    shuttleInfo.hasDirections !== false && waitDurationMin <= 120 && hasDeparture;
+
+  const shuttleDepartureMs = hasDeparture
+    ? Math.max(parsedDepartureMs, walkToHubArrivalMs)
+    : walkToHubArrivalMs;
+  const shuttleArrivalMs = shuttleDepartureMs + shuttleInfo.tripDurationMin * 60_000;
+  const finalArrivalMs = shuttleArrivalMs + walkFromHubMin * 60_000;
+
+  const departureHub = shuttleInfo.departureHubCoordinate;
+  const arrivalHub = shuttleInfo.arrivalHubCoordinate;
+  const destinationFocus = destinationCoord ?? arrivalHub ?? departureHub ?? null;
+  const departureHubLabel =
+    shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)';
+  const arrivalHubLabel =
+    shuttleInfo.departureCampus === 'SGW' ? 'Vanier Library (Loyola)' : 'Hall Building (SGW)';
+  const walkToHubDurationText = [
+    walkToHubMin > 0 ? `~${walkToHubMin} min walk` : '',
+    directionsAllowed && waitDurationMin > 0 ? `wait ${formatHoursMinutes(waitDurationMin)}` : '',
+  ]
+    .filter((text) => text.length > 0)
+    .join(' + ');
+
+  const navigationSteps = buildShuttleNavigationSteps(shuttleInfo, {
+    directionsAllowed,
+    departureHubLabel,
+    arrivalHubLabel,
+    walkToHubDurationText,
+    walkToHubArrivalMs,
+    shuttleArrivalMs,
+    finalArrivalMs,
+    departureHub,
+    arrivalHub,
+    destinationFocus,
+    walkFromHubMin,
+  });
+
+  return { routeRegion, navigationSteps };
+}
+
+/** Pure helper: compute route summary and steps for driving/walking mode. */
+function computeModeRouteDisplayState(
+  route: ModeRoute,
+  baseNowMs: number,
+): { routeSummary: RouteSummary; navigationSteps: NavigationStep[] } {
+  const arrival = new Date(baseNowMs + route.durationSec * 1000);
+  const arrivalText = arrival.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return {
+    routeSummary: {
+      arrivalText,
+      distanceText: route.distanceText,
+      durationText: route.durationText,
+      viaText: route.viaText || 'Suggested route',
+    },
+    navigationSteps: route.steps,
+  };
+}
+
+/** Returns shuttle final arrival time in ms, or null if not computable. */
+function getShuttleFinalArrivalMs(shuttleInfo: ShuttleInfo | null, nowMs: number): number | null {
+  if (!shuttleInfo) return null;
+  const firstDepartureIso = shuttleInfo.departureTimes.find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  if (!firstDepartureIso) return null;
+  const departureMs = new Date(firstDepartureIso).getTime();
+  if (!Number.isFinite(departureMs)) return null;
+  const walkToHubMin = shuttleInfo.walkToHubDurationMin ?? 0;
+  const walkFromHubMin = shuttleInfo.walkFromHubDurationMin ?? 0;
+  const walkToHubArrivalMs = nowMs + walkToHubMin * 60_000;
+  const shuttleDepartureMs = Math.max(departureMs, walkToHubArrivalMs);
+  const shuttleArrivalMs = shuttleDepartureMs + shuttleInfo.tripDurationMin * 60_000;
+  return shuttleArrivalMs + walkFromHubMin * 60_000;
+}
+
+/** Pure helper: which transport modes would arrive after the deadline. */
+function computeLateTransportModes(
+  arriveByMs: number,
+  nowMs: number,
+  allModeRoutes: AllModeRoutes,
+  shuttleInfo: ShuttleInfo | null,
+): TransportMode[] {
+  const late: TransportMode[] = [];
+  if (allModeRoutes.driving?.durationSec != null) {
+    const drivingArrivalMs = nowMs + allModeRoutes.driving.durationSec * 1000;
+    if (drivingArrivalMs > arriveByMs) late.push('driving');
+  }
+  if (allModeRoutes.walking?.durationSec != null) {
+    const walkingArrivalMs = nowMs + allModeRoutes.walking.durationSec * 1000;
+    if (walkingArrivalMs > arriveByMs) late.push('walking');
+  }
+  const shuttleFinalMs = getShuttleFinalArrivalMs(shuttleInfo, nowMs);
+  if (shuttleFinalMs != null && shuttleFinalMs > arriveByMs) {
+    late.push('shuttle');
+  }
+  return late;
+}
+
 interface UseNavigationBetweenBuildingsParams {
   buildings: Building[];
   onSelectBuilding: (buildingId: string) => void;
@@ -546,7 +722,7 @@ export function useNavigationBetweenBuildings({
           }) ?? null;
         const firstCatchableDepartureMs = firstCatchableDeparture
           ? new Date(firstCatchableDeparture).getTime()
-          : NaN;
+          : Number.NaN;
         const waitDurationMin = Number.isFinite(firstCatchableDepartureMs)
           ? minutesBetween(walkToHubArrivalMs, firstCatchableDepartureMs)
           : null;
@@ -592,124 +768,31 @@ export function useNavigationBetweenBuildings({
       setRoutePolyline([]);
       setRouteRegion(null);
       return;
-    } // Shuttle mode: show walk-to-hub + walk-from-hub polylines; the shuttle
-    // segment itself is rendered separately as a red solid line on the map.
+    }
     if (selectedTransportMode === 'shuttle') {
       if (shuttleInfo) {
-        const allPoints = [
-          ...shuttleInfo.walkToHubPolyline,
-          ...shuttleInfo.shuttleSegmentPolyline,
-          ...shuttleInfo.walkFromHubPolyline,
-        ];
-        if (allPoints.length > 0) {
-          setRouteRegion(boundsToRegion(calculateBounds(allPoints)));
-        }
-        setRoutePolyline([]); // individual segments handled by the map
-
-        const walkToHubMin = shuttleInfo.walkToHubDurationMin ?? 0;
-        const walkFromHubMin = shuttleInfo.walkFromHubDurationMin ?? 0;
-        const walkToHubArrivalMs = baseNowMs + walkToHubMin * 60_000;
-        const firstDepartureIso = shuttleInfo.departureTimes.find(
-          (value): value is string => typeof value === 'string' && value.length > 0,
-        );
-        const parsedDepartureMs = firstDepartureIso ? new Date(firstDepartureIso).getTime() : NaN;
-        const hasDeparture = Number.isFinite(parsedDepartureMs);
-        const waitDurationMin =
-          hasDeparture && parsedDepartureMs > walkToHubArrivalMs
-            ? minutesBetween(walkToHubArrivalMs, parsedDepartureMs)
-            : 0;
-        const directionsAllowed =
-          shuttleInfo.hasDirections !== false && waitDurationMin <= 120 && hasDeparture;
-        const shuttleDepartureMs = hasDeparture
-          ? Math.max(parsedDepartureMs, walkToHubArrivalMs)
-          : walkToHubArrivalMs;
-        const shuttleArrivalMs = shuttleDepartureMs + shuttleInfo.tripDurationMin * 60_000;
-        const finalArrivalMs = shuttleArrivalMs + walkFromHubMin * 60_000;
-
-        const departureHub = shuttleInfo.departureHubCoordinate;
-        const arrivalHub = shuttleInfo.arrivalHubCoordinate;
-        const destinationFocus = navigationDestinationCoord ?? arrivalHub ?? departureHub;
-        const departureHubLabel =
-          shuttleInfo.departureCampus === 'SGW' ? 'Hall Building (SGW)' : 'Vanier Library (Loyola)';
-        const arrivalHubLabel =
-          shuttleInfo.departureCampus === 'SGW' ? 'Vanier Library (Loyola)' : 'Hall Building (SGW)';
-        const walkToHubDurationText = [
-          walkToHubMin > 0 ? `~${walkToHubMin} min walk` : '',
-          directionsAllowed && waitDurationMin > 0
-            ? `wait ${formatHoursMinutes(waitDurationMin)}`
-            : '',
-        ]
-          .filter((text) => text.length > 0)
-          .join(' + ');
-
-        setNavigationSteps([
-          {
-            instruction: `Walk to ${departureHubLabel}`,
-            distanceText: `Arrive at ${formatTime(new Date(walkToHubArrivalMs))}`,
-            durationText: walkToHubDurationText,
-            focusCoordinate: departureHub
-              ? midpointOrFallback(shuttleInfo.walkToHubPolyline, departureHub)
-              : undefined,
-          },
-          {
-            instruction: `Take shuttle to ${arrivalHubLabel}`,
-            distanceText: directionsAllowed
-              ? `Arrive at ${formatTime(new Date(shuttleArrivalMs))}`
-              : 'No more shuttles today',
-            durationText: directionsAllowed ? `~${shuttleInfo.tripDurationMin} min ride` : '',
-            focusCoordinate: arrivalHub
-              ? midpointOrFallback(shuttleInfo.shuttleSegmentPolyline, arrivalHub)
-              : undefined,
-            focusRegion:
-              shuttleInfo.shuttleSegmentPolyline.length > 0
-                ? boundsToRegion(calculateBounds(shuttleInfo.shuttleSegmentPolyline))
-                : undefined,
-          },
-          {
-            instruction: 'Walk to your destination',
-            distanceText: directionsAllowed
-              ? `Arrive at ${formatTime(new Date(finalArrivalMs))}`
-              : 'Arrival time unavailable (no shuttle departure)',
-            durationText:
-              directionsAllowed && walkFromHubMin > 0 ? `~${walkFromHubMin} min walk` : '',
-            focusCoordinate: destinationFocus
-              ? midpointOrFallback(shuttleInfo.walkFromHubPolyline, destinationFocus)
-              : undefined,
-          },
-        ]);
-        if (!directionsAllowed) {
-          setNavigationSteps([]);
-        }
-        return;
+        const { routeRegion: shuttleRegion, navigationSteps: shuttleSteps } =
+          computeShuttleDisplayState(shuttleInfo, baseNowMs, navigationDestinationCoord);
+        if (shuttleRegion) setRouteRegion(shuttleRegion);
+        setRoutePolyline([]);
+        setNavigationSteps(shuttleSteps);
+      } else {
+        setNavigationSteps([]);
       }
-      setNavigationSteps([]);
       return;
     }
-
     const route =
       selectedTransportMode === 'driving' ? allModeRoutes.driving : allModeRoutes.walking;
     if (route?.polyline && route.polyline.length > 0) {
+      const { routeSummary: summary, navigationSteps: steps } = computeModeRouteDisplayState(
+        route,
+        baseNowMs,
+      );
       setRoutePolyline(route.polyline);
       setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
-
-      // Update trip summary + steps to match the selected mode
-      const arrival = new Date(baseNowMs + route.durationSec * 1000);
-      const arrivalText = arrival.toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-      setRouteSummary({
-        arrivalText,
-        distanceText: route.distanceText,
-        durationText: route.durationText,
-        viaText: route.viaText || 'Suggested route',
-      });
-      setNavigationSteps(route.steps);
+      setRouteSummary(summary);
+      setNavigationSteps(steps);
     } else if (allModeRoutes.driving || allModeRoutes.walking) {
-      // Only clear when we genuinely have route data but the selected
-      // mode is unavailable.  When allModeRoutes is empty (a new fetch
-      // is in-flight after an endpoint change) we keep the previous
-      // polyline visible as a placeholder.
       setRoutePolyline([]);
       setRouteRegion(null);
       setNavigationSteps([]);
@@ -937,38 +1020,8 @@ export function useNavigationBetweenBuildings({
     if (!arriveBy) return [];
     const arriveByMs = arriveBy.getTime();
     if (!Number.isFinite(arriveByMs)) return [];
-
     const nowMs = currentTime?.getTime() ?? Date.now();
-    const late = new Set<TransportMode>();
-
-    if (allModeRoutes.driving?.durationSec != null) {
-      const drivingArrivalMs = nowMs + allModeRoutes.driving.durationSec * 1000;
-      if (drivingArrivalMs > arriveByMs) late.add('driving');
-    }
-    if (allModeRoutes.walking?.durationSec != null) {
-      const walkingArrivalMs = nowMs + allModeRoutes.walking.durationSec * 1000;
-      if (walkingArrivalMs > arriveByMs) late.add('walking');
-    }
-    if (shuttleInfo) {
-      const walkToHubMin = shuttleInfo.walkToHubDurationMin ?? 0;
-      const walkFromHubMin = shuttleInfo.walkFromHubDurationMin ?? 0;
-      const walkToHubArrivalMs = nowMs + walkToHubMin * 60_000;
-      const firstDepartureIso =
-        shuttleInfo.departureTimes.find(
-          (value): value is string => typeof value === 'string' && value.length > 0,
-        ) ?? null;
-      if (firstDepartureIso) {
-        const departureMs = new Date(firstDepartureIso).getTime();
-        if (Number.isFinite(departureMs)) {
-          const shuttleDepartureMs = Math.max(departureMs, walkToHubArrivalMs);
-          const shuttleArrivalMs = shuttleDepartureMs + shuttleInfo.tripDurationMin * 60_000;
-          const finalArrivalMs = shuttleArrivalMs + walkFromHubMin * 60_000;
-          if (finalArrivalMs > arriveByMs) late.add('shuttle');
-        }
-      }
-    }
-
-    return Array.from(late);
+    return computeLateTransportModes(arriveByMs, nowMs, allModeRoutes, shuttleInfo);
   }, [arriveBy, currentTime, allModeRoutes, shuttleInfo]);
 
   return {

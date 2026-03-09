@@ -98,7 +98,7 @@ export default function GoogleCalendarInstructionsScreen() {
       ) : null}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {steps.map((step, idx) => (
-          <View key={idx} style={styles.card}>
+          <View key={step.text} style={styles.card}>
             <View style={styles.stepHeader}>
               <Text style={styles.stepNumber}>{idx + 1}.</Text>
               <Text style={styles.stepText}>{step.text}</Text>

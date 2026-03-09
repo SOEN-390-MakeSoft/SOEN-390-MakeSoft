@@ -4,6 +4,10 @@ import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 
 /**
  * Normalizes a label by removing accents and special characters for comparison
+ *  - Uses String normalization (NFD) to split accents from letters
+ *  - Removes all accent codepoints with regex
+ *  - Converts to lowercase
+ *  - Removes anything that's not alphanumeric (keeping a-z, 0-9)
  * @param value String to normalize
  * @returns Normalized lowercase string with no accents or special characters
  */
@@ -22,11 +26,14 @@ export function normalizeLabel(value: string): string {
  * @returns Building code or null if not found
  */
 export function extractCodeFromName(name: string): string | null {
+  // Try for prefix with dash, e.g., "H - Hall Building"
   const dashMatch = name.match(/^([A-Z]{1,3})\s*-/);
   if (dashMatch) return dashMatch[1];
 
+  // Try for name wrapped in parentheses at end, e.g., "Hall Building (H)"
   const parenMatch = name.match(/\(([A-Z]{1,3})\)\s*$/);
   if (parenMatch) return parenMatch[1];
+  // Try for code alone at the end, e.g., "MB"
   const trailingMatch = name.match(/(?:^|\s)([A-Z]{1,3})\s*$/);
   return trailingMatch ? trailingMatch[1] : null;
 }
@@ -62,12 +69,13 @@ export interface ParsedLocation {
  */
 export function parseLocationString(location: string): ParsedLocation {
   if (!location || !location.trim()) {
+    // If the location is missing or empty, return all nulls
     return { campus: null, building: null, room: null };
   }
 
   const trimmed = location.trim();
 
-  // Determine campus
+  // Try to determine campus from location string prefix
   let campus: ParsedLocation['campus'] = null;
   let remainder = trimmed;
 
@@ -78,7 +86,7 @@ export function parseLocationString(location: string): ParsedLocation {
     campus = 'Loyola';
     remainder = trimmed.replace(/loyola campus\s*-?\s*/i, '');
   } else {
-    // No recognised campus prefix — try splitting on " - " anyway
+    // No recognised campus prefix — try splitting on " - "
     const dashIdx = trimmed.indexOf(' - ');
     if (dashIdx !== -1) {
       remainder = trimmed.slice(dashIdx + 3);
@@ -87,15 +95,17 @@ export function parseLocationString(location: string): ParsedLocation {
 
   remainder = remainder.trim();
 
-  // Extract optional room number: "Rm 535", "Room 535", "Rm535", "Room535"
+  // Extract optional room number: matches "Rm 535", "Room 535", "Rm535", "Room535"
   const roomMatch = remainder.match(/\s*\b(?:Rm|Room)\s*(\S+)\s*$/i);
   let room: string | null = null;
   let building: string | null = null;
 
   if (roomMatch) {
+    // If a room match is found, extract and remove it from the building string
     room = roomMatch[1];
     building = remainder.slice(0, roomMatch.index).trim() || null;
   } else {
+    // No explicit room, use the whole remainder as a building name
     building = remainder || null;
   }
 
@@ -112,6 +122,136 @@ export interface ResolvedBuilding {
   campus: 'SGW' | 'Loyola';
   /** Street address from BUILDING_ADDRESSES (null when not found) */
   address: string | null;
+}
+
+type BUILDING_ADDRESSES_TYPE = (typeof BUILDING_ADDRESSES)[number];
+
+// Candidate for building name resolution, used to gather all possible buildings (from polygons)
+type ResolveCandidate = {
+  id: string; // Polygon or address id
+  rawName: string; // Name as shown in the dataset
+  campus: 'SGW' | 'Loyola';
+};
+
+// Row data for matching, expanded with search tokens for matching by name/code/alias
+type ResolveRow = {
+  candidate: ResolveCandidate;
+  exactTokens: string[]; // For strict matching (normalised)
+  substringTokens: string[]; // For relaxed (partial) matches
+};
+
+/**
+ * Gathers all possible building candidates (polygon entries) from the polygon datasets,
+ * filtered by campus if requested.
+ * @param campus Build a candidate list for a specific campus, or both if not provided
+ * @returns List of candidates, one per known building
+ */
+function getResolveCandidates(campus?: 'SGW' | 'Loyola' | null): ResolveCandidate[] {
+  const candidates: ResolveCandidate[] = [];
+  // For SGW campus, add all SGW buildings
+  if (!campus || campus === 'SGW') {
+    for (const [id, entry] of Object.entries(BUILDING_POLYGONS)) {
+      candidates.push({ id, rawName: (entry as { name: string }).name, campus: 'SGW' });
+    }
+  }
+  // For Loyola campus, add all Loyola buildings
+  if (!campus || campus === 'Loyola') {
+    for (const [id, entry] of Object.entries(LOYOLA_BUILDING_POLYGONS)) {
+      candidates.push({ id, rawName: (entry as { name: string }).name, campus: 'Loyola' });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Build the list of tokens for each candidate for matching purposes.
+ * - exactTokens: Used for exact (normalized) match attempts (always include normalized rawName)
+ * - substringTokens: Used for partial (substring) matching (like "hall", aliases, etc.)
+ *
+ * @param candidates List of ResolveCandidates returned from getResolveCandidates
+ * @param addressMap Map of code -> BUILDING_ADDRESSES_TYPE for adding alias/official name info
+ * @returns Array of ResolveRow with tokens for matching
+ */
+function buildResolveRows(
+  candidates: ResolveCandidate[],
+  addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
+): ResolveRow[] {
+  return candidates.map((c) => {
+    const exactTokens: string[] = [normalizeLabel(c.rawName)];
+    const substringTokens: string[] = [];
+    // If candidate name is "CODE - Description"
+    const dashMatch = c.rawName.match(/^([A-Z]{1,3})\s*-\s*(.+)$/);
+    if (dashMatch) {
+      // Add code (e.g. "H") as an exact token and description as a substring
+      exactTokens.push(normalizeLabel(dashMatch[1]));
+      substringTokens.push(normalizeLabel(dashMatch[2]));
+      // Also add aliases from the address dataset for this code, if any
+      const addr = addressMap.get(dashMatch[1].toUpperCase());
+      if (addr) {
+        substringTokens.push(normalizeLabel(addr.name));
+        // Add all aliases as substrings, e.g. "webster", "webster library"
+        for (const alias of addr.aliases ?? []) {
+          substringTokens.push(normalizeLabel(alias));
+        }
+      }
+    }
+    // If candidate name is "Description (CODE)"
+    const parenMatch = c.rawName.match(/^(.+?)\s*\(([A-Z]{1,3})\)$/);
+    if (parenMatch) {
+      // Add code (e.g. "H") as an exact token and description as a substring
+      exactTokens.push(normalizeLabel(parenMatch[2]));
+      substringTokens.push(normalizeLabel(parenMatch[1]));
+      // Add address/aliases as above
+      const addr = addressMap.get(parenMatch[2].toUpperCase());
+      if (addr) {
+        substringTokens.push(normalizeLabel(addr.name));
+        for (const alias of addr.aliases ?? []) {
+          substringTokens.push(normalizeLabel(alias));
+        }
+      }
+    }
+    // Could repeat for other patterns if needed (currently handles main two forms)
+    return { candidate: c, exactTokens, substringTokens };
+  });
+}
+
+/**
+ * Try to find an exact match to the needle among candidate rows.
+ * Checks both exactTokens and substringTokens for equality to the needle.
+ *
+ * @param rows All candidate rows with their tokens
+ * @param needle The normalized search string (from user/building)
+ * @returns The matching candidate or null if not found
+ */
+function findExactMatch(rows: ResolveRow[], needle: string): ResolveCandidate | null {
+  for (const { candidate, exactTokens, substringTokens } of rows) {
+    const all = [...exactTokens, ...substringTokens];
+    if (all.some((t) => t === needle)) return candidate;
+  }
+  return null;
+}
+
+// Minimum length for partial substring match to avoid accidental word collisions
+const MIN_SUBSTRING_LEN = 5;
+
+/**
+ * Looks for any candidate row where the substringTokens or the needle
+ * contains the other as a substring (>= MIN_SUBSTRING_LEN).
+ * Not symmetric: will return only the first found.
+ */
+function findSubstringMatch(rows: ResolveRow[], needle: string): ResolveCandidate | null {
+  // Do not search for substrings on very short input
+  if (needle.length < MIN_SUBSTRING_LEN) return null;
+  for (const { candidate, substringTokens } of rows) {
+    if (
+      substringTokens.some(
+        (t) => t.length >= MIN_SUBSTRING_LEN && (t.includes(needle) || needle.includes(t)),
+      )
+    ) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 /**
@@ -134,15 +274,18 @@ export function resolveBuilding(
 ): ResolvedBuilding | null {
   if (!buildingName?.trim()) return null;
 
+  // Step 1: If a code can be extracted from name, try to resolve by code recursively
   const extractedCode = extractCodeFromName(buildingName);
   if (extractedCode) {
     const normalized = normalizeLabel(buildingName.trim());
     const normalizedCode = normalizeLabel(extractedCode);
+    // If the name isn't just the code itself, try resolving by the code
     if (normalized !== normalizedCode) {
       return resolveBuilding(extractedCode, campus);
     }
   }
 
+  // Step 2: Special case - handle Hingston Building A/B/C variations robustly
   const hingstonMatch = buildingName.match(
     /hingston\s*(?:hall\s*)?([abc])\s*(?:building|bldg|hall)?/i,
   );
@@ -151,109 +294,27 @@ export function resolveBuilding(
     return resolveBuilding(forcedCode, campus);
   }
 
+  // Step 3: Normalized search string ("needle")
   const needle = normalizeLabel(buildingName.trim());
-
-  // ── Build candidate rows from the polygon datasets ──────────────────────
-  type Candidate = {
-    id: string;
-    rawName: string;
-    campus: 'SGW' | 'Loyola';
-  };
-
-  const candidates: Candidate[] = [];
-
-  if (!campus || campus === 'SGW') {
-    for (const [id, entry] of Object.entries(BUILDING_POLYGONS)) {
-      candidates.push({ id, rawName: (entry as { name: string }).name, campus: 'SGW' });
-    }
-  }
-  if (!campus || campus === 'Loyola') {
-    for (const [id, entry] of Object.entries(LOYOLA_BUILDING_POLYGONS)) {
-      candidates.push({ id, rawName: (entry as { name: string }).name, campus: 'Loyola' });
-    }
-  }
-
-  // For each candidate build every string we match against:
-  //   • the full polygon name (e.g. "H - Henry F. Hall Building")
-  //   • the code part only  (e.g. "H")
-  //   • the description part only (e.g. "Henry F. Hall Building")
-  //   • all aliases from BUILDING_ADDRESSES for the same code
+  // Build an address lookup map (by code, uppercase)
   const addressMap = new Map<string, BUILDING_ADDRESSES_TYPE>();
   for (const addr of BUILDING_ADDRESSES) {
     addressMap.set(addr.code.toUpperCase(), addr);
   }
-  // Each row carries:
-  //   exactTokens  — must match the needle exactly (normalised)
-  //   substringTokens — longer description strings where substring matching
-  //                     is safe (min length 5 to avoid false positives)
-  type Row = {
-    candidate: Candidate;
-    exactTokens: string[];
-    substringTokens: string[];
-  };
 
-  const rows: Row[] = candidates.map((c) => {
-    const exactTokens: string[] = [normalizeLabel(c.rawName)];
-    const substringTokens: string[] = [];
+  // Prepare all building name candidates and their text variants
+  const candidates = getResolveCandidates(campus);
+  const rows = buildResolveRows(candidates, addressMap);
 
-    // "CODE - Description" pattern (SGW polygon names)
-    const dashMatch = c.rawName.match(/^([A-Z]{1,3})\s*-\s*(.+)$/);
-    if (dashMatch) {
-      exactTokens.push(normalizeLabel(dashMatch[1])); // code alone → exact only
-      substringTokens.push(normalizeLabel(dashMatch[2])); // description → substring ok
+  // Step 4: Try exact match using normalised candidate tokens
+  const exactCandidate = findExactMatch(rows, needle);
+  if (exactCandidate) return buildResult(exactCandidate, addressMap);
 
-      const addr = addressMap.get(dashMatch[1].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
-        }
-      }
-    }
+  // Step 5: Try substring (partial) match if exact fails
+  const substringCandidate = findSubstringMatch(rows, needle);
+  if (substringCandidate) return buildResult(substringCandidate, addressMap);
 
-    // "Description (CODE)" pattern (Loyola polygon names)
-    const parenMatch = c.rawName.match(/^(.+?)\s*\(([A-Z]{1,3})\)$/);
-    if (parenMatch) {
-      exactTokens.push(normalizeLabel(parenMatch[2])); // code alone → exact only
-      substringTokens.push(normalizeLabel(parenMatch[1])); // base name → substring ok
-
-      const addr = addressMap.get(parenMatch[2].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
-        }
-      }
-    }
-
-    return { candidate: c, exactTokens, substringTokens };
-  });
-
-  // ── Pass 1: exact normalised match ──────────────────────────────────────
-  for (const { candidate, exactTokens, substringTokens } of rows) {
-    const all = [...exactTokens, ...substringTokens];
-    if (all.some((t) => t === needle)) {
-      return buildResult(candidate, addressMap);
-    }
-  }
-
-  // ── Pass 2: substring match (description tokens only, min length 5) ─────
-  // Only allow: needle is fully contained inside a description token,
-  //             OR a description token is fully contained inside the needle.
-  // Short tokens (< 5 chars) are skipped to avoid e.g. "hall" ⊂ "hingtsonhall".
-  const MIN_SUB_LEN = 5;
-  if (needle.length >= MIN_SUB_LEN) {
-    for (const { candidate, substringTokens } of rows) {
-      if (
-        substringTokens.some(
-          (t) => t.length >= MIN_SUB_LEN && (t.includes(needle) || needle.includes(t)),
-        )
-      ) {
-        return buildResult(candidate, addressMap);
-      }
-    }
-  }
-
+  // Step 6: No matches found
   return null;
 }
 
@@ -261,14 +322,22 @@ export function resolveBuilding(
 // Location conflict resolution
 // ---------------------------------------------------------------------------
 
+// SGW = Sir George Williams, Loyola = Loyola campus
 export type Campus = 'SGW' | 'Loyola';
 
+// Enumerates possible sources of conflict or mismatch between raw location
+// and datasets/runtime info
 export type LocationConflict =
+  // Case: Campus in string and polygon set do not agree (mismatch)
   | { type: 'campus_mismatch'; parsedCampus: Campus; actualCampus: Campus; buildingId: string }
+  // Case: No campus in input, but can infer from polygon runtime set
   | { type: 'campus_inferred'; inferredCampus: Campus; buildingId: string }
+  // Case: Located by name/code, but missing from runtime polygons (shouldn't happen if datasets are synced)
   | { type: 'building_not_in_polygons'; resolvedId: string }
+  // Case: Could not parse or resolve anything for input
   | { type: 'unresolvable_location'; rawLocation: string };
 
+// Results of resolving a location: resolved building, opposed campus, any detected conflict
 export type LocationResolution = {
   building: {
     id: string;
@@ -280,6 +349,8 @@ export type LocationResolution = {
   conflict: LocationConflict | null;
 };
 
+// Describes a single runtime building (polygon in either SGW or Loyola set)
+// These are passed in at runtime, not loaded from datasets
 type RuntimeBuilding = {
   id: string;
   code: string | null;
@@ -301,16 +372,21 @@ type RuntimeBuilding = {
  * @param rawLocation   Raw location string from a calendar event.
  * @param sgwBuildings  Runtime SGW building list (from `useCampusContext`).
  * @param loyolaBuildings Runtime Loyola building list.
+ *
+ * @returns LocationResolution describing building, campus, and any conflict found
  */
 export function resolveEventLocation(
   rawLocation: string,
   sgwBuildings: readonly RuntimeBuilding[],
   loyolaBuildings: readonly RuntimeBuilding[],
 ): LocationResolution {
+  // Parse string into parts (campus/building/room)
   const parsed = parseLocationString(rawLocation);
+
+  // Try to resolve building name against polygons/addresses
   const resolved = resolveBuilding(parsed.building, parsed.campus);
 
-  // Conflict 1: completely unresolvable based on current algorithm
+  // Conflict 1: completely unresolvable based on current algorithm (no match)
   if (!resolved) {
     return {
       building: null,
@@ -320,6 +396,7 @@ export function resolveEventLocation(
   }
 
   // Find which runtime polygon set actually has this building
+  // Checks by both dataset id and building code
   const inSGW = sgwBuildings.find(
     (b) => b.id === resolved.id || (resolved.code !== null && b.code === resolved.code),
   );
@@ -328,6 +405,7 @@ export function resolveEventLocation(
   );
 
   // Conflict 2: resolved by name-match but absent from runtime arrays
+  // (should only occur if dataset and runtime out of sync)
   if (!inSGW && !inLoyola) {
     return {
       building: null,
@@ -336,7 +414,9 @@ export function resolveEventLocation(
     };
   }
 
+  // Determine which campus the matched building is part of
   const actualCampus: Campus = inSGW ? 'SGW' : 'Loyola';
+  // We know one of these is present - select the correct building object
   const actualBuilding = (inSGW ?? inLoyola)!;
 
   // Conflict 3: campus missing from location string — infer it
@@ -348,7 +428,8 @@ export function resolveEventLocation(
     };
   }
 
-  // Conflict 4: campus in string contradicts polygon data
+  // Conflict 4: campus in input string contradicts polygon campus
+  // Normalise parsed campus string to enum value
   const parsedCampusNorm: Campus = /loyola/i.test(parsed.campus) ? 'Loyola' : 'SGW';
   if (parsedCampusNorm !== actualCampus) {
     return {
@@ -363,15 +444,16 @@ export function resolveEventLocation(
     };
   }
 
-  // No conflict
+  // No conflict: Everything matches.
   return { building: actualBuilding, campus: actualCampus, conflict: null };
 }
 
-// ── helper ────────────────────────────────────────────────────────────────
-type BUILDING_ADDRESSES_TYPE = (typeof BUILDING_ADDRESSES)[number];
-
+/**
+ * Helper to build the ResolvedBuilding object out of a candidate row, extracting code
+ * and resolving address if available.
+ */
 function buildResult(
-  candidate: { id: string; rawName: string; campus: 'SGW' | 'Loyola' },
+  candidate: ResolveCandidate,
   addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
 ): ResolvedBuilding {
   // Extract code from "CODE - Description" or "Description (CODE)"
@@ -379,6 +461,7 @@ function buildResult(
   const parenMatch = candidate.rawName.match(/\(([A-Z]{1,3})\)$/);
   const code = dashMatch?.[1] ?? parenMatch?.[1] ?? null;
 
+  // Find the official address from BUILDING_ADDRESSES if code is present
   const addr = code ? (addressMap.get(code.toUpperCase()) ?? null) : null;
 
   return {

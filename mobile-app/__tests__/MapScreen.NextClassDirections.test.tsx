@@ -10,10 +10,11 @@ const mockHandleSelectBuilding = jest.fn();
 const mockHandleCloseCard = jest.fn();
 const mockSetSearchQuery = jest.fn();
 const mockSetIsSearchFocused = jest.fn();
-const mockGoToUserLocation = jest.fn(async (options?: { onResolved?: (c: any) => void }) => {
+const mockGoToUserLocation = jest.fn((options?: { onResolved?: (c: any) => void }) => {
   if (options?.onResolved) {
-    await options.onResolved({ latitude: 45.4971, longitude: -73.5791 });
+    options.onResolved({ latitude: 45.4971, longitude: -73.5791 });
   }
+  return Promise.resolve();
 });
 
 let mockCalendarEvents: any[] = [];
