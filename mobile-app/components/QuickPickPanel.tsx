@@ -77,7 +77,12 @@ export default function QuickPickPanel({
           <MaterialIcons name="my-location" size={32} color="#c41230" />
         )}
       </Pressable>
-      <Pressable style={styles.quickPickHeader} onPress={onToggleOpen}>
+      <Pressable
+        style={styles.quickPickHeader}
+        onPress={onToggleOpen}
+        testID="quick-pick-toggle"
+        accessibilityLabel="Toggle quick picks"
+      >
         <Text style={styles.quickPickTitle} testID="campus-label">
           {activeCampus === 'loyola' ? 'LOYOLA' : 'SGW'}
         </Text>

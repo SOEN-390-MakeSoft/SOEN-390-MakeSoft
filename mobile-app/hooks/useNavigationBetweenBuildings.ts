@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
 import {
   coordsEqual,
+  distanceMeters,
   findBuildingAtOrNearCoordinate,
   polygonCentroid,
   type LatLng,
@@ -12,6 +13,8 @@ import {
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
 
 const MAX_TAP_DISTANCE_METERS = 80;
+const ARRIVAL_THRESHOLD_METERS = 60;
+const E2E_DIRECTIONS_MODE = process.env.EXPO_PUBLIC_E2E_DIRECTIONS_MODE ?? '';
 
 /** Decode a Google-encoded polyline string into an array of LatLng. */
 function decodePolyline(encoded: string): LatLng[] {
@@ -270,6 +273,9 @@ export function useNavigationBetweenBuildings({
   const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
   const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
   const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
+  const [hasArrived, setHasArrived] = useState(false);
+  const [e2eLiveTick, setE2eLiveTick] = useState(1);
+  const baseStepsRef = useRef<NavigationStep[]>([]);
 
   // --- Shuttle state ---
   const [isShuttleRoute, setIsShuttleRoute] = useState(false);
@@ -314,6 +320,49 @@ export function useNavigationBetweenBuildings({
   const isGetDirectionsDisabled =
     !hasOrigin || !hasDestinationLabel || sameOriginDestination || missingCoordinates;
 
+  useEffect(() => {
+    if (!isNavigationOpen || !navigationOrigin || !navigationDestinationCoord) {
+      setHasArrived(false);
+      return;
+    }
+    if (E2E_DIRECTIONS_MODE === 'scripted') {
+      setHasArrived(true);
+      return;
+    }
+    const distance = distanceMeters(navigationOrigin, navigationDestinationCoord);
+    setHasArrived(distance <= ARRIVAL_THRESHOLD_METERS);
+  }, [isNavigationOpen, navigationOrigin, navigationDestinationCoord]);
+
+  useEffect(() => {
+    if (E2E_DIRECTIONS_MODE !== 'scripted') return;
+    if (!isNavigationOpen) {
+      setE2eLiveTick(1);
+      return;
+    }
+    if (baseStepsRef.current.length === 0) return;
+    const interval = setInterval(() => {
+      setE2eLiveTick((tick) => tick + 1);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [isNavigationOpen, navigationSteps.length]);
+
+  useEffect(() => {
+    if (E2E_DIRECTIONS_MODE !== 'scripted') return;
+    if (!isNavigationOpen) return;
+    if (baseStepsRef.current.length === 0) return;
+    const focusCoordinate =
+      baseStepsRef.current[0]?.focusCoordinate ?? navigationDestinationCoord ?? undefined;
+    setNavigationSteps([
+      {
+        instruction: `Live update ${e2eLiveTick}`,
+        distanceText: '',
+        durationText: '',
+        focusCoordinate,
+      },
+      ...baseStepsRef.current,
+    ]);
+  }, [e2eLiveTick, isNavigationOpen, navigationDestinationCoord]);
+
   const formatBuildingLabel = useCallback((name: string, code: string | null) => {
     if (!code) return name;
     return name.includes(`(${code})`) ? name : `${name} (${code})`;
@@ -336,7 +385,18 @@ export function useNavigationBetweenBuildings({
 
   useEffect(() => {
     if (!isNavigationOpen) return;
-    if (!navigationOrigin || !navigationDestinationCoord) {
+    if (!navigationDestinationCoord) {
+      setIsRouteLoading(false);
+      return;
+    }
+    if (!navigationOrigin) {
+      if (E2E_DIRECTIONS_MODE === 'scripted') {
+        const nearOrigin: LatLng = {
+          latitude: navigationDestinationCoord.latitude + 0.004,
+          longitude: navigationDestinationCoord.longitude - 0.006,
+        };
+        setNavigationOrigin(nearOrigin);
+      }
       setIsRouteLoading(false);
       return;
     }
@@ -438,7 +498,23 @@ export function useNavigationBetweenBuildings({
           setRoutePolyline(active.polyline);
           setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
         }
-        setNavigationSteps(active?.steps ?? []);
+        const baseSteps = active?.steps ?? [];
+        baseStepsRef.current = baseSteps;
+        if (E2E_DIRECTIONS_MODE === 'scripted') {
+          const focusCoordinate =
+            baseSteps[0]?.focusCoordinate ?? navigationDestinationCoord ?? undefined;
+          setNavigationSteps([
+            {
+              instruction: `Live update ${e2eLiveTick}`,
+              distanceText: '',
+              durationText: '',
+              focusCoordinate,
+            },
+            ...baseSteps,
+          ]);
+        } else {
+          setNavigationSteps(baseSteps);
+        }
 
         const primary = driving ?? walking;
         if (primary) {
@@ -595,6 +671,7 @@ export function useNavigationBetweenBuildings({
     } // Shuttle mode: show walk-to-hub + walk-from-hub polylines; the shuttle
     // segment itself is rendered separately as a red solid line on the map.
     if (selectedTransportMode === 'shuttle') {
+      baseStepsRef.current = [];
       if (shuttleInfo) {
         const allPoints = [
           ...shuttleInfo.walkToHubPolyline,
@@ -704,7 +781,22 @@ export function useNavigationBetweenBuildings({
         durationText: route.durationText,
         viaText: route.viaText || 'Suggested route',
       });
-      setNavigationSteps(route.steps);
+      baseStepsRef.current = route.steps;
+      if (E2E_DIRECTIONS_MODE === 'scripted') {
+        const focusCoordinate =
+          route.steps[0]?.focusCoordinate ?? navigationDestinationCoord ?? undefined;
+        setNavigationSteps([
+          {
+            instruction: `Live update ${e2eLiveTick}`,
+            distanceText: '',
+            durationText: '',
+            focusCoordinate,
+          },
+          ...route.steps,
+        ]);
+      } else {
+        setNavigationSteps(route.steps);
+      }
     } else if (allModeRoutes.driving || allModeRoutes.walking) {
       // Only clear when we genuinely have route data but the selected
       // mode is unavailable.  When allModeRoutes is empty (a new fetch
@@ -914,6 +1006,8 @@ export function useNavigationBetweenBuildings({
     setRoutePolyline([]);
     setRouteRegion(null);
     setNavigationSteps([]);
+    baseStepsRef.current = [];
+    setE2eLiveTick(1);
     setShuttleInfo(null);
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
@@ -987,6 +1081,7 @@ export function useNavigationBetweenBuildings({
     routeRegion,
     navigationSteps,
     isDestinationLocked,
+    hasArrived,
     // Shuttle
     isShuttleRoute,
     isShuttleLoading,

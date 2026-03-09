@@ -44,6 +44,7 @@ interface NavigationScreenProps {
   /** Whether today is a weekend (shuttle not available) */
   isWeekend?: boolean;
   onOpenPreview?: () => void;
+  hasArrived?: boolean;
 }
 
 const DRAG_THRESHOLD = 40;
@@ -416,6 +417,7 @@ export default function NavigationScreen({
   shuttleInfo = null,
   isWeekend = false,
   onOpenPreview,
+  hasArrived = false,
 }: Readonly<NavigationScreenProps>) {
   const { colourBlindMode } = useSettings();
   const [isMinimized, setIsMinimized] = useState(false);
@@ -548,6 +550,7 @@ export default function NavigationScreen({
           <Pressable
             onPress={onClose}
             style={[styles.closeButton, { backgroundColor: themeColors.closeBg }]}
+            testID="navigation-close-button"
           >
             <MaterialIcons name="close" size={18} color={themeColors.closeIcon} />
           </Pressable>
@@ -555,6 +558,12 @@ export default function NavigationScreen({
         <Text style={styles.tripTitle} numberOfLines={2}>
           {tripTitleText}
         </Text>
+        {hasArrived ? (
+          <View style={styles.arrivalBanner} testID="arrival-banner">
+            <MaterialIcons name="flag" size={16} color="#fff" />
+            <Text style={styles.arrivalText}>Arrived near destination</Text>
+          </View>
+        ) : null}
         <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
         <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
         <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
@@ -666,6 +675,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '700',
+  },
+  arrivalBanner: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 6,
+  },
+  arrivalText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   tripMeta: { marginTop: 4, fontSize: 14, color: '#f3d7dc' },
   errorText: {

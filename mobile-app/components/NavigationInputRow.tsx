@@ -14,6 +14,7 @@ interface NavigationInputRowProps {
   clearIconColor: string;
   clearButtonBg: string;
   locked?: boolean;
+  testID?: string;
 }
 
 export default function NavigationInputRow({
@@ -28,12 +29,14 @@ export default function NavigationInputRow({
   clearIconColor,
   clearButtonBg,
   locked = false,
+  testID,
 }: Readonly<NavigationInputRowProps>) {
   return (
     <View style={styles.routeRow}>
       <MaterialIcons name={icon} size={20} color={iconColor} />
       <View style={styles.inputWrap}>
         <TextInput
+          testID={testID}
           value={value}
           onChangeText={(text) => {
             if (!locked) onChangeText(text);

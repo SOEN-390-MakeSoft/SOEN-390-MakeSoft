@@ -9,6 +9,7 @@ import ICAL from 'ical.js';
 const STORE_KEY = 'calendar_connection';
 const LEGACY_KEY = 'public_calendar_id';
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+const E2E_CALENDAR_MODE = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE ?? '';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -349,6 +350,55 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
       setLoading(true);
       setError(null);
       try {
+        if (E2E_CALENDAR_MODE === 'scripted' && conn.type === 'ical') {
+          if (/no-calendars|empty/i.test(conn.icalUrl)) {
+            setEvents([]);
+            return;
+          }
+          if (/mock-next/i.test(conn.icalUrl)) {
+            setEvents([
+              {
+                id: 'e2e-next-1',
+                summary: 'SOEN 391',
+                location: 'Loyola Campus - Concordia Vanier Library (VL)',
+                start: { dateTime: new Date(Date.now() + 7200_000).toISOString() },
+                end: { dateTime: new Date(Date.now() + 9000_000).toISOString() },
+              },
+            ]);
+            return;
+          }
+          if (/mock-unknown/i.test(conn.icalUrl)) {
+            setEvents([
+              {
+                id: 'e2e-unknown-1',
+                summary: 'SOEN 394',
+                location: 'Unknown Building 123',
+                start: { dateTime: new Date(Date.now() + 3600_000).toISOString() },
+                end: { dateTime: new Date(Date.now() + 5400_000).toISOString() },
+              },
+            ]);
+            return;
+          }
+          if (/mock/i.test(conn.icalUrl)) {
+            setEvents([
+              {
+                id: 'e2e-1',
+                summary: 'SOEN 390',
+                location: 'Loyola Campus - Hingston Hall (HB)',
+                start: { dateTime: new Date(Date.now() + 3600_000).toISOString() },
+                end: { dateTime: new Date(Date.now() + 5400_000).toISOString() },
+              },
+            ]);
+            return;
+          }
+          if (/denied/i.test(conn.icalUrl)) {
+            setError(
+              'Cannot access this calendar. Try using the "Secret address in iCal format" from Google Calendar settings.',
+            );
+            setEvents([]);
+            return;
+          }
+        }
         if (conn.type === 'public') {
           await fetchPublicEvents(conn.calendarId);
         } else {
@@ -382,6 +432,80 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
   // --------------------------------------------------
   const connectCalendar = useCallback(
     async (input: string) => {
+      if (E2E_CALENDAR_MODE === 'scripted') {
+        const trimmedInput = input.trim();
+        if (!trimmedInput) {
+          setError('Please paste a valid Google Calendar URL or secret iCal address.');
+          return;
+        }
+        if (/denied/i.test(trimmedInput)) {
+          setError(
+            'Cannot access this calendar. Try using the "Secret address in iCal format" from Google Calendar settings.',
+          );
+          setEvents([]);
+          return;
+        }
+        if (/no-calendars|empty/i.test(trimmedInput)) {
+          const mockConn: StoredConnection = { type: 'ical', icalUrl: trimmedInput };
+          await saveConnection(mockConn);
+          setConnection(mockConn);
+          setCalendarId(trimmedInput);
+          setError(null);
+          setEvents([]);
+          return;
+        }
+        if (/mock-next/i.test(trimmedInput)) {
+          const mockConn: StoredConnection = { type: 'ical', icalUrl: trimmedInput };
+          await saveConnection(mockConn);
+          setConnection(mockConn);
+          setCalendarId(trimmedInput);
+          setError(null);
+          setEvents([
+            {
+              id: 'e2e-next-1',
+              summary: 'SOEN 391',
+              location: 'Loyola Campus - Concordia Vanier Library (VL)',
+              start: { dateTime: new Date(Date.now() + 7200_000).toISOString() },
+              end: { dateTime: new Date(Date.now() + 9000_000).toISOString() },
+            },
+          ]);
+          return;
+        }
+        if (/mock-unknown/i.test(trimmedInput)) {
+          const mockConn: StoredConnection = { type: 'ical', icalUrl: trimmedInput };
+          await saveConnection(mockConn);
+          setConnection(mockConn);
+          setCalendarId(trimmedInput);
+          setError(null);
+          setEvents([
+            {
+              id: 'e2e-unknown-1',
+              summary: 'SOEN 394',
+              location: 'Unknown Building 123',
+              start: { dateTime: new Date(Date.now() + 3600_000).toISOString() },
+              end: { dateTime: new Date(Date.now() + 5400_000).toISOString() },
+            },
+          ]);
+          return;
+        }
+        if (/mock/i.test(trimmedInput)) {
+          const mockConn: StoredConnection = { type: 'ical', icalUrl: trimmedInput };
+          await saveConnection(mockConn);
+          setConnection(mockConn);
+          setCalendarId(trimmedInput);
+          setError(null);
+          setEvents([
+            {
+              id: 'e2e-1',
+              summary: 'SOEN 390',
+              location: 'Loyola Campus - Hingston Hall (HB)',
+              start: { dateTime: new Date(Date.now() + 3600_000).toISOString() },
+              end: { dateTime: new Date(Date.now() + 5400_000).toISOString() },
+            },
+          ]);
+          return;
+        }
+      }
       const info = extractCalendarInfo(input);
       if (!info) {
         setError('Please paste a valid Google Calendar URL or secret iCal address.');

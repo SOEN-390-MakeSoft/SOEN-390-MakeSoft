@@ -211,6 +211,7 @@ export default function MapScreen() {
     routeSegments,
     openNavigationForResolvedDestination,
     isDestinationLocked,
+    hasArrived,
   } = useNavigationBetweenBuildings({
     buildings,
     onSelectBuilding: handleSelectBuilding,
@@ -893,6 +894,7 @@ export default function MapScreen() {
         shuttleInfo={shuttleInfo}
         isWeekend={isWeekend}
         onOpenPreview={handleOpenRoutePreview}
+        hasArrived={hasArrived}
       />
 
       <RoutePreviewScreen
@@ -919,7 +921,12 @@ export default function MapScreen() {
           <Text style={styles.nextClassLocation} numberOfLines={1}>
             {nextClassLocationLabel}
           </Text>
-          <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
+          <Pressable
+            style={styles.nextClassGoButton}
+            onPress={handleNextClassGo}
+            testID="next-class-go-button"
+            accessibilityLabel="Go to next class directions"
+          >
             <Text style={styles.nextClassGoText}>Go</Text>
           </Pressable>
         </View>

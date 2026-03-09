@@ -16,7 +16,7 @@
     "test:coverage": "jest --coverage",
     "detox:publish:android": "node ./scripts/publish-detox-android.js",
     "detox:build:android": "detox build -c android.emu.debug",
-    "detox:test:android": "detox test -c android.emu.debug",
+    "detox:test:android": "NODE_NO_WARNINGS=1 detox test -c android.emu.debug",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "cd .. && husky mobile-app/.husky"

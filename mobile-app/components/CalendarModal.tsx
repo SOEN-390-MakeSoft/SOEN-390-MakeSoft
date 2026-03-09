@@ -86,7 +86,7 @@ export default function CalendarModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} testID="calendar-modal">
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
@@ -98,9 +98,11 @@ export default function CalendarModal({
 
           {/* Error */}
           {error ? (
-            <View style={styles.errorBox}>
+            <View style={styles.errorBox} testID="calendar-error">
               <MaterialIcons name="error-outline" size={18} color="#912338" />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText} testID="calendar-error-text">
+                {error}
+              </Text>
             </View>
           ) : null}
 
@@ -127,11 +129,13 @@ export default function CalendarModal({
                 returnKeyType="go"
                 onSubmitEditing={handleConnect}
                 multiline={false}
+                testID="calendar-link-input"
               />
               <Pressable
                 style={[styles.connectButton, !link.trim() && styles.connectButtonDisabled]}
                 onPress={handleConnect}
                 disabled={!link.trim() || loading}
+                testID="calendar-connect-button"
               >
                 {loading ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -156,7 +160,7 @@ export default function CalendarModal({
           {/* Connected — show events */}
           {isConnected && !loading ? (
             events.length === 0 ? (
-              <View style={styles.centered}>
+              <View style={styles.centered} testID="calendar-empty-state">
                 <MaterialIcons name="event-busy" size={48} color="#999" />
                 <Text style={styles.emptyText}>No upcoming events.</Text>
               </View>
@@ -165,13 +169,14 @@ export default function CalendarModal({
                 data={events}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
+                testID="calendar-events-list"
                 // TODO: Display event description (item.description) and allow tapping
                 // to view full event details. Currently only titles are rendered as placeholders.
                 renderItem={({ item }) => (
-                  <View style={styles.eventRow}>
+                  <View style={styles.eventRow} testID="calendar-event-row">
                     <View style={styles.eventDot} />
                     <View style={styles.eventInfo}>
-                      <Text style={styles.eventName} numberOfLines={2}>
+                      <Text style={styles.eventName} numberOfLines={2} testID="calendar-event-name">
                         {item.summary}
                       </Text>
                       <Text style={styles.eventTime} numberOfLines={1}>
@@ -192,7 +197,11 @@ export default function CalendarModal({
 
           {/* Disconnect button */}
           {isConnected ? (
-            <Pressable style={styles.disconnectButton} onPress={handleDisconnect}>
+            <Pressable
+              style={styles.disconnectButton}
+              onPress={handleDisconnect}
+              testID="calendar-disconnect-button"
+            >
               <MaterialIcons name="link-off" size={18} color="#fff" />
               <Text style={styles.disconnectText}>Disconnect Calendar</Text>
             </Pressable>

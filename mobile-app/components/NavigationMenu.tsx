@@ -178,6 +178,7 @@ export default function NavigationMenu({
             clearLabel="Clear start"
             clearIconColor={clearIconColor}
             clearButtonBg={routeCardColor}
+            testID="navigation-start-input"
           />
           <View style={[styles.routeDivider, { backgroundColor: dividerColor }]} />
           <NavigationInputRow
@@ -192,6 +193,7 @@ export default function NavigationMenu({
             clearIconColor={clearIconColor}
             clearButtonBg={routeCardColor}
             locked={destinationLocked}
+            testID="navigation-destination-input"
           />
         </View>
 
