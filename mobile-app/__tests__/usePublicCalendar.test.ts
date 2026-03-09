@@ -1,4 +1,9 @@
-import { getNextEvent, getNextClassForToday, CalendarEvent } from '../hooks/usePublicCalendar';
+import {
+  getNextEvent,
+  getNextClassForToday,
+  extractCalendarInfo,
+  CalendarEvent,
+} from '../hooks/usePublicCalendar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -218,5 +223,115 @@ describe('getNextClassForToday', () => {
     );
 
     expect(result).toEqual({ status: 'classes_over_today' });
+  });
+
+  it('returns no_classes_today for an empty events array', () => {
+    expect(getNextClassForToday([], baseNow)).toEqual({ status: 'no_classes_today' });
+  });
+
+  it('skips all-day events and returns no_classes_today when only all-day events exist today', () => {
+    const allDay = makeAllDayEvent('a1', 'Holiday', '2026-03-07');
+    expect(getNextClassForToday([allDay], baseNow)).toEqual({ status: 'no_classes_today' });
+  });
+
+  it('returns the in-progress class when one is currently running', () => {
+    // baseNow = 15:00 UTC; event runs 14:00–16:00
+    const inProgress = makeEvent('ip', 'Running Class', makeTodayAt(14, 0), makeTodayAt(16, 0));
+    const result = getNextClassForToday([inProgress], baseNow);
+    expect(result.status).toBe('next_class');
+    if (result.status === 'next_class') expect(result.event.id).toBe('ip');
+  });
+
+  it('prefers an in-progress class over an upcoming one today', () => {
+    const inProgress = makeEvent('ip', 'Running Class', makeTodayAt(14, 0), makeTodayAt(16, 0));
+    const upcoming = makeEvent('up', 'Later Class', makeTodayAt(17, 0), makeTodayAt(18, 0));
+    const result = getNextClassForToday([upcoming, inProgress], baseNow);
+    expect(result.status).toBe('next_class');
+    if (result.status === 'next_class') expect(result.event.id).toBe('ip');
+  });
+
+  it('returns the earliest upcoming class when multiple classes are later today', () => {
+    const sooner = makeEvent('s', 'Sooner Class', makeTodayAt(16, 0), makeTodayAt(17, 0));
+    const later = makeEvent('l', 'Later Class', makeTodayAt(18, 0), makeTodayAt(19, 0));
+    const result = getNextClassForToday([later, sooner], baseNow);
+    expect(result.status).toBe('next_class');
+    if (result.status === 'next_class') expect(result.event.id).toBe('s');
+  });
+
+  it('returns classes_over_today when multiple classes existed today but all ended', () => {
+    const events = [
+      makeEvent('a', 'Class A', makeTodayAt(8, 0), makeTodayAt(9, 30)),
+      makeEvent('b', 'Class B', makeTodayAt(10, 0), makeTodayAt(11, 30)),
+    ];
+    expect(getNextClassForToday(events, baseNow)).toEqual({ status: 'classes_over_today' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractCalendarInfo
+// ---------------------------------------------------------------------------
+
+describe('extractCalendarInfo', () => {
+  // Invalid / empty inputs
+
+  it('returns null for an empty string', () => {
+    expect(extractCalendarInfo('')).toBeNull();
+  });
+
+  it('returns null for a whitespace-only string', () => {
+    expect(extractCalendarInfo('   ')).toBeNull();
+  });
+
+  it('returns null for a plain email address', () => {
+    expect(extractCalendarInfo('user@example.com')).toBeNull();
+  });
+
+  it('returns null for a non-Google URL', () => {
+    expect(extractCalendarInfo('https://outlook.com/calendar/abc')).toBeNull();
+  });
+
+  it('returns null for a Google URL with no recognisable calendar info', () => {
+    expect(extractCalendarInfo('https://calendar.google.com/')).toBeNull();
+  });
+
+  //Secret iCal URL
+
+  it('detects a secret iCal URL and returns type ical', () => {
+    const url =
+      'https://calendar.google.com/calendar/ical/user%40gmail.com/private-abc123/basic.ics';
+    const result = extractCalendarInfo(url);
+    expect(result).toEqual({ type: 'ical', icalUrl: url });
+  });
+
+  it('trims whitespace before parsing a secret iCal URL', () => {
+    const url =
+      '  https://calendar.google.com/calendar/ical/user%40gmail.com/private-abc123/basic.ics  ';
+    const result = extractCalendarInfo(url);
+    expect(result?.type).toBe('ical');
+  });
+
+  // Public iCal URL
+
+  it('detects a public iCal URL and returns type public with decoded calendarId', () => {
+    const url = 'https://calendar.google.com/calendar/ical/user%40gmail.com/public/basic.ics';
+    const result = extractCalendarInfo(url);
+    expect(result).toEqual({ type: 'public', calendarId: 'user@gmail.com' });
+  });
+
+  //  Embed URL (src param)
+
+  it('detects an embed URL via src param and returns type public', () => {
+    const url =
+      'https://calendar.google.com/calendar/embed?src=user%40gmail.com&ctz=America%2FMontreal';
+    const result = extractCalendarInfo(url);
+    expect(result).toEqual({ type: 'public', calendarId: 'user@gmail.com' });
+  });
+
+  //cid URL
+
+  it('detects a cid URL and returns type public', () => {
+    const url = 'https://calendar.google.com/calendar/u/0?cid=user%40gmail.com';
+    const result = extractCalendarInfo(url);
+    expect(result).toEqual({ type: 'public', calendarId: 'user@gmail.com' });
   });
 });
