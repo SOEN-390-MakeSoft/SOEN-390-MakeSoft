@@ -90,6 +90,7 @@ export default function SearchBar({
           onPress={onLogoPress}
           accessibilityLabel="Google Calendar"
           accessibilityRole="button"
+          testID="calendar-open-button"
         >
           <Image source={logoSource} style={styles.mapBrandBadgeImage} resizeMode="contain" />
         </Pressable>

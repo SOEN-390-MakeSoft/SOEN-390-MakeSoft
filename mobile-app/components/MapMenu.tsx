@@ -92,7 +92,12 @@ export default function MapMenu({ visible, onClose, fullScreen = false }: Readon
   const content = (
     <SafeAreaView style={styles.menuScreen}>
       <View style={styles.menuHeader}>
-        <Pressable onPress={onClose} style={styles.menuBack}>
+        <Pressable
+          onPress={onClose}
+          style={styles.menuBack}
+          testID="menu-close-button"
+          accessibilityLabel="Close menu"
+        >
           <MaterialIcons name="chevron-left" size={43} color={brandRed} />
         </Pressable>
         <Text style={styles.menuTitle}>Menu</Text>

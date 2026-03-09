@@ -1,4 +1,5 @@
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const STEP_PAUSE_MS = 1800;
 const logCheck = (label, done) => {
   console.log(`${done ? '☑' : '☐'} ${label}`);
 };
@@ -23,31 +24,33 @@ describe('US-3.2 Select calendar', () => {
       .toBeVisible()
       .withTimeout(10000);
 
-    await pause(1200);
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-required-connect')).tap();
 
     await waitFor(element(by.id('calendar-modal')))
       .toBeVisible()
       .withTimeout(8000);
 
-    await pause(1200);
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-link-input')).replaceText(
-      'https://calendar.google.com/calendar/ical/mock/basic.ics',
+      'https://calendar.google.com/calendar/ical/8e4bd319d14b618d72f25e7bc49c1cb67bf8b41f33e59e6bd97dd8ad64dceb42%40group.calendar.google.com/private-f407e9ad39169e5c2888b32df4726b8a/basic.ics',
     );
-    await pause(1200);
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-connect-button')).tap();
 
     await waitFor(element(by.id('calendar-events-list')))
       .toBeVisible()
       .withTimeout(10000);
 
-    await waitFor(element(by.id('calendar-event-row')))
+    await waitFor(element(by.id('calendar-event-row')).atIndex(0))
       .toBeVisible()
       .withTimeout(8000);
 
+    await pause(STEP_PAUSE_MS);
     await element(by.label('Close')).tap();
 
     await device.launchApp({ newInstance: true });
+    await pause(STEP_PAUSE_MS);
 
     try {
       await waitFor(element(by.id('get-started')))
@@ -62,7 +65,7 @@ describe('US-3.2 Select calendar', () => {
       .toBeVisible()
       .withTimeout(10000);
 
-    await pause(2000);
+    await pause(STEP_PAUSE_MS);
     await element(by.label('Google Calendar')).tap();
 
     await waitFor(element(by.id('calendar-modal')))
@@ -79,16 +82,17 @@ describe('US-3.2 Select calendar', () => {
 
     logCheck('Calendar connection is saved and reused in future sessions', true);
 
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-disconnect-button')).tap();
     await waitFor(element(by.id('calendar-connect-button')))
       .toBeVisible()
       .withTimeout(8000);
 
-    await pause(1200);
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-link-input')).replaceText(
       'https://calendar.google.com/calendar/ical/no-calendars/basic.ics',
     );
-    await pause(1200);
+    await pause(STEP_PAUSE_MS);
     await element(by.id('calendar-connect-button')).tap();
 
     await waitFor(element(by.id('calendar-empty-state')))
@@ -97,6 +101,6 @@ describe('US-3.2 Select calendar', () => {
 
     logCheck('If no events are available, the app displays a clear and informative message', true);
 
-    await pause(2000);
+    await pause(STEP_PAUSE_MS);
   });
 });

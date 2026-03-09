@@ -49,7 +49,7 @@ describe('US-3.1 Connect Google Calendar', () => {
       .toBeVisible()
       .withTimeout(10000);
 
-    logCheck('User can connect Google Calendar using an authentication flow', true);
+    logCheck('User can connect Google Calendar using an iCal', true);
     logCheck('App receives permission to read calendar events', true);
 
     await pause(1200);

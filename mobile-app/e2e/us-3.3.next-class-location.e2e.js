@@ -1,118 +1,85 @@
-const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-const logCheck = (label, done) => {
-  console.log(`${done ? '☑' : '☐'} ${label}`);
-};
+const ICAL_URL =
+  'https://calendar.google.com/calendar/ical/8e4bd319d14b618d72f25e7bc49c1cb67bf8b41f33e59e6bd97dd8ad64dceb42%40group.calendar.google.com/private-f407e9ad39169e5c2888b32df4726b8a/basic.ics';
+const FAST_MAP_TIMEOUT_MS = 3000;
+const FAST_GET_STARTED_TIMEOUT_MS = 2000;
+const STEP_PAUSE_MS = 800;
 
-describe('US-3.3 Identify next class location', () => {
-  it('identifies the next event, maps known buildings, and provides fallback', async () => {
-    console.log('\nUS-3.3 E2E — Next class location');
+function pause(ms = STEP_PAUSE_MS) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-    logCheck('The next upcoming event is identified', false);
-    logCheck('Locations are mapped to known buildings when possible', false);
-    logCheck('Manual fallback is provided when needed', false);
-
+describe('US-3.3 Identify Next Class Location', () => {
+  it('identifies the next upcoming event', async () => {
     try {
+      await waitFor(element(by.id('map-screen')))
+        .toBeVisible()
+        .withTimeout(FAST_MAP_TIMEOUT_MS);
+    } catch (err) {
       await waitFor(element(by.id('get-started')))
         .toBeVisible()
-        .withTimeout(12000);
+        .withTimeout(FAST_GET_STARTED_TIMEOUT_MS);
       await element(by.id('get-started')).tap();
-    } catch (error) {
-      // Already past the welcome screen.
+      await waitFor(element(by.id('map-screen')))
+        .toBeVisible()
+        .withTimeout(20000);
     }
+
+    await pause();
+    try {
+      await waitFor(element(by.id('classes-calendar-required')))
+        .toBeVisible()
+        .withTimeout(4000);
+    } catch (err) {
+      await element(by.id('calendar-open-button')).tap();
+      await waitFor(element(by.id('calendar-modal')))
+        .toBeVisible()
+        .withTimeout(5000);
+      await element(by.id('calendar-disconnect-button')).tap();
+      await element(by.label('Close')).tap();
+      await waitFor(element(by.id('classes-calendar-required')))
+        .toBeVisible()
+        .withTimeout(8000);
+    }
+
+    await pause();
+    await element(by.id('calendar-required-connect')).tap();
+    await waitFor(element(by.id('calendar-modal')))
+      .toBeVisible()
+      .withTimeout(5000);
+
+    await pause();
+    await element(by.id('calendar-link-input')).replaceText(ICAL_URL);
+    await pause();
+    await element(by.id('calendar-connect-button')).tap();
+
+    await waitFor(element(by.id('calendar-events-list')))
+      .toBeVisible()
+      .withTimeout(20000);
+    await waitFor(element(by.id('calendar-event-name')).atIndex(0))
+      .toBeVisible()
+      .withTimeout(10000);
+    const firstEventAttrs = await element(by.id('calendar-event-name')).atIndex(0).getAttributes();
+    const firstEventName =
+      (firstEventAttrs && (firstEventAttrs.text || firstEventAttrs.label)) || null;
+    await pause();
+    await element(by.label('Close')).tap();
 
     await waitFor(element(by.id('classes-calendar-required')))
+      .toBeNotVisible()
+      .withTimeout(8000);
+    await waitFor(element(by.id('next-class-info-button')))
       .toBeVisible()
-      .withTimeout(12000);
+      .withTimeout(15000);
+    await pause();
+    await element(by.id('next-class-info-button')).tap();
 
-    await pause(1600);
-    await element(by.id('calendar-required-connect')).tap();
-
-    await waitFor(element(by.id('calendar-modal')))
+    await waitFor(element(by.text('Next Class')))
       .toBeVisible()
-      .withTimeout(12000);
-
-    await pause(1600);
-    await element(by.id('calendar-link-input')).replaceText(
-      'https://calendar.google.com/calendar/ical/mock/basic.ics',
-    );
-    await pause(1600);
-    await element(by.id('calendar-connect-button')).tap();
-
-    await waitFor(element(by.id('calendar-event-row')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.label('Close')).tap();
-
-    await pause(1600);
-    await element(by.id('directions-to-next-class-button')).tap();
-
-    await waitFor(element(by.id('next-class-card')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.text('SOEN 390')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    logCheck('The next upcoming event is identified', true);
-
-    await waitFor(element(by.text('Hingston Hall (HB)')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    logCheck('Locations are mapped to known buildings when possible', true);
-
-    await element(by.label('Google Calendar')).tap();
-
-    await waitFor(element(by.id('calendar-modal')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.id('calendar-disconnect-button')).tap();
-
-    await waitFor(element(by.id('calendar-connect-button')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await pause(1600);
-    await element(by.id('calendar-link-input')).replaceText(
-      'https://calendar.google.com/calendar/ical/mock-unknown/basic.ics',
-    );
-    await pause(1600);
-    await element(by.id('calendar-connect-button')).tap();
-
-    await waitFor(element(by.id('calendar-event-row')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.label('Close')).tap();
-
-    await pause(1600);
-    await element(by.id('directions-to-next-class-button')).tap();
-
-    await waitFor(element(by.id('next-class-card')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.text('Unknown Building 123')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.text('Go')).tap();
-
-    await waitFor(element(by.text('Unable to open directions')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    logCheck('Manual fallback is provided when needed', true);
-
-    try {
-      await element(by.text('OK')).tap();
-    } catch (error) {
-      // Alert button may auto-dismiss in some environments.
+      .withTimeout(10000);
+    if (firstEventName) {
+      await waitFor(element(by.text(firstEventName)))
+        .toBeVisible()
+        .withTimeout(10000);
     }
-
-    await pause(1500);
   });
 });

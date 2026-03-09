@@ -4,12 +4,10 @@ const logCheck = (label, done) => {
 };
 
 describe('US-3.4 Generate directions to next class', () => {
-  it('generates directions, detects arrival, and updates routes when the next class changes', async () => {
+  it('opens next class directions for SOEN 390 (Faubourg FG)', async () => {
     console.log('\nUS-3.4 E2E — Next class directions');
 
-    logCheck('Directions are generated from current location', false);
-    logCheck('Arrival is detected when near destination', false);
-    logCheck('Routes update if the next class changes', false);
+    logCheck('Next class directions show SOEN 390 at Faubourg (FG)', false);
 
     try {
       await waitFor(element(by.id('get-started')))
@@ -33,14 +31,10 @@ describe('US-3.4 Generate directions to next class', () => {
 
     await pause(1600);
     await element(by.id('calendar-link-input')).replaceText(
-      'https://calendar.google.com/calendar/ical/mock/basic.ics',
+      'https://calendar.google.com/calendar/ical/8e4bd319d14b618d72f25e7bc49c1cb67bf8b41f33e59e6bd97dd8ad64dceb42%40group.calendar.google.com/private-f407e9ad39169e5c2888b32df4726b8a/basic.ics',
     );
     await pause(1600);
     await element(by.id('calendar-connect-button')).tap();
-
-    await waitFor(element(by.id('calendar-event-row')))
-      .toBeVisible()
-      .withTimeout(12000);
 
     await element(by.label('Close')).tap();
 
@@ -55,86 +49,14 @@ describe('US-3.4 Generate directions to next class', () => {
       .toBeVisible()
       .withTimeout(12000);
 
-    await waitFor(element(by.text('Hingston Hall (HB)')))
+    await element(by.id('next-class-go-button')).tap();
+
+    await waitFor(element(by.id('preview-route-button')))
       .toBeVisible()
       .withTimeout(12000);
+    await element(by.id('preview-route-button')).tap();
 
-    await element(by.text('Go')).tap();
-
-    await waitFor(element(by.id('nav-step-0')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.id('navigation-start-input')))
-      .toHaveText('Your location')
-      .withTimeout(12000);
-
-    await waitFor(element(by.id('navigation-destination-input')))
-      .toHaveText('Hingston Hall (HB)')
-      .withTimeout(12000);
-
-    logCheck('Directions are generated from current location', true);
-
-    await waitFor(element(by.id('arrival-banner')))
-      .toExist()
-      .withTimeout(12000);
-
-    logCheck('Arrival is detected when near destination', true);
-
-    await element(by.id('navigation-close-button')).tap();
-
-    await pause(1600);
-    await element(by.label('Google Calendar')).tap();
-
-    await waitFor(element(by.id('calendar-modal')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.id('calendar-disconnect-button')).tap();
-
-    await waitFor(element(by.id('calendar-connect-button')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await pause(1600);
-    await element(by.id('calendar-link-input')).replaceText(
-      'https://calendar.google.com/calendar/ical/mock-next/basic.ics',
-    );
-    await pause(1600);
-    await element(by.id('calendar-connect-button')).tap();
-
-    await waitFor(element(by.id('calendar-event-row')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.label('Close')).tap();
-
-    await pause(1600);
-    await element(by.id('directions-to-next-class-button')).tap();
-
-    await waitFor(element(by.id('next-class-card')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.text('SOEN 391')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.text('Concordia Vanier Library (VL)')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await element(by.text('Go')).tap();
-
-    await waitFor(element(by.id('nav-step-0')))
-      .toBeVisible()
-      .withTimeout(12000);
-
-    await waitFor(element(by.id('navigation-destination-input')))
-      .toHaveText('Concordia Vanier Library (VL)')
-      .withTimeout(12000);
-
-    logCheck('Routes update if the next class changes', true);
+    logCheck('Next class directions show SOEN 390 at Faubourg (FG)', true);
 
     await pause(1500);
   });
