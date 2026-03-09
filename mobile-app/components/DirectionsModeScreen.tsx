@@ -28,7 +28,8 @@ function haversineDistance(
     sinLat * sinLat +
     Math.cos((a.latitude * Math.PI) / 180) *
       Math.cos((b.latitude * Math.PI) / 180) *
-      sinLng * sinLng;
+      sinLng *
+      sinLng;
   return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
 }
 
@@ -150,8 +151,8 @@ export default function DirectionsModeScreen({
       subscriptionRef.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          distanceInterval: 5,   // update every ~5 metres of movement
-          timeInterval: 3000,    // or every 3 seconds, whichever comes first
+          distanceInterval: 5, // update every ~5 metres of movement
+          timeInterval: 3000, // or every 3 seconds, whichever comes first
         },
         handleLocationUpdate,
       );

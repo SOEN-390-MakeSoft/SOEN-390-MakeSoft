@@ -97,7 +97,9 @@ function makeMockLocation(coord: { latitude: number; longitude: number }): Locat
 }
 
 /** Render the component and wait until watchPositionAsync has been called. */
-async function renderAndTrack(props: Partial<React.ComponentProps<typeof DirectionsModeScreen>> = {}) {
+async function renderAndTrack(
+  props: Partial<React.ComponentProps<typeof DirectionsModeScreen>> = {},
+) {
   const merged = {
     visible: true,
     steps: STEPS,
@@ -476,9 +478,7 @@ describe('DirectionsModeScreen', () => {
     it('removes the location subscription when visible becomes false', async () => {
       const { rerender } = await renderAndTrack();
 
-      rerender(
-        <DirectionsModeScreen visible={false} steps={STEPS} onClose={jest.fn()} />,
-      );
+      rerender(<DirectionsModeScreen visible={false} steps={STEPS} onClose={jest.fn()} />);
 
       expect(mockSubscriptionRemove).toHaveBeenCalled();
     });

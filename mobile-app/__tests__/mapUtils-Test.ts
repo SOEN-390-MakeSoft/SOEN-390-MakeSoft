@@ -420,7 +420,7 @@ describe('mapUtils', () => {
     });
 
     it('returns Loyola for a point inside Loyola bounds (happy path)', () => {
-      const loyolaPoint: LatLng = { latitude: 45.458, longitude: -73.640 };
+      const loyolaPoint: LatLng = { latitude: 45.458, longitude: -73.64 };
       expect(getCampusFromCoordinate(loyolaPoint)).toBe('Loyola');
     });
 
@@ -431,7 +431,7 @@ describe('mapUtils', () => {
   });
 
   describe('nearestPolygonVertex', () => {
-    const square: LatLng[] = makeRectangle(45.502, -73.568, 45.500, -73.566);
+    const square: LatLng[] = makeRectangle(45.502, -73.568, 45.5, -73.566);
 
     it('returns the reference point unchanged for an empty polygon (edge case)', () => {
       const ref: LatLng = { latitude: 45.501, longitude: -73.567 };
@@ -448,7 +448,7 @@ describe('mapUtils', () => {
 
     it('returns the single vertex for a one-vertex polygon (edge case)', () => {
       const single: LatLng[] = [{ latitude: 45.497, longitude: -73.579 }];
-      const ref: LatLng = { latitude: 45.500, longitude: -73.580 };
+      const ref: LatLng = { latitude: 45.5, longitude: -73.58 };
       expect(nearestPolygonVertex(ref, single)).toEqual(single[0]);
     });
   });

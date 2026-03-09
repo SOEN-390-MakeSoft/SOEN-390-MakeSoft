@@ -32,6 +32,7 @@ interface SearchBarProps {
   inputRef: React.RefObject<TextInput | null>;
   brandColor: string;
   logoSource: ImageSourcePropType;
+  onLogoPress?: () => void;
 }
 
 export default function SearchBar({
@@ -48,6 +49,7 @@ export default function SearchBar({
   inputRef,
   brandColor,
   logoSource,
+  onLogoPress,
 }: Readonly<SearchBarProps>) {
   return (
     <>
@@ -83,9 +85,14 @@ export default function SearchBar({
             </Pressable>
           )}
         </View>
-        <View style={styles.mapBrandBadge}>
+        <Pressable
+          style={styles.mapBrandBadge}
+          onPress={onLogoPress}
+          accessibilityLabel="Google Calendar"
+          accessibilityRole="button"
+        >
           <Image source={logoSource} style={styles.mapBrandBadgeImage} resizeMode="contain" />
-        </View>
+        </Pressable>
       </View>
 
       {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
@@ -103,7 +110,7 @@ export default function SearchBar({
                 {result.name}
               </Text>
               <Text style={styles.mapSearchResultMeta} numberOfLines={1}>
-                {result.code ? `${result.code} · ` : ''}
+                {result.code ? `${result.code} Â· ` : ''}
                 {result.address ?? 'Address unavailable'}
               </Text>
             </Pressable>
