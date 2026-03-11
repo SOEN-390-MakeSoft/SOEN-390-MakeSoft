@@ -126,11 +126,10 @@ export default function IndoorMapOverlay({
   routeColor = '#1a73e8',
 }: Readonly<IndoorMapOverlayProps>) {
   // ---- Categorise features --------------------------------------------------
-  const { outlines, areas, rooms, corridors, stairs, escalators } = useMemo(() => {
+  const { outlines, areas, rooms, stairs, escalators } = useMemo(() => {
     const out: IndoorLevelOutline[] = [];
     const ar: IndoorArea[] = [];
     const rm: IndoorRoom[] = [];
-    const co: IndoorCorridor[] = [];
     const st: IndoorStairs[] = [];
     const es: IndoorEscalator[] = [];
 
@@ -145,9 +144,6 @@ export default function IndoorMapOverlay({
         case 'room':
           rm.push(f as IndoorRoom);
           break;
-        case 'corridor':
-          co.push(f as IndoorCorridor);
-          break;
         case 'stairs':
           st.push(f as IndoorStairs);
           break;
@@ -159,7 +155,7 @@ export default function IndoorMapOverlay({
       }
     }
 
-    return { outlines: out, areas: ar, rooms: rm, corridors: co, stairs: st, escalators: es };
+    return { outlines: out, areas: ar, rooms: rm, stairs: st, escalators: es };
   }, [activeLevelFeatures]);
 
   // ---- Route polyline filtered to this level --------------------------------

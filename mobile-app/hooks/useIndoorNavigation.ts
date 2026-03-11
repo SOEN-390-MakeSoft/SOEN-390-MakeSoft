@@ -129,18 +129,41 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     fromLevel?: string;
   } | null>(null);
 
+  // Cached building data (features, graph, roomIndex, levels)
+  const [buildingData, setBuildingData] = useState<ReturnType<typeof loadBuilding> | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!activeBuildingCode) {
+      setBuildingData(null);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const data = loadBuilding(activeBuildingCode);
+      if (!isCancelled) {
+        setBuildingData(data);
+      }
+    } catch (e) {
+      if (!isCancelled) {
+        setError((prev) => prev ?? 'Failed to load indoor map data');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeBuildingCode]);
+
   // Building metadata (bounds, entrance, etc.)
   const buildingMeta = useMemo(
     () => (activeBuildingCode ? getBuildingMeta(activeBuildingCode) : null),
     [activeBuildingCode],
   );
-
-  // Cached building data (features, graph, roomIndex, levels)
-  const buildingData = useMemo(() => {
-    if (!activeBuildingCode) return null;
-    return loadBuilding(activeBuildingCode);
-  }, [activeBuildingCode]);
-
   const levels = buildingData?.levels ?? [];
   const featuresByLevel = useMemo(
     () => (buildingData ? groupByLevel(buildingData.features) : new Map<string, IndoorFeature[]>()),
@@ -241,7 +264,6 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       setError(`No indoor map available for building "${buildingCode}"`);
       return false;
     }
-    setIsLoading(true);
     setError(null);
     try {
       const code = buildingCode.toUpperCase();
@@ -258,8 +280,6 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     } catch (e) {
       setError(String(e));
       return false;
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 

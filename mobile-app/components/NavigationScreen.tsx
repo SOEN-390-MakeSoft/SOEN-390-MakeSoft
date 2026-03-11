@@ -461,10 +461,6 @@ export default function NavigationScreen({
 
   const isModeDisabled = (mode: TransportMode) => disabledTransportModes.includes(mode);
 
-  useEffect(() => {
-    isMinimizedRef.current = isMinimized;
-  }, [isMinimized]);
-
   const handleOpenPreview = () => {
     if (isPreviewButtonDisabled) return;
     setIsMinimized(false);
@@ -525,15 +521,16 @@ export default function NavigationScreen({
           { backgroundColor: themeColors.bottomCardColor },
         ]}
       >
-        <View
+        <Pressable
           style={styles.minimizeHandleTouch}
           {...handlePanResponder.panHandlers}
+          onPress={() => setIsMinimized((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={isMinimized ? 'Expand menu' : 'Minimize menu'}
           testID="menu-minimize-toggle"
         >
           <View style={styles.minimizeHandleBar} />
-        </View>
+        </Pressable>
         <View style={styles.bottomHeader}>
           <View style={styles.tripModeRow}>
             <ModeChip

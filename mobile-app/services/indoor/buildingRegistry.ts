@@ -143,8 +143,8 @@ export function loadBuilding(buildingCode: string): CachedBuildingData | null {
 }
 
 /**
- * Determine which indoor building (if any) a coordinate falls inside.
- * Uses a simple bounding-box + closest-entrance heuristic.
+ * Determine which indoor building (if any) a coordinate is near.
+ * Uses a simple closest-entrance heuristic within a 100 m radius.
  */
 export function findBuildingAtCoordinate(point: LatLng): IndoorBuildingMeta | null {
   let closest: IndoorBuildingMeta | null = null;

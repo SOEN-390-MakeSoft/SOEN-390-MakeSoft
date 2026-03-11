@@ -86,8 +86,12 @@ function addSecondsToLabel(label: string, extraSeconds: number): string {
   totalSec += extraSeconds;
   const hours = Math.floor(totalSec / 3600);
   const mins = Math.ceil((totalSec % 3600) / 60);
-  if (hours > 0) return mins > 0 ? `${hours} hour ${mins} mins` : `${hours} hour`;
-  return `${mins} mins`;
+  const hourLabel = hours === 1 ? 'hour' : 'hours';
+  const minLabel = mins === 1 ? 'min' : 'mins';
+
+  if (hours > 0)
+    return mins > 0 ? `${hours} ${hourLabel} ${mins} ${minLabel}` : `${hours} ${hourLabel}`;
+  return `${mins} ${minLabel}`;
 }
 
 type QuickPick = {
@@ -325,6 +329,14 @@ export default function MapScreen() {
       500,
     );
   });
+
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const {
     isMenuOpen,
     setIsMenuOpen,
@@ -344,7 +356,7 @@ export default function MapScreen() {
   // alongside buildings in the global search bar.
   // -----------------------------------------------------------------------
   const roomSearchResults = useMemo(() => {
-    const q = searchQuery.trim();
+    const q = debouncedQuery.trim();
     if (!q) return [];
 
     // If indoor mode is already active, use the hook's fast search.
@@ -685,7 +697,7 @@ export default function MapScreen() {
       }
 
       // 3. Zoom the map to the building entrance area
-      const meta = indoor.buildingMeta;
+      const meta = getBuildingMeta(detected.buildingCode);
       const entrance = meta?.entrances?.[0];
       if (entrance) {
         mapRef.current?.animateToRegion(

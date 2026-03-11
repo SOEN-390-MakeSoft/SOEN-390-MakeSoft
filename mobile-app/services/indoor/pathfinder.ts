@@ -10,7 +10,7 @@
  */
 
 import { IndoorGraph } from './IndoorGraph';
-import type { GraphNode, IndoorNavStep, IndoorRoute, LatLng } from './types';
+import type { IndoorNavStep, IndoorRoute, LatLng } from './types';
 
 // ---------------------------------------------------------------------------
 // Options
