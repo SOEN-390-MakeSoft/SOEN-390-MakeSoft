@@ -35,6 +35,12 @@ export function buildRoomIndex(features: IndoorFeature[]): Map<string, ResolvedR
 
     // Index by exact ref and also by a normalized version (uppercase, trimmed)
     const key = normalizeRef(room.ref);
+
+    // Prefer the polygon version when both a Polygon and a Point exist for
+    // the same ref — the polygon carries the outline needed for highlighting.
+    const existing = index.get(key);
+    if (existing && existing.polygon.length >= 3 && room.polygon.length < 3) continue;
+
     index.set(key, {
       featureId: room.id,
       ref: room.ref,

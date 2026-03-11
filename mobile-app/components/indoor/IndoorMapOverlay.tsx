@@ -54,7 +54,15 @@ const COLORS = {
 // Text lays out, then stop to avoid per-frame overhead.
 // ---------------------------------------------------------------------------
 
-function RoomLabelMarker({ room, shortLabel }: { room: IndoorRoom; shortLabel: string }) {
+function RoomLabelMarker({
+  room,
+  shortLabel,
+  onPress,
+}: {
+  room: IndoorRoom;
+  shortLabel: string;
+  onPress?: () => void;
+}) {
   const [tracked, setTracked] = useState(Platform.OS === 'android');
 
   const handleLayout = useCallback(
@@ -72,6 +80,7 @@ function RoomLabelMarker({ room, shortLabel }: { room: IndoorRoom; shortLabel: s
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracked}
       zIndex={10}
+      onPress={onPress}
     >
       <View collapsable={false} onLayout={handleLayout} style={labelStyles.labelContainer}>
         <Text style={labelStyles.labelText} allowFontScaling={false}>
@@ -214,7 +223,7 @@ export default function IndoorMapOverlay({
         const isSelected = selectedRoom?.featureId === room.id;
         return (
           <Polygon
-            key={room.id}
+            key={`${room.id}${isSelected ? '-sel' : ''}`}
             coordinates={room.polygon}
             fillColor={isSelected ? COLORS.roomSelectedFill : COLORS.roomFill}
             strokeColor={isSelected ? COLORS.roomSelectedStroke : COLORS.roomStroke}
@@ -249,39 +258,107 @@ export default function IndoorMapOverlay({
         else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
         else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
         else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
-        return <RoomLabelMarker key={`label-${room.id}`} room={room} shortLabel={shortLabel} />;
+        return (
+          <RoomLabelMarker
+            key={`label-${room.id}`}
+            room={room}
+            shortLabel={shortLabel}
+            onPress={
+              onRoomPress && room.ref
+                ? () =>
+                    onRoomPress({
+                      featureId: room.id,
+                      ref: room.ref!,
+                      level: room.levels[0] ?? '0',
+                      position: room.centroid,
+                      polygon: room.polygon,
+                    })
+                : undefined
+            }
+          />
+        );
       })}
 
       {/* 4. Corridors — intentionally not rendered; rooms + outlines give
            sufficient context and the walkway lines add visual clutter. */}
 
-      {/* 5. Stairs — area polygons only (paths hidden to reduce clutter) */}
+      {/* 5. Stairs — area polygons + label */}
       {stairs.map((s) =>
         s.polygon.length > 2 ? (
-          <Polygon
-            key={s.id}
-            coordinates={s.polygon}
-            fillColor="rgba(180, 120, 40, 0.2)"
-            strokeColor={COLORS.stairs}
-            strokeWidth={1.5}
-            zIndex={5}
-            tappable={false}
-          />
+          <React.Fragment key={s.id}>
+            <Polygon
+              coordinates={s.polygon}
+              fillColor="rgba(180, 120, 40, 0.2)"
+              strokeColor={COLORS.stairs}
+              strokeWidth={1.5}
+              zIndex={5}
+              tappable={false}
+            />
+            <Marker
+              coordinate={(() => {
+                const sum = s.polygon.reduce(
+                  (a, p) => ({
+                    latitude: a.latitude + p.latitude,
+                    longitude: a.longitude + p.longitude,
+                  }),
+                  { latitude: 0, longitude: 0 },
+                );
+                return {
+                  latitude: sum.latitude / s.polygon.length,
+                  longitude: sum.longitude / s.polygon.length,
+                };
+              })()}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+              zIndex={10}
+            >
+              <View style={labelStyles.labelContainer}>
+                <Text style={labelStyles.labelText} allowFontScaling={false}>
+                  Stairs
+                </Text>
+              </View>
+            </Marker>
+          </React.Fragment>
         ) : null,
       )}
 
-      {/* 6. Escalators — area polygons only (paths hidden to reduce clutter) */}
+      {/* 6. Escalators — area polygons + label */}
       {escalators.map((e) =>
         e.polygon.length > 2 ? (
-          <Polygon
-            key={e.id}
-            coordinates={e.polygon}
-            fillColor="rgba(140, 100, 180, 0.2)"
-            strokeColor={COLORS.escalator}
-            strokeWidth={1.5}
-            zIndex={5}
-            tappable={false}
-          />
+          <React.Fragment key={e.id}>
+            <Polygon
+              coordinates={e.polygon}
+              fillColor="rgba(140, 100, 180, 0.2)"
+              strokeColor={COLORS.escalator}
+              strokeWidth={1.5}
+              zIndex={5}
+              tappable={false}
+            />
+            <Marker
+              coordinate={(() => {
+                const sum = e.polygon.reduce(
+                  (a, p) => ({
+                    latitude: a.latitude + p.latitude,
+                    longitude: a.longitude + p.longitude,
+                  }),
+                  { latitude: 0, longitude: 0 },
+                );
+                return {
+                  latitude: sum.latitude / e.polygon.length,
+                  longitude: sum.longitude / e.polygon.length,
+                };
+              })()}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+              zIndex={10}
+            >
+              <View style={labelStyles.labelContainer}>
+                <Text style={labelStyles.labelText} allowFontScaling={false}>
+                  Esc.
+                </Text>
+              </View>
+            </Marker>
+          </React.Fragment>
         ) : null,
       )}
 

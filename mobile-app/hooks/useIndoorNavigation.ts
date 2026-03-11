@@ -177,14 +177,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
 
   const computeRoute = useCallback(
     (
-      data: {
-        graph: ReturnType<typeof loadBuilding> extends infer T
-          ? T extends null
-            ? never
-            : T
-          : never;
-        roomIndex: Map<string, ResolvedRoom>;
-      },
+      data: NonNullable<ReturnType<typeof loadBuilding>>,
       bCode: string,
       roomQuery: string,
       options: PathfinderOptions,

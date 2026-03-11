@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Entypo from '@expo/vector-icons/Entypo';
 
 type QuickPick = {
   code: string;
@@ -92,46 +93,46 @@ export default function QuickPickPanel({
         testID="quick-pick-panel"
         {...panResponder.panHandlers}
       >
-        {/* All floating action buttons live inside the wrapper so they move with the panel */}
-        <View pointerEvents="auto">
-          <Pressable
-            testID="directions-to-next-class-button"
-            style={styles.directionsToNextClassButton}
-            onPress={onDirectionsToNextClassPress ?? (() => {})}
-            accessibilityLabel="Directions to my next class"
-          >
-            <View style={styles.directionsToNextClassIcon}>
-              <MaterialIcons name="directions-walk" size={28} color="#c41230" />
-              <View style={styles.directionsToNextClassIconRight}>
-                <MaterialIcons name="event" size={20} color="#c41230" />
-                <MaterialIcons name="place" size={20} color="#c41230" />
-              </View>
+        {/* Directions-to-next-class button — floats above top-left of panel */}
+        <Pressable
+          testID="directions-to-next-class-button"
+          style={styles.directionsToNextClassButton}
+          onPress={onDirectionsToNextClassPress ?? (() => {})}
+          accessibilityLabel="Directions to my next class"
+        >
+          <View style={styles.directionsToNextClassIcon}>
+            <MaterialIcons name="directions-walk" size={28} color="#c41230" />
+            <View style={styles.directionsToNextClassIconRight}>
+              <MaterialIcons name="event" size={20} color="#c41230" />
+              <MaterialIcons name="place" size={20} color="#c41230" />
             </View>
-          </Pressable>
-          {showNextClassInfo && (
-            <Pressable
-              testID="next-class-info-button"
-              style={styles.courseInfoButton}
-              onPress={onNextClassInfoPress ?? (() => {})}
-              accessibilityLabel="Show next class information"
-            >
-              <MaterialIcons name="info-outline" size={28} color="#c41230" />
-            </Pressable>
-          )}
+          </View>
+        </Pressable>
+        {/* Next class info button — floats above panel, left of location */}
+        {showNextClassInfo && onNextClassInfoPress ? (
           <Pressable
-            testID="location-button"
-            style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
-            onPress={onLocationPress}
-            disabled={isLocating}
-            accessibilityLabel="Go to my location"
+            testID="next-class-info-button"
+            style={styles.courseInfoButton}
+            onPress={onNextClassInfoPress}
+            accessibilityLabel="Show next class information"
           >
-            {isLocating ? (
-              <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
-            ) : (
-              <MaterialIcons name="my-location" size={32} color="#c41230" />
-            )}
+            <Entypo name="info-with-circle" color="#c41230" size={24} />
           </Pressable>
-        </View>
+        ) : null}
+        {/* Location button — floats above top-right of panel */}
+        <Pressable
+          testID="location-button"
+          style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
+          onPress={onLocationPress}
+          disabled={isLocating}
+          accessibilityLabel="Go to my location"
+        >
+          {isLocating ? (
+            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
+          ) : (
+            <MaterialIcons name="my-location" size={32} color="#c41230" />
+          )}
+        </Pressable>
 
         {/* Drag handle indicator */}
         <View style={styles.dragHandle} />
@@ -279,16 +280,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -44,
     left: 100,
-    width: 65,
-    height: 65,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#d8d8d8',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
     zIndex: 4,
-    elevation: 6,
   },
   directionsToNextClassIcon: {
     flexDirection: 'row',

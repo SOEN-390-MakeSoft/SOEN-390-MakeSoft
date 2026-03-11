@@ -22,7 +22,10 @@ import {
   searchRooms,
   findNearestPOI,
 } from '../services/indoor/roomResolver';
-import { detectIndoorDestination } from '../services/indoor/buildingRegistry';
+import {
+  detectIndoorDestination,
+  findBuildingAtCoordinate,
+} from '../services/indoor/buildingRegistry';
 import type { IndoorFeature, IndoorRoom, IndoorCorridor } from '../services/indoor/types';
 
 // ---------------------------------------------------------------------------
@@ -550,5 +553,212 @@ describe('detectIndoorDestination', () => {
 
   it('returns null for unknown building codes', () => {
     expect(detectIndoorDestination('Z-100')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ref-based classification tests
+// ---------------------------------------------------------------------------
+
+describe('geojsonParser – ref-based classification', () => {
+  beforeEach(() => resetIdCounter());
+
+  it('classifies a feature with ref containing "escalator" as escalator', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { ref: 'H-escalator-5', level: '3', indoor: 'room' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-73.579, 45.497],
+                [-73.5789, 45.497],
+                [-73.5789, 45.4971],
+                [-73.579, 45.4971],
+                [-73.579, 45.497],
+              ],
+            ],
+          },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    expect(features.length).toBe(1);
+    expect(features[0].type).toBe('escalator');
+  });
+
+  it('classifies a feature with ref containing "stair" tagged as area as stairs', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { ref: 'H-stair-2-1', level: '2', indoor: 'area' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-73.579, 45.497],
+                [-73.5789, 45.497],
+                [-73.5789, 45.4971],
+                [-73.579, 45.4971],
+                [-73.579, 45.497],
+              ],
+            ],
+          },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    expect(features.length).toBe(1);
+    expect(features[0].type).toBe('stairs');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// repeat_on level merging tests
+// ---------------------------------------------------------------------------
+
+describe('geojsonParser – repeat_on support', () => {
+  beforeEach(() => resetIdCounter());
+
+  it('merges repeat_on levels with the base level', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { highway: 'steps', level: '8', repeat_on: '9' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [-73.579, 45.497],
+              [-73.5789, 45.4971],
+            ],
+          },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    expect(features[0].levels).toEqual(expect.arrayContaining(['8', '9']));
+    expect(features[0].levels.length).toBe(2);
+  });
+
+  it('does not duplicate levels when repeat_on overlaps', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { highway: 'steps', level: '8;9', repeat_on: '9' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [-73.579, 45.497],
+              [-73.5789, 45.4971],
+            ],
+          },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    expect(features[0].levels).toEqual(['8', '9']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRoomIndex polygon-over-point preference tests
+// ---------------------------------------------------------------------------
+
+describe('buildRoomIndex – polygon preference', () => {
+  beforeEach(() => resetIdCounter());
+
+  it('keeps the polygon entry when point comes second', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { indoor: 'room', level: '8', ref: 'H-820' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-73.579, 45.497],
+                [-73.5789, 45.497],
+                [-73.5789, 45.4971],
+                [-73.579, 45.4971],
+                [-73.579, 45.497],
+              ],
+            ],
+          },
+        },
+        {
+          type: 'Feature',
+          properties: { indoor: 'room', level: '8', ref: 'H-820' },
+          geometry: { type: 'Point', coordinates: [-73.57893, 45.49733] },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    const index = buildRoomIndex(features);
+    const room = index.get('H-820');
+    expect(room).toBeDefined();
+    expect(room!.polygon.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('replaces the point entry when polygon comes second', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { indoor: 'room', level: '8', ref: 'H-820' },
+          geometry: { type: 'Point', coordinates: [-73.57893, 45.49733] },
+        },
+        {
+          type: 'Feature',
+          properties: { indoor: 'room', level: '8', ref: 'H-820' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-73.579, 45.497],
+                [-73.5789, 45.497],
+                [-73.5789, 45.4971],
+                [-73.579, 45.4971],
+                [-73.579, 45.497],
+              ],
+            ],
+          },
+        },
+      ],
+    };
+    const features = parseIndoorGeoJSON(geo);
+    const index = buildRoomIndex(features);
+    const room = index.get('H-820');
+    expect(room).toBeDefined();
+    expect(room!.polygon.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findBuildingAtCoordinate tests
+// ---------------------------------------------------------------------------
+
+describe('findBuildingAtCoordinate', () => {
+  it('returns building meta when coordinate is near Hall Building', () => {
+    // Hall Building approximate centre
+    const result = findBuildingAtCoordinate({ latitude: 45.4972, longitude: -73.5789 });
+    expect(result).not.toBeNull();
+    expect(result!.code).toBe('H');
+  });
+
+  it('returns null for a coordinate far from any indoor building', () => {
+    const result = findBuildingAtCoordinate({ latitude: 0, longitude: 0 });
+    expect(result).toBeNull();
   });
 });

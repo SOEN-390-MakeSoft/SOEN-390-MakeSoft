@@ -14,6 +14,7 @@ import type {
   IndoorElevator,
   IndoorEscalator,
   IndoorFeature,
+  IndoorFeatureType,
   IndoorLevelOutline,
   IndoorPOI,
   IndoorRoom,
@@ -64,13 +65,25 @@ function ringToLatLngs(ring: GeoCoord[]): LatLng[] {
   return ring.map(toLatLng);
 }
 
-/** Parse the "level" property which can be semicolon-separated. */
-function parseLevels(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return raw
-    .split(';')
-    .map((l) => l.trim())
-    .filter(Boolean);
+/** Parse the "level" property which can be semicolon-separated.
+ *  Optionally merge extra levels from the `repeat_on` tag. */
+function parseLevels(raw: string | undefined, repeatOn?: string): string[] {
+  const base = raw
+    ? raw
+        .split(';')
+        .map((l) => l.trim())
+        .filter(Boolean)
+    : [];
+  if (repeatOn) {
+    const extra = repeatOn
+      .split(';')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (const l of extra) {
+      if (!base.includes(l)) base.push(l);
+    }
+  }
+  return base;
 }
 
 /** Simple centroid of a polygon ring. */
@@ -84,7 +97,7 @@ function centroid(ring: LatLng[]): LatLng {
 }
 
 /** Classify a GeoJSON feature into our indoor type system. */
-function classify(props: Record<string, string | undefined>): IndoorFeature['type'] {
+function classify(props: Record<string, string | undefined>): IndoorFeatureType {
   // Elevator check first (highway=elevator)
   if (props.highway === 'elevator') return 'elevator';
   // Escalator: conveying + stairs
@@ -93,6 +106,10 @@ function classify(props: Record<string, string | undefined>): IndoorFeature['typ
   if (props.conveying === 'yes' && props.highway === 'steps') return 'escalator';
   // Stairs / steps
   if (props.highway === 'steps' || props.stairs === 'yes') return 'stairs';
+  // Ref-based fallback — catch features named like escalators / stairs even
+  // when explicit tags are missing (common in JOSM-exported indoor data).
+  if (props.ref && /escalator/i.test(props.ref)) return 'escalator';
+  if (props.ref && /stair/i.test(props.ref)) return 'stairs';
   // Explicit indoor room
   if (props.indoor === 'room') return 'room';
   // Building-level outline
@@ -144,7 +161,7 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
   for (const f of collection.features) {
     const props = f.properties ?? {};
     const type = classify(props);
-    const levels = parseLevels(props.level);
+    const levels = parseLevels(props.level, props.repeat_on);
     const ref = props.ref ?? null;
     const geom = f.geometry;
 
