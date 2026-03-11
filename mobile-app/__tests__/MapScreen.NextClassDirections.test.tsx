@@ -136,10 +136,10 @@ jest.mock('../hooks/useMapUI', () => ({
   useMapUI: () => ({
     isMenuOpen: false,
     setIsMenuOpen: jest.fn(),
-    isQuickPickOpen: false,
-    quickPickContentHeight: 0,
+    isQuickPickOpen: true,
+    quickPickContentHeight: 200,
     setQuickPickContentHeight: jest.fn(),
-    quickPickVisibleHeight: 0,
+    quickPickVisibleHeight: 200,
     quickPickMaxHeight: 300,
     handleToggleQuickPick: jest.fn(),
   }),
