@@ -73,8 +73,8 @@ function formatIndoorTime(seconds: number): string {
  */
 function addSecondsToLabel(label: string, extraSeconds: number): string {
   // Parse hours and minutes from the label
-  const hourMatch = label.match(/(\d+)\s*hour/);
-  const minMatch = label.match(/(\d+)\s*min/);
+  const hourMatch = label.match(/(\d+) ?hour/);
+  const minMatch = label.match(/([0-9]+) ?min/);
   let totalSec =
     (hourMatch ? parseInt(hourMatch[1], 10) * 3600 : 0) +
     (minMatch ? parseInt(minMatch[1], 10) * 60 : 0);
