@@ -16,8 +16,9 @@
  *   6. Destination marker pin
  */
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import { Marker, Polygon, Polyline } from 'react-native-maps';
 import type {
   IndoorFeature,
@@ -47,6 +48,39 @@ const COLORS = {
   stairs: 'rgba(180, 120, 40, 0.75)',
   escalator: 'rgba(140, 100, 180, 0.75)',
 };
+
+// ---------------------------------------------------------------------------
+// Android marker fix – start tracking so the bitmap is captured after the
+// Text lays out, then stop to avoid per-frame overhead.
+// ---------------------------------------------------------------------------
+
+function RoomLabelMarker({ room, shortLabel }: { room: IndoorRoom; shortLabel: string }) {
+  const [tracked, setTracked] = useState(Platform.OS === 'android');
+
+  const handleLayout = useCallback(
+    (_e: LayoutChangeEvent) => {
+      if (Platform.OS === 'android' && tracked) {
+        setTimeout(() => setTracked(false), 100);
+      }
+    },
+    [tracked],
+  );
+
+  return (
+    <Marker
+      coordinate={room.centroid}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracked}
+      zIndex={10}
+    >
+      <View collapsable={false} onLayout={handleLayout} style={labelStyles.labelContainer}>
+        <Text style={labelStyles.labelText} allowFontScaling={false}>
+          {shortLabel}
+        </Text>
+      </View>
+    </Marker>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -207,23 +241,15 @@ export default function IndoorMapOverlay({
       {rooms.map((room) => {
         if (!room.ref || room.polygon.length < 3) return null;
         // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
-        const shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
-        return (
-          <Marker
-            key={`label-${room.id}`}
-            coordinate={room.centroid}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-            zIndex={10}
-            style={labelStyles.markerWrap}
-          >
-            <View style={labelStyles.labelContainer}>
-              <Text style={labelStyles.labelText} numberOfLines={1} allowFontScaling={false}>
-                {shortLabel}
-              </Text>
-            </View>
-          </Marker>
-        );
+        let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
+        // Abbreviate facility names so they fit Android's marker bitmap limit
+        if (/^elevator/i.test(shortLabel)) shortLabel = 'Elev.';
+        else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
+        else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
+        else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
+        else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
+        else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
+        return <RoomLabelMarker key={`label-${room.id}`} room={room} shortLabel={shortLabel} />;
       })}
 
       {/* 4. Corridors — intentionally not rendered; rooms + outlines give
@@ -297,10 +323,6 @@ export default function IndoorMapOverlay({
 // ---------------------------------------------------------------------------
 
 const labelStyles = StyleSheet.create({
-  markerWrap: {
-    // Prevent the marker from having a default pin shadow / size
-    ...(Platform.OS === 'android' ? { width: 60, height: 20 } : {}),
-  },
   labelContainer: {
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderRadius: 4,

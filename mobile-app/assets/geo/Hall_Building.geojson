@@ -20399,7 +20399,7 @@
             "type": "Feature",
             "properties": {
                 "indoor": "room",
-                "level": "1;2;8;9",
+                "level": "1;2",
                 "ref": "H-elevator-1"
             },
             "geometry": {
@@ -27122,9 +27122,8 @@
             "type": "Feature",
             "properties": {
                 "indoor": "room",
-                "level": "1;2;8;9",
-                "ref": "H-elevator-8",
-                "repeat_on": "9"
+                "level": "8;9",
+                "ref": "H-elevator-8"
             },
             "geometry": {
                 "type": "Polygon",
