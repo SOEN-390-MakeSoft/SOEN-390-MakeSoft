@@ -7,8 +7,12 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  ScrollView,
   StyleSheet,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { CalendarEvent } from '../hooks/usePublicCalendar';
@@ -43,6 +47,38 @@ function formatEventTime(event: CalendarEvent): string {
   } catch {
     return startStr;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Event row (extracted to avoid nested component)
+// ---------------------------------------------------------------------------
+interface CalendarEventRowProps {
+  event: CalendarEvent;
+}
+
+function CalendarEventRow({ event }: Readonly<CalendarEventRowProps>) {
+  return (
+    <View style={styles.eventRow}>
+      <View style={styles.eventDot} />
+      <View style={styles.eventInfo}>
+        <Text style={styles.eventName} numberOfLines={2}>
+          {event.summary}
+        </Text>
+        <Text style={styles.eventTime} numberOfLines={1}>
+          {formatEventTime(event)}
+        </Text>
+        {event.location ? (
+          <Text style={styles.eventLocation} numberOfLines={1}>
+            📍 {event.location}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function CalendarListSeparator() {
+  return <View style={styles.separator} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,121 +120,123 @@ export default function CalendarModal({
     await onDisconnect();
   };
 
+  let connectedEventsContent: React.ReactNode = null;
+  if (isConnected && !loading) {
+    if (events.length === 0) {
+      connectedEventsContent = (
+        <View style={styles.centered}>
+          <MaterialIcons name="event-busy" size={48} color="#999" />
+          <Text style={styles.emptyText}>No upcoming events.</Text>
+        </View>
+      );
+    } else {
+      connectedEventsContent = (
+        <FlatList
+          data={events}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          // TODO: Display event description (item.description) and allow tapping
+          // to view full event details. Currently only titles are rendered as placeholders.
+          renderItem={({ item }) => <CalendarEventRow event={item} />}
+          ItemSeparatorComponent={CalendarListSeparator}
+        />
+      );
+    }
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>My Calendar</Text>
-            <Pressable onPress={onClose} accessibilityLabel="Close" style={styles.closeButton}>
-              <MaterialIcons name="close" size={24} color="#333" />
-            </Pressable>
-          </View>
-
-          {/* Error */}
-          {error ? (
-            <View style={styles.errorBox}>
-              <MaterialIcons name="error-outline" size={18} color="#912338" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* Not connected — show paste input */}
-          {!isConnected ? (
-            <View style={styles.connectSection}>
-              <Text style={styles.instructions}>
-                Paste your Google Calendar <Text style={styles.bold}>secret iCal address</Text>{' '}
-                below.
-              </Text>
-              <Text style={styles.hint}>
-                In Google Calendar → Settings → your calendar → Integrate calendar → copy the{' '}
-                &ldquo;Secret address in iCal format&rdquo;. No need to make your calendar public.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="https://calendar.google.com/calendar/..."
-                placeholderTextColor="#999"
-                value={link}
-                onChangeText={setLink}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                returnKeyType="go"
-                onSubmitEditing={handleConnect}
-                multiline={false}
-              />
-              <Pressable
-                style={[styles.connectButton, !link.trim() && styles.connectButtonDisabled]}
-                onPress={handleConnect}
-                disabled={!link.trim() || loading}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <MaterialIcons name="link" size={18} color="#fff" />
-                    <Text style={styles.connectButtonText}>Connect Calendar</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* Loading (when connected) */}
-          {loading && isConnected ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color="#912338" />
-              <Text style={styles.loadingText}>Loading events…</Text>
-            </View>
-          ) : null}
-
-          {/* Connected — show events */}
-          {isConnected && !loading ? (
-            events.length === 0 ? (
-              <View style={styles.centered}>
-                <MaterialIcons name="event-busy" size={48} color="#999" />
-                <Text style={styles.emptyText}>No upcoming events.</Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.overlay}>
+            <View style={styles.container}>
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.title}>My Calendar</Text>
+                <Pressable onPress={onClose} accessibilityLabel="Close" style={styles.closeButton}>
+                  <MaterialIcons name="close" size={24} color="#333" />
+                </Pressable>
               </View>
-            ) : (
-              <FlatList
-                data={events}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.list}
-                // TODO: Display event description (item.description) and allow tapping
-                // to view full event details. Currently only titles are rendered as placeholders.
-                renderItem={({ item }) => (
-                  <View style={styles.eventRow}>
-                    <View style={styles.eventDot} />
-                    <View style={styles.eventInfo}>
-                      <Text style={styles.eventName} numberOfLines={2}>
-                        {item.summary}
-                      </Text>
-                      <Text style={styles.eventTime} numberOfLines={1}>
-                        {formatEventTime(item)}
-                      </Text>
-                      {item.location ? (
-                        <Text style={styles.eventLocation} numberOfLines={1}>
-                          📍 {item.location}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                )}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-              />
-            )
-          ) : null}
 
-          {/* Disconnect button */}
-          {isConnected ? (
-            <Pressable style={styles.disconnectButton} onPress={handleDisconnect}>
-              <MaterialIcons name="link-off" size={18} color="#fff" />
-              <Text style={styles.disconnectText}>Disconnect Calendar</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+              {/* Error */}
+              {error ? (
+                <View style={styles.errorBox}>
+                  <MaterialIcons name="error-outline" size={18} color="#912338" />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              {/* Not connected — show paste input */}
+              {!isConnected ? (
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.connectSection}
+                >
+                  <Text style={styles.instructions}>
+                    Paste your Google Calendar <Text style={styles.bold}>secret iCal address</Text>{' '}
+                    below.
+                  </Text>
+                  <Text style={styles.hint}>
+                    In Google Calendar → Settings → your calendar → Integrate calendar → copy the{' '}
+                    &ldquo;Secret address in iCal format&rdquo;. No need to make your calendar
+                    public.
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="https://calendar.google.com/calendar/..."
+                    placeholderTextColor="#999"
+                    value={link}
+                    onChangeText={setLink}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    returnKeyType="go"
+                    onSubmitEditing={handleConnect}
+                    multiline={false}
+                  />
+                  <Pressable
+                    style={[styles.connectButton, !link.trim() && styles.connectButtonDisabled]}
+                    onPress={handleConnect}
+                    disabled={!link.trim() || loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="link" size={18} color="#fff" />
+                        <Text style={styles.connectButtonText}>Connect Calendar</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </ScrollView>
+              ) : null}
+
+              {/* Loading (when connected) */}
+              {loading && isConnected ? (
+                <View style={styles.centered}>
+                  <ActivityIndicator size="large" color="#912338" />
+                  <Text style={styles.loadingText}>Loading events…</Text>
+                </View>
+              ) : null}
+
+              {/* Connected — show events */}
+              {connectedEventsContent}
+
+              {/* Disconnect button */}
+              {isConnected ? (
+                <Pressable style={styles.disconnectButton} onPress={handleDisconnect}>
+                  <MaterialIcons name="link-off" size={18} color="#fff" />
+                  <Text style={styles.disconnectText}>Disconnect Calendar</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -207,6 +245,9 @@ export default function CalendarModal({
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

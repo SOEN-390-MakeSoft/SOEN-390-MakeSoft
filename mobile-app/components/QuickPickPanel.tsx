@@ -34,6 +34,9 @@ interface QuickPickPanelProps {
   onHeightChange: (height: number) => void;
   onQuickPick: (pick: QuickPick) => void;
   onLocationPress: () => void;
+  onDirectionsToNextClassPress?: () => void;
+  showNextClassInfo?: boolean;
+  onNextClassInfoPress?: () => void;
 }
 
 /**
@@ -54,6 +57,9 @@ export default function QuickPickPanel({
   onHeightChange,
   onQuickPick,
   onLocationPress,
+  onDirectionsToNextClassPress,
+  showNextClassInfo,
+  onNextClassInfoPress,
 }: Readonly<QuickPickPanelProps>) {
   // Swipe gesture: down to collapse, up to expand
   const panResponder = useRef(
@@ -80,31 +86,38 @@ export default function QuickPickPanel({
 
   return (
     <>
-      {/* Location button — repositions to bottom-right when panel is collapsed */}
-      {!isQuickPickOpen && (
-        <Pressable
-          testID="location-button"
-          style={[styles.recenterButtonFloating, { opacity: isLocating ? 0.85 : 1 }]}
-          onPress={onLocationPress}
-          disabled={isLocating}
-          accessibilityLabel="Go to my location"
-        >
-          {isLocating ? (
-            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
-          ) : (
-            <MaterialIcons name="my-location" size={32} color="#c41230" />
-          )}
-        </Pressable>
-      )}
-
       <View
         style={styles.quickPickWrapper}
         pointerEvents="auto"
         testID="quick-pick-panel"
         {...panResponder.panHandlers}
       >
-        {/* Location button inside the panel when open */}
-        {isQuickPickOpen && (
+        {/* All floating action buttons live inside the wrapper so they move with the panel */}
+        <View pointerEvents="auto">
+          <Pressable
+            testID="directions-to-next-class-button"
+            style={styles.directionsToNextClassButton}
+            onPress={onDirectionsToNextClassPress ?? (() => {})}
+            accessibilityLabel="Directions to my next class"
+          >
+            <View style={styles.directionsToNextClassIcon}>
+              <MaterialIcons name="directions-walk" size={28} color="#c41230" />
+              <View style={styles.directionsToNextClassIconRight}>
+                <MaterialIcons name="event" size={20} color="#c41230" />
+                <MaterialIcons name="place" size={20} color="#c41230" />
+              </View>
+            </View>
+          </Pressable>
+          {showNextClassInfo && (
+            <Pressable
+              testID="next-class-info-button"
+              style={styles.courseInfoButton}
+              onPress={onNextClassInfoPress ?? (() => {})}
+              accessibilityLabel="Show next class information"
+            >
+              <MaterialIcons name="info-outline" size={28} color="#c41230" />
+            </Pressable>
+          )}
           <Pressable
             testID="location-button"
             style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
@@ -118,7 +131,7 @@ export default function QuickPickPanel({
               <MaterialIcons name="my-location" size={32} color="#c41230" />
             )}
           </Pressable>
-        )}
+        </View>
 
         {/* Drag handle indicator */}
         <View style={styles.dragHandle} />
@@ -247,10 +260,10 @@ const styles = StyleSheet.create({
     zIndex: 4,
     elevation: 6,
   },
-  recenterButtonFloating: {
+  directionsToNextClassButton: {
     position: 'absolute',
-    bottom: 60,
-    right: 18,
+    top: -44,
+    left: 18,
     width: 65,
     height: 65,
     borderRadius: 32,
@@ -259,7 +272,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#d8d8d8',
-    zIndex: 10,
+    zIndex: 4,
     elevation: 6,
+  },
+  courseInfoButton: {
+    position: 'absolute',
+    top: -44,
+    left: 100,
+    width: 65,
+    height: 65,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d8d8d8',
+    zIndex: 4,
+    elevation: 6,
+  },
+  directionsToNextClassIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  directionsToNextClassIconRight: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 2,
   },
 });

@@ -194,6 +194,70 @@ describe('NavigationScreen', () => {
       fireEvent.press(screen.getByTestId('mode-chip-shuttle'));
       expect(onTransportModeChange).toHaveBeenCalledWith('shuttle');
     });
+
+    it('should call disabled-mode warning callback instead of switching when mode is late', () => {
+      const onTransportModeChange = jest.fn();
+      const onDisabledTransportModePress = jest.fn();
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="driving"
+          onTransportModeChange={onTransportModeChange}
+          disabledTransportModes={['walking']}
+          onDisabledTransportModePress={onDisabledTransportModePress}
+        />,
+      );
+
+      fireEvent.press(screen.getByTestId('mode-chip-walking'));
+
+      expect(onDisabledTransportModePress).toHaveBeenCalledWith('walking');
+      expect(onTransportModeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('trip summary and ETA', () => {
+    const tripSummary = {
+      arrivalText: '6:52 PM',
+      distanceText: '2.1 km',
+      durationText: '10 mins',
+      viaText: 'Rue Guy',
+    };
+
+    it('should display ETA title and distance/duration metadata for non-shuttle modes', () => {
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="driving"
+          tripSummary={tripSummary}
+        />,
+      );
+
+      expect(screen.getByText('Arrive at 6:52 PM - via Rue Guy')).toBeTruthy();
+      expect(screen.getByText('2.1 km - 10 mins')).toBeTruthy();
+    });
+
+    it('should hide trip summary text when shuttle mode is selected', () => {
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="shuttle"
+          isShuttleRoute={true}
+          shuttleInfo={{
+            departureTimes: ['2026-02-21T10:00:00', '2026-02-21T10:30:00', null],
+            tripDurationMin: 30,
+            departureCampus: 'SGW',
+            walkToHubPolyline: [],
+            shuttleSegmentPolyline: [],
+            walkFromHubPolyline: [],
+          }}
+          tripSummary={tripSummary}
+          isShuttleLoading={false}
+        />,
+      );
+
+      expect(screen.queryByText('Arrive at 6:52 PM - via Rue Guy')).toBeNull();
+      expect(screen.queryByText('2.1 km - 10 mins')).toBeNull();
+    });
   });
 
   describe('shuttle departures panel', () => {
@@ -204,6 +268,8 @@ describe('NavigationScreen', () => {
       walkToHubPolyline: [],
       shuttleSegmentPolyline: [],
       walkFromHubPolyline: [],
+      waitDurationMin: 95,
+      hasDirections: true,
     };
 
     it('should show shuttle panel when shuttle mode is selected and info is available', () => {
@@ -220,7 +286,7 @@ describe('NavigationScreen', () => {
       expect(screen.getByTestId('shuttle-departures-panel')).toBeTruthy();
     });
 
-    it('should show two departure time chips (one null is excluded)', () => {
+    it('should show only the first available departure time chip', () => {
       render(
         <NavigationScreen
           {...defaultProps}
@@ -232,8 +298,23 @@ describe('NavigationScreen', () => {
         />,
       );
       expect(screen.getByTestId('shuttle-time-0')).toBeTruthy();
-      expect(screen.getByTestId('shuttle-time-1')).toBeTruthy();
+      expect(screen.queryByTestId('shuttle-time-1')).toBeNull();
       expect(screen.queryByTestId('shuttle-time-2')).toBeNull();
+    });
+
+    it('should show wait time formatted in hours and minutes', () => {
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isShuttleRoute={true}
+          isWeekend={false}
+          selectedTransportMode="shuttle"
+          shuttleInfo={shuttleInfo}
+          isShuttleLoading={false}
+        />,
+      );
+      expect(screen.getByTestId('shuttle-wait-time')).toBeTruthy();
+      expect(screen.getByText('Wait: 1 h 35 min')).toBeTruthy();
     });
 
     it("should show 'No more shuttles today' when all departures are null", () => {
@@ -248,6 +329,21 @@ describe('NavigationScreen', () => {
         />,
       );
       expect(screen.getByTestId('shuttle-no-more')).toBeTruthy();
+    });
+
+    it('should show long-wait notice and hide ride directions when wait exceeds 2h', () => {
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isShuttleRoute={true}
+          isWeekend={false}
+          selectedTransportMode="shuttle"
+          shuttleInfo={{ ...shuttleInfo, waitDurationMin: 130, hasDirections: false }}
+          isShuttleLoading={false}
+        />,
+      );
+      expect(screen.getByTestId('shuttle-long-wait-notice')).toBeTruthy();
+      expect(screen.queryByText('~30 min ride')).toBeNull();
     });
 
     it('should show weekend notice when isWeekend is true and shuttle mode selected', () => {

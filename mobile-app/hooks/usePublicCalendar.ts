@@ -23,6 +23,11 @@ export type CalendarEvent = {
   htmlLink?: string;
 };
 
+export type NextClassTodayResult =
+  | { status: 'next_class'; event: CalendarEvent }
+  | { status: 'no_classes_today' }
+  | { status: 'classes_over_today' };
+
 /** Discriminated union returned by {@link extractCalendarInfo}. */
 export type CalendarInfo =
   | { type: 'public'; calendarId: string }
@@ -111,13 +116,102 @@ export function extractCalendarId(input: string): string | null {
   return info.type === 'public' ? info.calendarId : info.icalUrl;
 }
 
+/**
+ * Return the next class from a list of calendar events.
+ *
+ * Priority:
+ *  1. An event that is **currently in progress** (start ≤ now < end).
+ *  2. The next upcoming event (start > now) with the earliest start time.
+ *
+ * Returns `null` when the list is empty.
+ */
+export function getNextEvent(events: CalendarEvent[]): CalendarEvent | null {
+  if (!events || events.length === 0) return null;
+
+  const now = new Date();
+
+  // All-day events only have `start.date`, never `start.dateTime` — exclude them
+  const timedEvents = events.filter((e) => !!e.start.dateTime);
+
+  const getStart = (e: CalendarEvent): Date => new Date(e.start.dateTime!);
+  const getEnd = (e: CalendarEvent): Date => new Date(e.end.dateTime ?? e.end.date ?? 0);
+
+  // Events currently in progress
+  const inProgress = timedEvents.filter((e) => getStart(e) <= now && getEnd(e) > now);
+  if (inProgress.length > 0) {
+    return inProgress.reduce(
+      (latest, e) => (getStart(e) > getStart(latest) ? e : latest),
+      inProgress[0],
+    );
+  }
+
+  // Next upcoming event (earliest start after now)
+  const upcoming = timedEvents.filter((e) => getStart(e) > now);
+  if (upcoming.length === 0) return null;
+
+  return upcoming.reduce(
+    (earliest, e) => (getStart(e) < getStart(earliest) ? e : earliest),
+    upcoming[0],
+  );
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Determine the next class state for *today* only.
+ *
+ * Rules:
+ *  - If there are no timed classes today: `no_classes_today`
+ *  - If at least one class is currently running, or starts later today: `next_class`
+ *  - If classes existed today but all are finished: `classes_over_today`
+ */
+export function getNextClassForToday(
+  events: CalendarEvent[],
+  now: Date = new Date(),
+): NextClassTodayResult {
+  if (!events || events.length === 0) return { status: 'no_classes_today' };
+
+  const timedEvents = events.filter((e) => !!e.start.dateTime);
+  const getStart = (e: CalendarEvent): Date => new Date(e.start.dateTime!);
+  const getEnd = (e: CalendarEvent): Date => new Date(e.end.dateTime ?? e.end.date ?? 0);
+
+  const todayEvents = timedEvents.filter((e) => isSameLocalDay(getStart(e), now));
+  if (todayEvents.length === 0) return { status: 'no_classes_today' };
+
+  const inProgress = todayEvents.filter((e) => getStart(e) <= now && getEnd(e) > now);
+  if (inProgress.length > 0) {
+    const current = inProgress.reduce(
+      (latest, e) => (getStart(e) > getStart(latest) ? e : latest),
+      inProgress[0],
+    );
+    return { status: 'next_class', event: current };
+  }
+
+  const upcomingToday = todayEvents.filter((e) => getStart(e) > now);
+  if (upcomingToday.length > 0) {
+    const next = upcomingToday.reduce(
+      (earliest, e) => (getStart(e) < getStart(earliest) ? e : earliest),
+      upcomingToday[0],
+    );
+    return { status: 'next_class', event: next };
+  }
+
+  return { status: 'classes_over_today' };
+}
+
 // ---------------------------------------------------------------------------
 // iCal feed parser
 // ---------------------------------------------------------------------------
 
 /**
  * Fetch a `.ics` feed (e.g. the secret iCal address) and convert it to
- * an array of {@link CalendarEvent} objects, filtered to upcoming events.
+ * an array of {@link CalendarEvent} objects, keeping events from today onward.
  */
 export async function fetchICalEvents(icalUrl: string): Promise<CalendarEvent[]> {
   const { data: icsText } = await axios.get<string>(icalUrl, {
@@ -129,6 +223,8 @@ export async function fetchICalEvents(icalUrl: string): Promise<CalendarEvent[]>
   const vevents = comp.getAllSubcomponents('vevent');
 
   const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
   const events: CalendarEvent[] = [];
 
   for (const vevent of vevents) {
@@ -141,8 +237,8 @@ export async function fetchICalEvents(icalUrl: string): Promise<CalendarEvent[]>
     const jsStart = dtstart.toJSDate();
     const jsEnd = dtend ? dtend.toJSDate() : jsStart;
 
-    // Only include upcoming events (end is in the future)
-    if (jsEnd < now) continue;
+    // Keep all events that are still upcoming OR happened earlier today.
+    if (jsEnd < todayStart) continue;
 
     const isAllDay = dtstart.isDate;
 
@@ -158,14 +254,14 @@ export async function fetchICalEvents(icalUrl: string): Promise<CalendarEvent[]>
     });
   }
 
-  // Sort by start time ascending and limit to 20
+  // Sort by start time ascending and return a generous window for the in-app picker.
   events.sort((a, b) => {
     const aTime = new Date(a.start.dateTime ?? a.start.date ?? '').getTime();
     const bTime = new Date(b.start.dateTime ?? b.start.date ?? '').getTime();
     return aTime - bTime;
   });
 
-  return events.slice(0, 20);
+  return events.slice(0, 250);
 }
 
 // ---------------------------------------------------------------------------
@@ -221,13 +317,15 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
       return;
     }
 
-    const now = new Date().toISOString();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const timeMin = todayStart.toISOString();
     const encodedId = encodeURIComponent(id);
     const url =
       `https://www.googleapis.com/calendar/v3/calendars/${encodedId}/events` +
       `?key=${API_KEY}` +
-      `&timeMin=${now}` +
-      `&maxResults=20` +
+      `&timeMin=${timeMin}` +
+      `&maxResults=250` +
       `&singleEvents=true` +
       `&orderBy=startTime`;
 

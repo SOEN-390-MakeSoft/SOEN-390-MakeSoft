@@ -116,6 +116,42 @@ export function distanceMeters(a: LatLng, b: LatLng): number {
   return R * c;
 }
 
+/**
+ * Returns the shortest distance in metres from `point` to the nearest segment
+ * of `polyline`.  Uses a Cartesian approximation (accurate enough for the
+ * short distances — < 200 m — we test against).
+ */
+export function distanceToPolylineMeters(point: LatLng, polyline: LatLng[]): number {
+  if (polyline.length === 0) return Infinity;
+  if (polyline.length === 1) return distanceMeters(point, polyline[0]);
+
+  // Project to approximate metres so segment math is Cartesian.
+  const cosLat = Math.cos((point.latitude * Math.PI) / 180);
+  const toM = (p: LatLng) => ({
+    x: p.longitude * 111_320 * cosLat,
+    y: p.latitude * 111_320,
+  });
+  const pM = toM(point);
+
+  let minDist = Infinity;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const aM = toM(polyline[i]);
+    const bM = toM(polyline[i + 1]);
+    const abx = bM.x - aM.x;
+    const aby = bM.y - aM.y;
+    const abLen2 = abx * abx + aby * aby;
+    let t = 0;
+    if (abLen2 > 0) {
+      t = Math.max(0, Math.min(1, ((pM.x - aM.x) * abx + (pM.y - aM.y) * aby) / abLen2));
+    }
+    const dx = pM.x - (aM.x + t * abx);
+    const dy = pM.y - (aM.y + t * aby);
+    const d = Math.hypot(dx, dy);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
 export type BuildingWithPolygon = {
   id: string;
   name: string;
@@ -194,7 +230,7 @@ function inBounds(point: LatLng, bounds: CampusBounds): boolean {
  * - If outside: distance to the nearest clamped point on the rectangle.
  */
 export function distanceToCampusBorderMeters(point: LatLng, bounds: CampusBounds): number {
-  if (!point || point.latitude == null || point.longitude == null) {
+  if (point?.latitude == null || point?.longitude == null) {
     return Number.POSITIVE_INFINITY;
   }
 

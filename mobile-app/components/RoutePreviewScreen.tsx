@@ -4,30 +4,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
 import type { NavigationStep } from '../hooks/useNavigationBetweenBuildings';
 import { useSettings } from '../context/settings';
-
-const STEP_ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-  'turn-left': 'turn-left',
-  'turn-right': 'turn-right',
-  'turn-slight-left': 'turn-slight-left',
-  'turn-slight-right': 'turn-slight-right',
-  'turn-sharp-left': 'turn-left',
-  'turn-sharp-right': 'turn-right',
-  'uturn-left': 'u-turn-left',
-  'uturn-right': 'u-turn-right',
-  merge: 'merge',
-  'fork-left': 'fork-left',
-  'fork-right': 'fork-right',
-  'ramp-left': 'turn-slight-left',
-  'ramp-right': 'turn-slight-right',
-  'roundabout-left': 'roundabout-left',
-  'roundabout-right': 'roundabout-right',
-  straight: 'straight',
-};
-
-function getStepIcon(maneuver?: string): keyof typeof MaterialIcons.glyphMap {
-  if (!maneuver) return 'straight';
-  return STEP_ICON_MAP[maneuver] ?? 'straight';
-}
+import { navigationSharedStyles } from '../utils/navigationStyles';
+import StepInstructionPanel from './StepInstructionPanel';
 
 interface RoutePreviewScreenProps {
   visible: boolean;
@@ -35,6 +13,7 @@ interface RoutePreviewScreenProps {
   selectedStepIndex: number;
   onSelectStep: (index: number) => void;
   onClose: () => void;
+  destinationLabel?: string;
 }
 
 export default function RoutePreviewScreen({
@@ -43,6 +22,7 @@ export default function RoutePreviewScreen({
   selectedStepIndex,
   onSelectStep,
   onClose,
+  destinationLabel = '',
 }: Readonly<RoutePreviewScreenProps>) {
   const { colourBlindMode } = useSettings();
   const theme = useTheme();
@@ -106,121 +86,46 @@ export default function RoutePreviewScreen({
             <MaterialIcons name="keyboard-arrow-right" size={24} color="#fff" />
           </Pressable>
         </View>
-
-        <Text style={styles.instructionTitle}>Current action</Text>
-        <View style={styles.instructionRow}>
-          <View style={styles.instructionIconWrap}>
-            <MaterialIcons name={getStepIcon(currentStep?.maneuver)} size={18} color="#fff" />
-          </View>
-          <Text style={styles.instructionText} numberOfLines={3}>
-            {currentStep?.instruction ?? 'No route steps available'}
+        {!!destinationLabel && (
+          <Text style={styles.destinationText} testID="route-preview-destination">
+            Destination: {destinationLabel}
           </Text>
-        </View>
-        <Text style={styles.metaText}>
-          {currentStep?.distanceText ?? ''}
-          {currentStep?.durationText ? ` · ${currentStep.durationText}` : ''}
-        </Text>
-
-        {totalSteps > 0 && safeIndex === totalSteps - 1 && (
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Done preview"
-            style={[styles.doneButton, { backgroundColor: actionBg }]}
-            testID="route-preview-done"
-          >
-            <Text style={[styles.doneButtonText, { color: actionTextColor }]}>Done</Text>
-          </Pressable>
         )}
+
+        <StepInstructionPanel
+          titleText="Current action"
+          maneuver={currentStep?.maneuver}
+          instruction={currentStep?.instruction ?? 'No route steps available'}
+          distanceText={currentStep?.distanceText}
+          durationText={currentStep?.durationText}
+          isLastStep={totalSteps > 0 && safeIndex === totalSteps - 1}
+          actionBg={actionBg}
+          actionTextColor={actionTextColor}
+          onDone={onClose}
+          doneAccessibilityLabel="Done preview"
+          doneTestID="route-preview-done"
+        />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    paddingTop: 56,
-    paddingHorizontal: 14,
-    paddingBottom: 22,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomCard: {
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  arrowButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  positionText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  instructionTitle: {
-    marginTop: 10,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '600',
-  },
-  instructionRow: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  instructionIconWrap: {
-    width: 26,
-    alignItems: 'center',
-    paddingTop: 1,
-    marginRight: 6,
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '700',
-    flex: 1,
-  },
-  metaText: {
-    marginTop: 4,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.72)',
-  },
-  doneButton: {
-    marginTop: 12,
-    alignSelf: 'center',
-    borderRadius: 18,
-    paddingHorizontal: 22,
-    paddingVertical: 9,
-  },
-  doneButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
+const styles = {
+  ...navigationSharedStyles,
+  ...StyleSheet.create({
+    destinationText: {
+      marginTop: 8,
+      fontSize: 13,
+      color: 'rgba(255,255,255,0.85)',
+      fontWeight: '600' as const,
+    },
+    arrowButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      backgroundColor: 'rgba(255,255,255,0.18)',
+    },
+  }),
+};
