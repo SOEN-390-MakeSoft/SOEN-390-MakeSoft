@@ -17,6 +17,10 @@ interface NavigationScreenProps {
   onClose: () => void;
   onActiveFieldChange?: (field: 'start' | 'destination' | null) => void;
   onBuildingSelect?: (field: 'start' | 'destination', name: string, code: string | null) => void;
+  onRoomSelect?: (
+    field: 'start' | 'destination',
+    room: { buildingCode: string; roomRef: string },
+  ) => void;
   modeDurations?: {
     driving?: string;
     walking?: string;
@@ -423,6 +427,7 @@ export default function NavigationScreen({
   onClose,
   onActiveFieldChange,
   onBuildingSelect,
+  onRoomSelect,
   modeDurations,
   tripSummary,
   isLoading,
@@ -512,6 +517,7 @@ export default function NavigationScreen({
         destinationLocked={destinationLocked}
         onActiveFieldChange={onActiveFieldChange}
         onBuildingSelect={onBuildingSelect}
+        onRoomSelect={onRoomSelect}
       />
 
       <View

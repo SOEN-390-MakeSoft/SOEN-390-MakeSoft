@@ -5,6 +5,7 @@ import { BUILDING_ADDRESSES } from '../data/building-addresses';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
 import { formatAddress } from '../utils/mapUtils';
+import { detectIndoorDestination, getBuildingMeta } from '../services/indoor';
 import MapMenu from './MapMenu';
 import NavigationInputRow from './NavigationInputRow';
 import { useSettings } from '../context/settings';
@@ -17,6 +18,10 @@ interface NavigationMenuProps {
   destinationLocked?: boolean;
   onActiveFieldChange?: (field: ActiveField) => void;
   onBuildingSelect?: (field: 'start' | 'destination', name: string, code: string | null) => void;
+  onRoomSelect?: (
+    field: 'start' | 'destination',
+    room: { buildingCode: string; roomRef: string },
+  ) => void;
 }
 
 type SearchEntry = {
@@ -37,6 +42,7 @@ export default function NavigationMenu({
   destinationLocked = false,
   onActiveFieldChange,
   onBuildingSelect,
+  onRoomSelect,
 }: Readonly<NavigationMenuProps>) {
   const { colourBlindMode } = useSettings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -137,6 +143,16 @@ export default function NavigationMenu({
       .slice(0, 6);
   }, [activeQuery, buildingOptions]);
 
+  const indoorMatch = useMemo(
+    () => (activeField ? detectIndoorDestination(activeQuery.trim()) : null),
+    [activeField, activeQuery],
+  );
+  const hasAuxResults = (results.length > 0 || Boolean(indoorMatch)) && Boolean(activeField);
+  const indoorMeta = useMemo(
+    () => (indoorMatch ? getBuildingMeta(indoorMatch.buildingCode) : null),
+    [indoorMatch],
+  );
+
   const handleSelect = (field: 'start' | 'destination', entry: SearchEntry) => {
     if (blurTimer.current) {
       clearTimeout(blurTimer.current);
@@ -150,6 +166,23 @@ export default function NavigationMenu({
       setDestinationQuery(label);
       onBuildingSelect?.('destination', entry.name, entry.code);
     }
+    activeFieldRef.current = null;
+    setActiveField(null);
+  };
+
+  const handleRoomSelect = (field: 'start' | 'destination') => {
+    if (!indoorMatch || !onRoomSelect) return;
+    if (blurTimer.current) {
+      clearTimeout(blurTimer.current);
+      blurTimer.current = null;
+    }
+    const label = indoorMatch.roomRef;
+    if (field === 'start') {
+      setStartQuery(label);
+    } else {
+      setDestinationQuery(label);
+    }
+    onRoomSelect(field, indoorMatch);
     activeFieldRef.current = null;
     setActiveField(null);
   };
@@ -199,7 +232,7 @@ export default function NavigationMenu({
           <View style={styles.resultsCard}>
             {activeField === 'start' && (
               <Pressable
-                style={[styles.resultItem, results.length > 0 && styles.resultDivider]}
+                style={[styles.resultItem, hasAuxResults && styles.resultDivider]}
                 onPress={() =>
                   handleSelect('start', {
                     name: 'Your location',
@@ -213,6 +246,19 @@ export default function NavigationMenu({
                 </Text>
                 <Text style={styles.resultMeta} numberOfLines={1}>
                   Current location
+                </Text>
+              </Pressable>
+            )}
+            {indoorMatch && onRoomSelect && (
+              <Pressable
+                style={[styles.resultItem, results.length > 0 && styles.resultDivider]}
+                onPress={() => handleRoomSelect(activeField)}
+              >
+                <Text style={styles.resultTitle} numberOfLines={1}>
+                  Room {indoorMatch.roomRef}
+                </Text>
+                <Text style={styles.resultMeta} numberOfLines={1}>
+                  {indoorMeta?.name ?? indoorMatch.buildingCode}
                 </Text>
               </Pressable>
             )}

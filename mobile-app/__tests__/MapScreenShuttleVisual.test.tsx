@@ -2,6 +2,7 @@ import React from 'react';
 import { act, render } from '@testing-library/react-native';
 import MapScreen from '../components/MapScreen';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
+import { useIndoorNavigation } from '../hooks/useIndoorNavigation';
 
 let mockSimulatedNow: Date | null = null;
 const mockAnimateToRegion = jest.fn();
@@ -91,6 +92,9 @@ jest.mock('../context/settings', () => ({
 jest.mock('../hooks/useNavigationBetweenBuildings', () => ({
   useNavigationBetweenBuildings: jest.fn(),
 }));
+jest.mock('../hooks/useIndoorNavigation', () => ({
+  useIndoorNavigation: jest.fn(),
+}));
 
 jest.mock('../components/CampusSwitch', () => {
   const React = require('react');
@@ -145,8 +149,11 @@ function makeNavigationState(overrides: Record<string, unknown> = {}) {
     isRouteLoading: false,
     directionsError: null,
     isGetDirectionsDisabled: false,
+    openNavigation: jest.fn(),
     setNavigationActiveField: jest.fn(),
     openNavigationForBuilding: jest.fn(),
+    setNavigationStartLocation: jest.fn(),
+    setNavigationDestinationLocation: jest.fn(),
     handleMapBuildingPress: jest.fn(),
     handleMapCoordinatePress: jest.fn(),
     handleSearchSelect: jest.fn(),
@@ -171,12 +178,39 @@ function makeNavigationState(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeIndoorState(overrides: Record<string, unknown> = {}) {
+  return {
+    isIndoorActive: false,
+    activeBuildingCode: null,
+    buildingMeta: null,
+    levels: [],
+    activeLevel: '1',
+    setActiveLevel: jest.fn(),
+    activeLevelFeatures: [],
+    featuresByLevel: {},
+    indoorRoute: null,
+    destinationRoom: null,
+    selectedRoom: null,
+    error: null,
+    activateBuilding: jest.fn(),
+    deactivate: jest.fn(),
+    selectRoom: jest.fn(),
+    navigateToRoom: jest.fn(),
+    navigateToRoomAccessible: jest.fn(),
+    searchRooms: jest.fn().mockReturnValue([]),
+    findNearest: jest.fn(),
+    detectIndoor: jest.fn().mockReturnValue(null),
+    ...overrides,
+  };
+}
+
 describe('MapScreen shuttle visual distinction', () => {
   beforeEach(() => {
     mockSimulatedNow = null;
     mockNavigationScreenProps = null;
     mockRoutePreviewProps = null;
     mockAnimateToRegion.mockClear();
+    (useIndoorNavigation as jest.Mock).mockReturnValue(makeIndoorState());
   });
 
   it('passes simulatedNow from settings into navigation hook as currentTime', () => {
@@ -227,6 +261,54 @@ describe('MapScreen shuttle visual distinction', () => {
     expect(walkingPolyline.props.lineDashPattern).toEqual([10, 6]);
     expect(walkingPolyline.props.coordinates.length).toBe(2);
     expect(queryByTestId('route-driving-polyline')).toBeNull();
+  });
+
+  it('composes outdoor and indoor polylines into one continuous route', () => {
+    (useNavigationBetweenBuildings as jest.Mock).mockReturnValue(
+      makeNavigationState({
+        selectedTransportMode: 'walking',
+        routePolyline: [
+          { latitude: 45.0, longitude: -73.0 },
+          { latitude: 45.0001, longitude: -73.0001 },
+        ],
+      }),
+    );
+    (useIndoorNavigation as jest.Mock).mockReturnValue(
+      makeIndoorState({
+        isIndoorActive: true,
+        activeBuildingCode: 'H',
+        buildingMeta: {
+          name: 'Hall Building',
+          entrances: [{ latitude: 45.0002, longitude: -73.0002 }],
+        },
+        indoorRoute: {
+          polyline: [
+            { latitude: 45.0003, longitude: -73.0003 },
+            { latitude: 45.0004, longitude: -73.0004 },
+          ],
+          steps: [],
+          startLevel: '1',
+          totalEstimatedSeconds: 0,
+        },
+      }),
+    );
+
+    const { getByTestId } = render(<MapScreen />);
+    act(() => {
+      mockNavigationScreenProps.onRoomSelect('destination', {
+        buildingCode: 'H',
+        roomRef: 'H-840',
+      });
+    });
+    const walkingPolyline = getByTestId('route-walking-polyline');
+
+    expect(walkingPolyline.props.coordinates).toEqual([
+      { latitude: 45.0, longitude: -73.0 },
+      { latitude: 45.0001, longitude: -73.0001 },
+      { latitude: 45.0002, longitude: -73.0002 },
+      { latitude: 45.0003, longitude: -73.0003 },
+      { latitude: 45.0004, longitude: -73.0004 },
+    ]);
   });
 
   it('renders walking segments as dotted blue and shuttle as solid red', () => {

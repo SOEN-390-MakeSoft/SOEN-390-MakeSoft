@@ -820,6 +820,12 @@ export function useNavigationBetweenBuildings({
     setIsShuttleRoute(false);
   }, []);
 
+  const openNavigation = useCallback(() => {
+    setActiveMode('driving');
+    resetRouteState();
+    setIsNavigationOpen(true);
+  }, [resetRouteState]);
+
   /**
    * Re-fetch directions from a new origin (called when the user drifts off route).
    * Updates the origin coordinate without touching the displayed start label so
@@ -853,6 +859,32 @@ export function useNavigationBetweenBuildings({
       setIsNavigationOpen(true);
     },
     [formatBuildingLabel, resetRouteState],
+  );
+
+  const setNavigationStartLocation = useCallback(
+    (label: string, coordinate: LatLng | null) => {
+      setNavigationStart(label);
+      setNavigationOrigin(coordinate);
+      resetRouteState();
+    },
+    [resetRouteState],
+  );
+
+  const setNavigationDestinationLocation = useCallback(
+    (
+      label: string,
+      coordinate: LatLng | null,
+      options?: { lock?: boolean; tapMarker?: boolean },
+    ) => {
+      setIsDestinationLocked(options?.lock ?? false);
+      setNavigationDestination(label);
+      setNavigationDestinationCoord(coordinate);
+      if (coordinate && options?.tapMarker !== false) {
+        setTapMarkerCoordinate(coordinate);
+      }
+      resetRouteState();
+    },
+    [resetRouteState],
   );
 
   const openNavigationForResolvedDestination = useCallback(
@@ -1035,9 +1067,12 @@ export function useNavigationBetweenBuildings({
     isRouteLoading,
     directionsError,
     isGetDirectionsDisabled,
+    openNavigation,
     setNavigationActiveField,
     setActiveMode,
     openNavigationForBuilding,
+    setNavigationStartLocation,
+    setNavigationDestinationLocation,
     openNavigationForResolvedDestination,
     handleMapBuildingPress,
     handleMapCoordinatePress,

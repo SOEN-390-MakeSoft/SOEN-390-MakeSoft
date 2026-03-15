@@ -41,6 +41,10 @@ export type { PathfinderOptions } from './pathfinder';
 export { buildRoomIndex, resolveRoom, searchRooms, findNearestPOI } from './roomResolver';
 export type { ResolvedRoom, POICategory, NearestPOIResult } from './roomResolver';
 
+// Route planner (rooms/coordinates)
+export { computeIndoorRoute } from './routePlanner';
+export type { IndoorRouteEndpoint, IndoorRoutePlanResult } from './routePlanner';
+
 // Building registry
 export {
   INDOOR_BUILDINGS,
