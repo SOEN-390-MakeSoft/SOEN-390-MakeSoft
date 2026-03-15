@@ -71,6 +71,20 @@ function formatIndoorTime(seconds: number): string {
   return `${mins} min ${secs} sec`;
 }
 
+function formatMinutesLabel(totalMinutes: number): string {
+  const safeMinutes = Math.max(1, Math.round(totalMinutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  if (hours > 0 && minutes > 0) return `${hours} h ${minutes} min`;
+  if (hours > 0) return `${hours} h`;
+  return `${minutes} min`;
+}
+
+function roundSegmentMinutes(totalSeconds: number): number {
+  if (totalSeconds <= 0) return 0;
+  return Math.max(1, Math.round(totalSeconds / 60));
+}
+
 /**
  * Parse a Google-style duration label (e.g. "12 mins", "1 hour 5 mins")
  * into total seconds, add extra seconds, then re-format.
@@ -287,6 +301,7 @@ export default function MapScreen() {
     isGetDirectionsDisabled,
     setNavigationActiveField,
     openNavigationForBuilding,
+    outdoorDurationSec,
     handleMapBuildingPress,
     handleMapCoordinatePress,
     handleSearchSelect,
@@ -1252,6 +1267,33 @@ export default function MapScreen() {
     : 0;
   const originIndoorTimeSec = originIndoorRoute?.totalEstimatedSeconds ?? 0;
   const indoorTimeSec = originIndoorTimeSec + destinationIndoorTimeSec;
+  const tripTimeSummary = useMemo(() => {
+    const originMinutes = roundSegmentMinutes(originIndoorTimeSec);
+    const outdoorMinutes = roundSegmentMinutes(outdoorDurationSec);
+    const destinationMinutes = roundSegmentMinutes(destinationIndoorTimeSec);
+    if (outdoorMinutes === 0) return null;
+    if (originMinutes === 0 && destinationMinutes === 0) return null;
+
+    const segments: string[] = [];
+    if (originMinutes > 0) {
+      segments.push(`${formatMinutesLabel(originMinutes)} indoor`);
+    }
+
+    const outdoorLabel =
+      selectedTransportMode === 'driving'
+        ? 'driving'
+        : selectedTransportMode === 'walking'
+          ? 'walking'
+          : 'shuttle';
+    segments.push(`${formatMinutesLabel(outdoorMinutes)} ${outdoorLabel}`);
+
+    if (destinationMinutes > 0) {
+      segments.push(`${formatMinutesLabel(destinationMinutes)} indoor`);
+    }
+
+    const totalMinutes = originMinutes + outdoorMinutes + destinationMinutes;
+    return `${formatMinutesLabel(totalMinutes)} total: ${segments.join(' + ')}`;
+  }, [destinationIndoorTimeSec, originIndoorTimeSec, outdoorDurationSec, selectedTransportMode]);
 
   const augmentedRouteSummary = useMemo(() => {
     if (!routeSummary || indoorTimeSec <= 0) return routeSummary;
@@ -1637,6 +1679,7 @@ export default function MapScreen() {
         disabledTransportModes={lateTransportModes}
         onDisabledTransportModePress={handleDisabledTransportModePress}
         navigationSteps={combinedNavigationSteps}
+        tripTimeSummary={tripTimeSummary}
         isShuttleRoute={isShuttleRoute}
         isShuttleLoading={isShuttleLoading}
         shuttleInfo={shuttleInfo}

@@ -31,6 +31,8 @@ interface NavigationScreenProps {
     durationText: string;
     viaText: string;
   } | null;
+  /** Override title line with a combined ETA breakdown (e.g., "12 min total: ..."). */
+  tripTimeSummary?: string | null;
   isLoading?: boolean;
   directionsError?: DirectionsErrorType;
   isGetDirectionsDisabled?: boolean;
@@ -194,16 +196,22 @@ function getThemeColors(colourBlindMode: boolean): ThemeColors {
 function getTripTitleText({
   isLoading,
   tripSummary,
+  tripTimeSummary,
   selectedTransportMode,
   isShuttleRoute,
   isShuttleLoading,
 }: Readonly<{
   isLoading?: boolean;
   tripSummary?: NavigationScreenProps['tripSummary'];
+  tripTimeSummary?: NavigationScreenProps['tripTimeSummary'];
   selectedTransportMode: TransportMode;
   isShuttleRoute: boolean;
   isShuttleLoading: boolean;
 }>): string {
+  if (tripTimeSummary) {
+    return tripTimeSummary;
+  }
+
   if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
     return isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
   }
@@ -430,6 +438,7 @@ export default function NavigationScreen({
   onRoomSelect,
   modeDurations,
   tripSummary,
+  tripTimeSummary,
   isLoading,
   directionsError = null,
   isGetDirectionsDisabled = true,
@@ -455,6 +464,7 @@ export default function NavigationScreen({
   const tripTitleText = getTripTitleText({
     isLoading,
     tripSummary,
+    tripTimeSummary,
     selectedTransportMode,
     isShuttleRoute,
     isShuttleLoading,

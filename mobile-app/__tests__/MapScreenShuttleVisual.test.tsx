@@ -150,6 +150,7 @@ function makeNavigationState(overrides: Record<string, unknown> = {}) {
     directionsError: null,
     isGetDirectionsDisabled: false,
     openNavigation: jest.fn(),
+    outdoorDurationSec: 0,
     setNavigationActiveField: jest.fn(),
     openNavigationForBuilding: jest.fn(),
     setNavigationStartLocation: jest.fn(),

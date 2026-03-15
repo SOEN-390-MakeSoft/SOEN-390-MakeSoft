@@ -510,6 +510,20 @@ export function useNavigationBetweenBuildings({
     return process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
   };
 
+  const outdoorDurationSec = useMemo(() => {
+    if (selectedTransportMode === 'shuttle') {
+      if (!shuttleInfo) return 0;
+      const walkTo = shuttleInfo.walkToHubDurationMin ?? 0;
+      const ride = shuttleInfo.tripDurationMin ?? 0;
+      const walkFrom = shuttleInfo.walkFromHubDurationMin ?? 0;
+      return Math.max(0, walkTo + ride + walkFrom) * 60;
+    }
+
+    const route =
+      selectedTransportMode === 'driving' ? allModeRoutes.driving : allModeRoutes.walking;
+    return route?.durationSec ?? 0;
+  }, [selectedTransportMode, allModeRoutes, shuttleInfo]);
+
   useEffect(() => {
     if (!isNavigationOpen) return;
     if (!navigationOrigin || !navigationDestinationCoord) {
@@ -1068,6 +1082,7 @@ export function useNavigationBetweenBuildings({
     directionsError,
     isGetDirectionsDisabled,
     openNavigation,
+    outdoorDurationSec,
     setNavigationActiveField,
     setActiveMode,
     openNavigationForBuilding,
