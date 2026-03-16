@@ -97,21 +97,6 @@ function centroid(ring: LatLng[]): LatLng {
 }
 
 /** Classify a GeoJSON feature into our indoor type system. */
-/** Check if properties match escalator pattern by ref tag */
-function isEscalatorByRef(ref: string | undefined): boolean {
-  return ref !== undefined && /escalator/i.test(ref);
-}
-
-/** Check if properties match stairs pattern by ref tag */
-function isStairsByRef(ref: string | undefined): boolean {
-  return ref !== undefined && /stair/i.test(ref);
-}
-
-/** Check if properties match implicit room (ref + level) */
-function isImplicitRoom(props: Record<string, string | undefined>): boolean {
-  return Boolean(props.ref && props.level);
-}
-
 function classify(props: Record<string, string | undefined>): IndoorFeatureType {
   // Elevator check first (highway=elevator)
   if (props.highway === 'elevator') return 'elevator';
@@ -121,11 +106,10 @@ function classify(props: Record<string, string | undefined>): IndoorFeatureType 
   if (props.conveying === 'yes' && props.highway === 'steps') return 'escalator';
   // Stairs / steps
   if (props.highway === 'steps' || props.stairs === 'yes') return 'stairs';
-  // Ref-based fallback — catch features named like escalators / stairs
-  if (isEscalatorByRef(props.ref)) return 'escalator';
-  if (isStairsByRef(props.ref)) return 'stairs';
-  // Amenity-tagged POI (check before indoor=room to prioritize bathrooms, cafes, etc.)
-  if (props.amenity) return 'poi';
+  // Ref-based fallback — catch features named like escalators / stairs even
+  // when explicit tags are missing (common in JOSM-exported indoor data).
+  if (props.ref && /escalator/i.test(props.ref)) return 'escalator';
+  if (props.ref && /stair/i.test(props.ref)) return 'stairs';
   // Explicit indoor room
   if (props.indoor === 'room') return 'room';
   // Building-level outline
@@ -136,8 +120,11 @@ function classify(props: Record<string, string | undefined>): IndoorFeatureType 
   if (props.highway === 'footway') return 'corridor';
   // Door / entrance
   if (props.door || props.entrance) return 'door';
+  // Amenity-tagged POI
+  if (props.amenity) return 'poi';
   // Implicit room: has a ref and level but no other classification
-  if (isImplicitRoom(props)) return 'room';
+  // (common in JOSM-exported indoor data where rooms lack an explicit "indoor" tag)
+  if (props.ref && props.level) return 'room';
 
   return 'unknown';
 }
@@ -193,7 +180,7 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
           } satisfies IndoorRoom);
         } else if (geom.type === 'Point') {
           // Some rooms are Point-only (e.g. H-840 in the dataset)
-          const pos = toLatLng(geom.coordinates);
+          const pos = toLatLng(geom.coordinates as GeoCoord);
           features.push({
             ...base,
             id: nextId('room'),
@@ -237,7 +224,7 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             ...base,
             id: nextId('elevator'),
             type: 'elevator',
-            position: toLatLng(geom.coordinates),
+            position: toLatLng(geom.coordinates as GeoCoord),
           } satisfies IndoorElevator);
         }
         // LineString elevator edges are handled as graph edges, not standalone features
@@ -264,7 +251,7 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             ...base,
             id: nextId('door'),
             type: 'door',
-            position: toLatLng(geom.coordinates),
+            position: toLatLng(geom.coordinates as GeoCoord),
             doorKind: props.door ?? null,
             isEntrance: props.entrance === 'yes' || props.entrance === 'staircase',
           } satisfies IndoorDoor);
@@ -278,24 +265,9 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             ...base,
             id: nextId('poi'),
             type: 'poi',
-            position: toLatLng(geom.coordinates),
+            position: toLatLng(geom.coordinates as GeoCoord),
             amenity: props.amenity ?? 'unknown',
             name: props.name ?? null,
-          } satisfies IndoorPOI);
-        } else if (geom.type === 'Polygon') {
-          // Handle polygon-based POIs like bathrooms
-          const poly = ringToLatLngs(geom.coordinates[0]);
-          const cent = centroid(poly);
-          features.push({
-            ...base,
-            id: nextId('poi'),
-            type: 'poi',
-            polygon: poly,
-            centroid: cent,
-            amenity: props.amenity ?? 'unknown',
-            name: props.name ?? null,
-            male: props.male === 'yes',
-            female: props.female === 'yes',
           } satisfies IndoorPOI);
         }
         break;
