@@ -1079,7 +1079,7 @@ export default function MapScreen() {
 
   const indoorRoomOptions = useMemo<SearchEntry[] | undefined>(() => {
     if (!isIndoorOnlyRoute || !indoor.isIndoorActive) return undefined;
-    const rooms = indoor.listRooms(50);
+    const rooms = indoor.listRooms(500);
     return rooms.map((room) => ({
       name: room.ref,
       code: indoor.activeBuildingCode,

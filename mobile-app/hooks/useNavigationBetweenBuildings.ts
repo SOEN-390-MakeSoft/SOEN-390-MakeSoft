@@ -886,7 +886,7 @@ export function useNavigationBetweenBuildings({
       setNavigationOrigin(null);
       setNavigationDestinationCoord(null);
       setNavigationActiveFieldState(null);
-      setIsDestinationLocked(true);
+      setIsDestinationLocked(false);
       setTapMarkerCoordinate(null);
       resetRouteState();
       setIsNavigationOpen(true);

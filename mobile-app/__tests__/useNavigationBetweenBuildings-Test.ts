@@ -1920,6 +1920,7 @@ describe('useNavigationBetweenBuildings', () => {
       expect(result.current.isNavigationOpen).toBe(true);
       expect(result.current.navigationDestination).toBe('H-840');
       expect(result.current.navigationStart).toBe('Hall Building');
+      expect(result.current.isDestinationLocked).toBe(false);
     });
 
     it('uses default start label when none provided', () => {
