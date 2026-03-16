@@ -57,6 +57,7 @@ import {
   type BuildingWithPolygon,
   type LatLng,
 } from '../utils/mapUtils';
+import { resolveIndoorCategorySelection } from '../utils/indoorCategoryFilter';
 import { normalizeLabel, resolveEventLocation, type LocationConflict } from '../utils/stringUtils';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
@@ -543,21 +544,12 @@ export default function MapScreen() {
   /** Category chip tapped → filter POIs and escalators/elevators. */
   const handleCategoryChipPress = useCallback(
     (category: string) => {
-      // Toggle: if already selected, deselect (show all); otherwise select only this category
-      if (indoorCategoryFilter === category) {
-        setIndoorCategoryFilter(null);
-        setVisiblePoiAmenities(['toilets', 'drinking_water']); // Reset to default
-      } else {
-        setIndoorCategoryFilter(category);
-        // Map category names to amenity types
-        if (category === 'washrooms') {
-          setVisiblePoiAmenities(['toilets']);
-        } else if (category === 'water_fountains') {
-          setVisiblePoiAmenities(['drinking_water']);
-        } else if (category === 'elevators') {
-          setVisiblePoiAmenities([]); // Elevators shown separately via escalator/elevator rendering
-        }
-      }
+      const { nextCategoryFilter, nextVisiblePoiAmenities } = resolveIndoorCategorySelection(
+        indoorCategoryFilter,
+        category,
+      );
+      setIndoorCategoryFilter(nextCategoryFilter);
+      setVisiblePoiAmenities(nextVisiblePoiAmenities);
       setSelectedPoi(null); // Clear any open POI bubble
     },
     [indoorCategoryFilter],
@@ -729,7 +721,6 @@ export default function MapScreen() {
     Platform.OS === 'ios'
       ? Math.max(10, Math.round(width * 0.04))
       : Math.max(8, Math.round(width * 0.02));
-  const chipsTop = menuTop + (Platform.OS === 'ios' ? 140 : 130);
   const nextClassCardTop = menuTop + (Platform.OS === 'ios' ? 140 : 120);
 
   const isColorBlind = colourBlindMode;
@@ -1372,8 +1363,9 @@ export default function MapScreen() {
       {indoor.isIndoorActive && !isNavigationOpen && (
         <>
           {/* Category filter chips */}
-          <View style={[styles.indoorCategoryChips, { top: chipsTop }]} pointerEvents="auto">
+          <View style={styles.indoorCategoryChips} pointerEvents="auto">
             <Pressable
+              testID="indoor-chip-washrooms"
               style={[
                 styles.categoryChip,
                 indoorCategoryFilter === 'washrooms' && {
@@ -1391,6 +1383,7 @@ export default function MapScreen() {
             </Pressable>
 
             <Pressable
+              testID="indoor-chip-elevators"
               style={[
                 styles.categoryChip,
                 indoorCategoryFilter === 'elevators' && {
@@ -1408,6 +1401,7 @@ export default function MapScreen() {
             </Pressable>
 
             <Pressable
+              testID="indoor-chip-water-fountains"
               style={[
                 styles.categoryChip,
                 indoorCategoryFilter === 'water_fountains' && {
@@ -1808,6 +1802,7 @@ const styles = StyleSheet.create({
   indoorCategoryChips: {
     position: 'absolute',
     left: 16,
+    top: '35%',
     flexDirection: 'column',
     gap: 10,
     zIndex: 10,
