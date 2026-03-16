@@ -1,4 +1,4 @@
-﻿import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { Platform } from 'react-native';
 import { getNextShuttles } from '../services/api';
@@ -1898,6 +1898,68 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.clearTapMarker();
       });
       expect(result.current.tapMarkerCoordinate).toBeNull();
+    });
+  });
+
+  // ── openIndoorOnlyNavigation / isIndoorOnlyRoute ─────────────────────────
+
+  describe('openIndoorOnlyNavigation / isIndoorOnlyRoute', () => {
+    it('isIndoorOnlyRoute starts as false', () => {
+      const { result } = renderNavHook();
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
+    });
+
+    it('sets state correctly when called', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+      expect(result.current.isNavigationOpen).toBe(true);
+      expect(result.current.navigationDestination).toBe('H-840');
+      expect(result.current.navigationStart).toBe('Hall Building');
+    });
+
+    it('uses default start label when none provided', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840');
+      });
+
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+      expect(result.current.navigationStart).toBe('Building entrance');
+    });
+
+    it('closeNavigation resets isIndoorOnlyRoute to false', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+
+      act(() => {
+        result.current.closeNavigation();
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
+      expect(result.current.isNavigationOpen).toBe(false);
+    });
+
+    it('openNavigationForBuilding resets isIndoorOnlyRoute to false', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+
+      act(() => {
+        result.current.openNavigationForBuilding(mockBuildings[0], null);
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
     });
   });
 });
