@@ -241,6 +241,7 @@ const HIDE_POIS_MAP_STYLE = [
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
+  const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const { width, height } = Dimensions.get('window');
 
   // Use custom hooks for state management
@@ -451,23 +452,51 @@ export default function MapScreen() {
     [indoor, handleSelectSearchResult, setSearchQuery, setIsSearchFocused, searchInputRef],
   );
 
-  /** Navigate to the room from the info bubble — opens indoor-only NavigationScreen. */
+  /** Navigate to the room from the info bubble. Uses GPS proximity to decide:
+   *  if the user is near/inside the target building → indoor-only;
+   *  if the user is far away → combined outdoor+indoor. */
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
-      // 1. Compute the indoor route
       indoor.navigateToRoom(room.ref);
-      indoor.selectRoom(null); // close the bubble
-
-      // Mark as user-triggered so zoom-out won’t deactivate indoor mode
+      indoor.selectRoom(null);
       lastIndoorAutoRef.current = null;
-
-      // 2. Close the building info card if open so it doesn't overlap
       handleCloseCard();
 
       const buildingName = indoor.buildingMeta?.name ?? 'Building entrance';
-      openIndoorOnlyNavigation(room.ref, buildingName);
+
+      if (isIndoorOnlyRoute) {
+        openIndoorOnlyNavigation(room.ref, buildingName);
+        return;
+      }
+
+      const userNearBuilding =
+        userPositionRef.current &&
+        findBuildingAtCoordinate(userPositionRef.current)?.code === indoor.activeBuildingCode;
+
+      if (userNearBuilding) {
+        openIndoorOnlyNavigation(room.ref, buildingName);
+        return;
+      }
+
+      const outdoorBuilding = buildings.find(
+        (b) => b.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase(),
+      );
+      if (outdoorBuilding) {
+        handleSelectBuilding(outdoorBuilding.id);
+        openNavigationForBuilding(outdoorBuilding, null);
+      } else {
+        openIndoorOnlyNavigation(room.ref, buildingName);
+      }
     },
-    [indoor, handleCloseCard, openIndoorOnlyNavigation],
+    [
+      indoor,
+      buildings,
+      isIndoorOnlyRoute,
+      handleCloseCard,
+      handleSelectBuilding,
+      openNavigationForBuilding,
+      openIndoorOnlyNavigation,
+    ],
   );
 
   /** Room marker tapped on the indoor overlay → toggle selection. */
@@ -1066,7 +1095,7 @@ export default function MapScreen() {
     if (!indoor.selectedRoom) return undefined;
     const secs = indoor.estimateTimeToRoom(indoor.selectedRoom);
     if (secs == null || secs <= 0) return undefined;
-    return `~${formatIndoorTime(secs)} walk`;
+    return `~${formatIndoorTime(secs)} indoor walk`;
   }, [indoor.selectedRoom, indoor.estimateTimeToRoom]);
 
   const handleFloorSelect = useCallback(
@@ -1246,6 +1275,10 @@ export default function MapScreen() {
         showsMyLocationButton={false}
         showsPointsOfInterest={!indoor.isIndoorActive}
         customMapStyle={indoor.isIndoorActive ? HIDE_POIS_MAP_STYLE : []}
+        onUserLocationChange={(e) => {
+          const c = e.nativeEvent.coordinate;
+          if (c) userPositionRef.current = { latitude: c.latitude, longitude: c.longitude };
+        }}
         onRegionChangeComplete={handleRegionChange}
         onPress={(e) => {
           // Always dismiss keyboard & search focus when tapping the map
@@ -1426,9 +1459,9 @@ export default function MapScreen() {
         </View>
       ) : null}
 
-      {/* Building Info Card */}
+      {/* Building Info Card — hidden while the navigation sheet is open */}
       <BuildingInfoCard
-        selectedBuilding={selectedBuilding}
+        selectedBuilding={isNavigationOpen ? null : selectedBuilding}
         remoteBuilding={remoteBuilding}
         isLoading={isLoading}
         errorMessage={errorMessage}
