@@ -3,6 +3,7 @@ import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { NavigationStep, ShuttleInfo } from '../hooks/useNavigationBetweenBuildings';
 import NavigationMenu from './NavigationMenu';
+import AccessibleRouteToggle from './AccessibleRouteToggle';
 import { useSettings } from '../context/settings';
 
 export type DirectionsErrorType = 'same_origin_destination' | 'missing_coordinates' | null;
@@ -43,6 +44,10 @@ interface NavigationScreenProps {
   shuttleInfo?: ShuttleInfo | null;
   /** Whether today is a weekend (shuttle not available) */
   isWeekend?: boolean;
+  /** Whether accessible routing is enabled for indoor navigation */
+  isAccessibleRouteEnabled?: boolean;
+  /** Toggle accessible routing for indoor navigation */
+  onAccessibleRouteChange?: (enabled: boolean) => void;
   onOpenPreview?: () => void;
   onOpenDirections?: () => void;
 }
@@ -437,6 +442,8 @@ export default function NavigationScreen({
   isShuttleLoading = false,
   shuttleInfo = null,
   isWeekend = false,
+  isAccessibleRouteEnabled = false,
+  onAccessibleRouteChange,
   onOpenPreview,
   onOpenDirections,
 }: Readonly<NavigationScreenProps>) {
@@ -575,6 +582,12 @@ export default function NavigationScreen({
               onTransportModeChange,
               onDisabledTransportModePress,
             })}
+            <AccessibleRouteToggle
+              enabled={isAccessibleRouteEnabled}
+              chipColor={themeColors.chipColor}
+              chipMutedColor={themeColors.chipMutedColor}
+              onToggle={onAccessibleRouteChange}
+            />
           </View>
           <Pressable
             onPress={onClose}
@@ -647,7 +660,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 8,
-    flexWrap: 'nowrap',
+    rowGap: 8,
+    flexWrap: 'wrap',
     paddingRight: 40,
   },
   modeChip: {

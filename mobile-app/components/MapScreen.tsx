@@ -263,6 +263,7 @@ export default function MapScreen() {
   );
   const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
   const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
+  const [isAccessibleRouteEnabled, setIsAccessibleRouteEnabled] = useState(false);
   const { colourBlindMode, simulatedNow } = useSettings();
   const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
   useEffect(() => {
@@ -349,6 +350,17 @@ export default function MapScreen() {
   } = useMapUI();
   // Indoor navigation
   const indoor = useIndoorNavigation();
+
+  const navigateToIndoorRoom = useCallback(
+    (roomRef: string) => {
+      if (isAccessibleRouteEnabled) {
+        indoor.navigateToRoomAccessible(roomRef, { avoidStairs: true });
+        return;
+      }
+      indoor.navigateToRoom(roomRef);
+    },
+    [indoor, isAccessibleRouteEnabled],
+  );
 
   // -----------------------------------------------------------------------
   // Room autocomplete: search rooms on-the-fly (even before indoor is active)
@@ -448,7 +460,7 @@ export default function MapScreen() {
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
       // 1. Compute the indoor route
-      indoor.navigateToRoom(room.ref);
+      navigateToIndoorRoom(room.ref);
       indoor.selectRoom(null); // close the bubble
 
       // Mark as user-triggered so zoom-out won’t deactivate indoor mode
@@ -469,7 +481,7 @@ export default function MapScreen() {
         }
       }
     },
-    [indoor, buildings, handleCloseCard, openNavigationForBuilding],
+    [indoor, buildings, handleCloseCard, openNavigationForBuilding, navigateToIndoorRoom],
   );
 
   /** Room marker tapped on the indoor overlay → toggle selection. */
@@ -681,7 +693,7 @@ export default function MapScreen() {
 
       // 1. Activate indoor map + compute indoor route
       indoor.activateBuilding(detected.buildingCode);
-      indoor.navigateToRoom(detected.roomRef);
+      navigateToIndoorRoom(detected.roomRef);
 
       // Mark as NOT auto-activated so zoom-out won't dismiss it
       lastIndoorAutoRef.current = null;
@@ -717,7 +729,7 @@ export default function MapScreen() {
       }
       return true;
     },
-    [indoor, buildings, handleSelectBuilding, openNavigationForBuilding],
+    [indoor, buildings, handleSelectBuilding, openNavigationForBuilding, navigateToIndoorRoom],
   );
 
   const handleQuickPick = (pick: QuickPick) => {
@@ -1393,6 +1405,8 @@ export default function MapScreen() {
         isShuttleLoading={isShuttleLoading}
         shuttleInfo={shuttleInfo}
         isWeekend={isWeekend}
+        isAccessibleRouteEnabled={isAccessibleRouteEnabled}
+        onAccessibleRouteChange={setIsAccessibleRouteEnabled}
         onOpenPreview={handleOpenRoutePreview}
         onOpenDirections={handleOpenDirectionsMode}
       />
