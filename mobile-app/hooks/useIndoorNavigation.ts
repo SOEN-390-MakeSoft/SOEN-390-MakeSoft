@@ -98,6 +98,10 @@ export interface UseIndoorNavigationReturn {
   activateBuilding: (buildingCode: string) => boolean;
   /** Close the indoor map view. */
   deactivate: () => void;
+  /** List all rooms in the active building, sorted by ref. */
+  listRooms: (limit?: number) => ResolvedRoom[];
+  /** Estimate travel time to a room without triggering navigation state changes. Returns seconds or null. */
+  estimateTimeToRoom: (room: ResolvedRoom) => number | null;
   /** Check whether a query targets an indoor destination. */
   detectIndoor: (query: string) => { buildingCode: string; roomRef: string } | null;
   /** Whether the building data is currently loading/parsing. */
@@ -363,6 +367,38 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
 
   const detectIndoor = useCallback((query: string) => detectIndoorDestination(query), []);
 
+  const listRooms = useCallback(
+    (limit = 50): ResolvedRoom[] => {
+      if (!buildingData) return [];
+      return Array.from(buildingData.roomIndex.values())
+        .sort((a, b) => a.ref.localeCompare(b.ref))
+        .slice(0, limit);
+    },
+    [buildingData],
+  );
+
+  const estimateTimeToRoom = useCallback(
+    (room: ResolvedRoom): number | null => {
+      if (!buildingData || !activeBuildingCode) return null;
+
+      const destNode = buildingData.graph.findClosestNode(room.position, room.level);
+      if (!destNode) return null;
+
+      const meta = getBuildingMeta(activeBuildingCode);
+      const startPos =
+        meta?.entrances?.[0] ?? buildingData.graph.nodes.values().next().value?.position;
+      const startLevel = meta?.defaultLevel ?? '1';
+      if (!startPos) return null;
+
+      const startNode = buildingData.graph.findClosestNode(startPos, startLevel);
+      if (!startNode) return null;
+
+      const route = findPath(buildingData.graph, startNode.id, destNode.id);
+      return route?.totalEstimatedSeconds ?? null;
+    },
+    [buildingData, activeBuildingCode],
+  );
+
   // -------------------------------------------------------------------
   // Return value
   // -------------------------------------------------------------------
@@ -390,6 +426,8 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     activateBuilding,
     deactivate,
     detectIndoor,
+    listRooms,
+    estimateTimeToRoom,
     isLoading,
     error,
   };

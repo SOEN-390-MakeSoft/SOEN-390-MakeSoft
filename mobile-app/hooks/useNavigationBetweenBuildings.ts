@@ -428,6 +428,7 @@ export function useNavigationBetweenBuildings({
   arriveBy = null,
 }: UseNavigationBetweenBuildingsParams) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isIndoorOnlyRoute, setIsIndoorOnlyRoute] = useState(false);
   const [navigationStart, setNavigationStart] = useState<string>('Your location');
   const [navigationDestination, setNavigationDestination] = useState<string>('');
   const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
@@ -842,6 +843,7 @@ export function useNavigationBetweenBuildings({
       const destinationName = remoteBuilding?.name ?? selectedBuilding?.name ?? 'Destination';
       const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code ?? null;
       setIsDestinationLocked(false);
+      setIsIndoorOnlyRoute(false);
       setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
       setActiveMode('driving');
       if (selectedBuilding) {
@@ -874,6 +876,22 @@ export function useNavigationBetweenBuildings({
       setIsNavigationOpen(true);
     },
     [formatBuildingLabel, resetRouteState],
+  );
+
+  const openIndoorOnlyNavigation = useCallback(
+    (destinationLabel: string, startLabel?: string) => {
+      setIsIndoorOnlyRoute(true);
+      setNavigationDestination(destinationLabel);
+      setNavigationStart(startLabel ?? 'Building entrance');
+      setNavigationOrigin(null);
+      setNavigationDestinationCoord(null);
+      setNavigationActiveFieldState(null);
+      setIsDestinationLocked(true);
+      setTapMarkerCoordinate(null);
+      resetRouteState();
+      setIsNavigationOpen(true);
+    },
+    [resetRouteState],
   );
 
   const handleMapBuildingPress = useCallback(
@@ -1001,6 +1019,7 @@ export function useNavigationBetweenBuildings({
 
   const closeNavigation = useCallback(() => {
     setIsNavigationOpen(false);
+    setIsIndoorOnlyRoute(false);
     setNavigationActiveFieldState(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);
@@ -1039,6 +1058,8 @@ export function useNavigationBetweenBuildings({
     setActiveMode,
     openNavigationForBuilding,
     openNavigationForResolvedDestination,
+    openIndoorOnlyNavigation,
+    isIndoorOnlyRoute,
     handleMapBuildingPress,
     handleMapCoordinatePress,
     handleSearchSelect,

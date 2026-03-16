@@ -17,6 +17,7 @@ import BuildingInfoCard from './BuildingInfoCard';
 import QuickPickPanel from './QuickPickPanel';
 import MapMenu from './MapMenu';
 import NavigationScreen from './NavigationScreen';
+import type { SearchEntry } from './NavigationMenu';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import DirectionsModeScreen from './DirectionsModeScreen';
 import SearchBar from './SearchBar';
@@ -303,6 +304,8 @@ export default function MapScreen() {
     lateTransportModes = [],
     routeSegments,
     openNavigationForResolvedDestination,
+    openIndoorOnlyNavigation,
+    isIndoorOnlyRoute,
     isDestinationLocked,
     rerouteFromLocation,
   } = useNavigationBetweenBuildings({
@@ -444,7 +447,7 @@ export default function MapScreen() {
     [indoor, handleSelectSearchResult, setSearchQuery, setIsSearchFocused, searchInputRef],
   );
 
-  /** Navigate to the room from the info bubble — triggers full outdoor+indoor directions. */
+  /** Navigate to the room from the info bubble — opens indoor-only NavigationScreen. */
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
       // 1. Compute the indoor route
@@ -457,19 +460,10 @@ export default function MapScreen() {
       // 2. Close the building info card if open so it doesn't overlap
       handleCloseCard();
 
-      // 3. Directly open outdoor navigation to the building entrance.
-      //    This skips the BuildingInfoCard step so the user doesn't need
-      //    to tap "Navigate" again on a separate popup.
-      if (indoor.activeBuildingCode) {
-        const outdoorBuilding = buildings.find(
-          (b) => b.code?.toUpperCase() === indoor.activeBuildingCode!.toUpperCase(),
-        );
-        if (outdoorBuilding) {
-          openNavigationForBuilding(outdoorBuilding, null);
-        }
-      }
+      const buildingName = indoor.buildingMeta?.name ?? 'Building entrance';
+      openIndoorOnlyNavigation(room.ref, buildingName);
     },
-    [indoor, buildings, handleCloseCard, openNavigationForBuilding],
+    [indoor, handleCloseCard, openIndoorOnlyNavigation],
   );
 
   /** Room marker tapped on the indoor overlay → toggle selection. */
@@ -833,6 +827,19 @@ export default function MapScreen() {
 
   const handleNavigationBuildingSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
+      if (isIndoorOnlyRoute) {
+        const rooms = indoor.searchRooms(name, 1);
+        const room = rooms[0];
+        if (room) {
+          if (field === 'destination') {
+            indoor.navigateToRoom(room.ref);
+          } else if (field === 'start' && indoor.destinationRoom) {
+            indoor.navigateToRoom(indoor.destinationRoom.ref, room.position, room.level);
+          }
+        }
+        return;
+      }
+
       const normalizedName = normalizeLabel(name);
       const isCurrentLocationStart =
         field === 'start' &&
@@ -848,7 +855,13 @@ export default function MapScreen() {
         onResolved: resolveDirectionsStartFromCoordinate,
       });
     },
-    [goToUserLocation, handleSearchSelect, resolveDirectionsStartFromCoordinate],
+    [
+      goToUserLocation,
+      handleSearchSelect,
+      resolveDirectionsStartFromCoordinate,
+      isIndoorOnlyRoute,
+      indoor,
+    ],
   );
 
   const normalizedNavigationStart = normalizeLabel(navigationStart);
@@ -985,10 +998,13 @@ export default function MapScreen() {
       maneuver: step.fromLevel !== step.toLevel ? 'level-change' : 'walk',
       focusCoordinate:
         step.path.length > 0 ? step.path[Math.floor(step.path.length / 2)] : undefined,
-      _indoorLevel: step.toLevel, // used to auto-switch floor during preview
+      _indoorLevel: step.toLevel,
     }));
 
-    // Add a bridging step between outdoor and indoor
+    if (isIndoorOnlyRoute) {
+      return indoorSteps;
+    }
+
     const entrance = indoor.buildingMeta?.entrances?.[0];
     const enterStep = {
       instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
@@ -1000,7 +1016,13 @@ export default function MapScreen() {
     };
 
     return [...navigationSteps, enterStep, ...indoorSteps];
-  }, [navigationSteps, indoor.isIndoorActive, indoor.indoorRoute, indoor.buildingMeta]);
+  }, [
+    navigationSteps,
+    indoor.isIndoorActive,
+    indoor.indoorRoute,
+    indoor.buildingMeta,
+    isIndoorOnlyRoute,
+  ]);
 
   // -----------------------------------------------------------------------
   // Augment the Google route summary with indoor navigation time so the
@@ -1008,15 +1030,30 @@ export default function MapScreen() {
   // -----------------------------------------------------------------------
   const indoorTimeSec = indoor.indoorRoute?.totalEstimatedSeconds ?? 0;
 
+  const indoorOnlySummary = useMemo(() => {
+    if (!isIndoorOnlyRoute || !indoor.indoorRoute) return null;
+    const dist = indoor.indoorRoute.totalDistanceMeters;
+    return {
+      arrivalText: '',
+      distanceText: dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`,
+      durationText: formatIndoorTime(indoorTimeSec),
+      viaText: 'indoor route',
+    };
+  }, [isIndoorOnlyRoute, indoor.indoorRoute, indoorTimeSec]);
+
   const augmentedRouteSummary = useMemo(() => {
+    if (isIndoorOnlyRoute) return indoorOnlySummary;
     if (!routeSummary || indoorTimeSec <= 0) return routeSummary;
     return {
       ...routeSummary,
       durationText: addSecondsToLabel(routeSummary.durationText, indoorTimeSec),
     };
-  }, [routeSummary, indoorTimeSec]);
+  }, [isIndoorOnlyRoute, indoorOnlySummary, routeSummary, indoorTimeSec]);
 
   const augmentedModeDurations = useMemo(() => {
+    if (isIndoorOnlyRoute) {
+      return { walking: formatIndoorTime(indoorTimeSec) };
+    }
     if (!modeDurations || indoorTimeSec <= 0) return modeDurations;
     return {
       driving: modeDurations.driving
@@ -1026,7 +1063,67 @@ export default function MapScreen() {
         ? addSecondsToLabel(modeDurations.walking, indoorTimeSec)
         : modeDurations.walking,
     };
-  }, [modeDurations, indoorTimeSec]);
+  }, [isIndoorOnlyRoute, indoorTimeSec, modeDurations]);
+
+  const indoorTravelTimeText = useMemo(() => {
+    if (indoorTimeSec <= 0) return undefined;
+    return `~${formatIndoorTime(indoorTimeSec)} indoor walk`;
+  }, [indoorTimeSec]);
+
+  const selectedRoomTimeText = useMemo(() => {
+    if (!indoor.selectedRoom) return undefined;
+    const secs = indoor.estimateTimeToRoom(indoor.selectedRoom);
+    if (secs == null || secs <= 0) return undefined;
+    return `~${formatIndoorTime(secs)} walk`;
+  }, [indoor.selectedRoom, indoor.estimateTimeToRoom]);
+
+  const indoorRoomOptions = useMemo<SearchEntry[] | undefined>(() => {
+    if (!isIndoorOnlyRoute || !indoor.isIndoorActive) return undefined;
+    const rooms = indoor.listRooms(50);
+    return rooms.map((room) => ({
+      name: room.ref,
+      code: indoor.activeBuildingCode,
+      address: `${indoor.buildingMeta?.name ?? ''} \u00B7 Floor ${room.level}`,
+    }));
+  }, [
+    isIndoorOnlyRoute,
+    indoor.isIndoorActive,
+    indoor.listRooms,
+    indoor.activeBuildingCode,
+    indoor.buildingMeta,
+  ]);
+
+  const handleFloorSelect = useCallback(
+    (level: string) => {
+      indoor.setActiveLevel(level);
+
+      if (!indoor.indoorRoute) return;
+
+      const segmentsOnLevel = indoor.indoorRoute.steps
+        .filter((s) => s.fromLevel === level && s.toLevel === level)
+        .flatMap((s) => s.path);
+
+      if (segmentsOnLevel.length === 0) return;
+
+      const lats = segmentsOnLevel.map((c) => c.latitude);
+      const lngs = segmentsOnLevel.map((c) => c.longitude);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+
+      mapRef.current?.animateToRegion(
+        {
+          latitude: (minLat + maxLat) / 2,
+          longitude: (minLng + maxLng) / 2,
+          latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.0005),
+          longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.0005),
+        },
+        450,
+      );
+    },
+    [indoor],
+  );
 
   const handlePreviewStepChange = useCallback(
     (
@@ -1286,12 +1383,12 @@ export default function MapScreen() {
         )}
       </MapView>
 
-      {/* Indoor floor selector pill */}
-      {indoor.isIndoorActive && !isNavigationOpen && (
+      {/* Indoor floor selector pill — visible during navigation so users can switch floors */}
+      {indoor.isIndoorActive && !isRoutePreviewOpen && !isDirectionsModeOpen && (
         <FloorSelector
           levels={indoor.levels}
           activeLevel={indoor.activeLevel}
-          onSelectLevel={indoor.setActiveLevel}
+          onSelectLevel={handleFloorSelect}
           accentColor={brandRed}
         />
       )}
@@ -1303,6 +1400,7 @@ export default function MapScreen() {
           buildingName={indoor.buildingMeta?.name}
           onNavigate={handleRoomNavigate}
           onClose={() => indoor.selectRoom(null)}
+          estimatedTimeText={selectedRoomTimeText}
           accentColor={brandRed}
           bottomOffset={isQuickPickOpen ? 320 : 160}
         />
@@ -1395,6 +1493,9 @@ export default function MapScreen() {
         isWeekend={isWeekend}
         onOpenPreview={handleOpenRoutePreview}
         onOpenDirections={handleOpenDirectionsMode}
+        indoorTravelTimeText={indoorTravelTimeText}
+        isIndoorOnlyRoute={isIndoorOnlyRoute}
+        indoorRoomOptions={indoorRoomOptions}
       />
 
       <RoutePreviewScreen
