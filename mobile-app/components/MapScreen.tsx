@@ -8,6 +8,7 @@ import {
   StyleSheet,
   View,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -33,6 +34,7 @@ import {
   searchRooms as searchIndoorRooms,
   getBuildingMeta,
 } from '../services/indoor';
+import type { IndoorPOI, IndoorEscalator, IndoorElevator } from '../services/indoor/types';
 import { useSettings } from '../context/settings';
 import { isClassesCalendarValid } from '../utils/calendarValidation';
 import {
@@ -73,15 +75,15 @@ function formatIndoorTime(seconds: number): string {
  */
 function addSecondsToLabel(label: string, extraSeconds: number): string {
   // Parse hours and minutes from the label
-  const hourMatch = label.match(/(\d+) ?hour/);
-  const minMatch = label.match(/([0-9]+) ?min/);
+  const hourMatch = /(\d+) ?hour/.exec(label);
+  const minMatch = /(\d+) ?min/.exec(label);
   let totalSec =
-    (hourMatch ? parseInt(hourMatch[1], 10) * 3600 : 0) +
-    (minMatch ? parseInt(minMatch[1], 10) * 60 : 0);
+    (hourMatch ? Number.parseInt(hourMatch[1], 10) * 3600 : 0) +
+    (minMatch ? Number.parseInt(minMatch[1], 10) * 60 : 0);
   // If neither matched, try bare number ("5" → 5 min)
   if (!hourMatch && !minMatch) {
-    const bare = parseInt(label, 10);
-    if (!isNaN(bare)) totalSec = bare * 60;
+    const bare = Number.parseInt(label, 10);
+    if (Number.isNaN(bare) === false) totalSec = bare * 60;
   }
   totalSec += extraSeconds;
   const hours = Math.floor(totalSec / 3600);
@@ -92,6 +94,26 @@ function addSecondsToLabel(label: string, extraSeconds: number): string {
   if (hours > 0)
     return mins > 0 ? `${hours} ${hourLabel} ${mins} ${minLabel}` : `${hours} ${hourLabel}`;
   return `${mins} ${minLabel}`;
+}
+
+/**
+ * Get the display title for a POI based on its type and amenity
+ */
+function getPoiTitle(
+  poi:
+    | IndoorPOI
+    | (IndoorEscalator & { type: 'escalator' })
+    | (IndoorElevator & { type: 'elevator' }),
+): string {
+  if (poi.type === 'escalator') return 'Escalator';
+  if (poi.type === 'elevator') return 'Elevator';
+  if (poi.amenity === 'toilets') {
+    if (poi.male && !poi.female) return "Men's Washroom";
+    if (poi.female && !poi.male) return "Women's Washroom";
+    return 'Unisex Washroom';
+  }
+  if (poi.amenity === 'drinking_water') return 'Water Fountain';
+  return poi.amenity;
 }
 
 type QuickPick = {
@@ -263,6 +285,12 @@ export default function MapScreen() {
   );
   const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
   const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
+  const [visiblePoiAmenities, setVisiblePoiAmenities] = useState<string[]>([
+    'toilets',
+    'drinking_water',
+  ]);
+  const [selectedPoi, setSelectedPoi] = useState<any>(null);
+  const [indoorCategoryFilter, setIndoorCategoryFilter] = useState<string | null>(null);
   const { colourBlindMode, simulatedNow } = useSettings();
   const showBuildingNotFoundToast = useCallback(() => setBuildingNotFoundToast(true), []);
   useEffect(() => {
@@ -485,6 +513,42 @@ export default function MapScreen() {
     [indoor],
   );
 
+  /** POI polygon tapped on the indoor overlay → toggle selection. */
+  const handlePoiPress = useCallback(
+    (poi: any) => {
+      // If this POI is already selected, deselect it
+      if (selectedPoi?.id === poi.id) {
+        setSelectedPoi(null);
+      } else {
+        setSelectedPoi(poi);
+      }
+    },
+    [selectedPoi],
+  );
+
+  /** Category chip tapped → filter POIs and escalators/elevators. */
+  const handleCategoryChipPress = useCallback(
+    (category: string) => {
+      // Toggle: if already selected, deselect (show all); otherwise select only this category
+      if (indoorCategoryFilter === category) {
+        setIndoorCategoryFilter(null);
+        setVisiblePoiAmenities(['toilets', 'drinking_water']); // Reset to default
+      } else {
+        setIndoorCategoryFilter(category);
+        // Map category names to amenity types
+        if (category === 'washrooms') {
+          setVisiblePoiAmenities(['toilets']);
+        } else if (category === 'water_fountains') {
+          setVisiblePoiAmenities(['drinking_water']);
+        } else if (category === 'elevators') {
+          setVisiblePoiAmenities([]); // Elevators shown separately via escalator/elevator rendering
+        }
+      }
+      setSelectedPoi(null); // Clear any open POI bubble
+    },
+    [indoorCategoryFilter],
+  );
+
   // Track the last map region for zoom-based indoor auto-show
   const lastIndoorAutoRef = useRef<string | null>(null);
 
@@ -651,6 +715,7 @@ export default function MapScreen() {
     Platform.OS === 'ios'
       ? Math.max(10, Math.round(width * 0.04))
       : Math.max(8, Math.round(width * 0.02));
+  const chipsTop = menuTop + (Platform.OS === 'ios' ? 140 : 130);
   const nextClassCardTop = menuTop + (Platform.OS === 'ios' ? 140 : 120);
 
   const isColorBlind = colourBlindMode;
@@ -980,9 +1045,9 @@ export default function MapScreen() {
 
     const indoorSteps = indoor.indoorRoute.steps.map((step) => ({
       instruction: step.instruction,
-      distanceText: step.distanceMeters != null ? `${Math.round(step.distanceMeters)} m` : '',
-      durationText: step.estimatedSeconds != null ? formatIndoorTime(step.estimatedSeconds) : '',
-      maneuver: step.fromLevel !== step.toLevel ? 'level-change' : 'walk',
+      distanceText: step.distanceMeters === null ? '' : `${Math.round(step.distanceMeters)} m`,
+      durationText: step.estimatedSeconds === null ? '' : formatIndoorTime(step.estimatedSeconds),
+      maneuver: step.fromLevel === step.toLevel ? 'walk' : 'level-change',
       focusCoordinate:
         step.path.length > 0 ? step.path[Math.floor(step.path.length / 2)] : undefined,
       _indoorLevel: step.toLevel, // used to auto-switch floor during preview
@@ -1281,19 +1346,78 @@ export default function MapScreen() {
             destinationRoom={indoor.destinationRoom}
             selectedRoom={indoor.selectedRoom}
             onRoomPress={handleRoomMarkerPress}
+            onPoiPress={handlePoiPress}
             routeColor={routeColor}
+            visiblePoiAmenities={visiblePoiAmenities}
+            categoryFilter={indoorCategoryFilter}
           />
         )}
       </MapView>
 
       {/* Indoor floor selector pill */}
       {indoor.isIndoorActive && !isNavigationOpen && (
-        <FloorSelector
-          levels={indoor.levels}
-          activeLevel={indoor.activeLevel}
-          onSelectLevel={indoor.setActiveLevel}
-          accentColor={brandRed}
-        />
+        <>
+          {/* Category filter chips */}
+          <View style={[styles.indoorCategoryChips, { top: chipsTop }]} pointerEvents="auto">
+            <Pressable
+              style={[
+                styles.categoryChip,
+                indoorCategoryFilter === 'washrooms' && {
+                  backgroundColor: brandRed,
+                },
+              ]}
+              onPress={() => handleCategoryChipPress('washrooms')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons
+                name="wc"
+                size={24}
+                color={indoorCategoryFilter === 'washrooms' ? '#fff' : '#666'}
+              />
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.categoryChip,
+                indoorCategoryFilter === 'elevators' && {
+                  backgroundColor: brandRed,
+                },
+              ]}
+              onPress={() => handleCategoryChipPress('elevators')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons
+                name="elevator"
+                size={24}
+                color={indoorCategoryFilter === 'elevators' ? '#fff' : '#666'}
+              />
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.categoryChip,
+                indoorCategoryFilter === 'water_fountains' && {
+                  backgroundColor: brandRed,
+                },
+              ]}
+              onPress={() => handleCategoryChipPress('water_fountains')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons
+                name="water-drop"
+                size={24}
+                color={indoorCategoryFilter === 'water_fountains' ? '#fff' : '#666'}
+              />
+            </Pressable>
+          </View>
+
+          <FloorSelector
+            levels={indoor.levels}
+            activeLevel={indoor.activeLevel}
+            onSelectLevel={indoor.setActiveLevel}
+            accentColor={brandRed}
+          />
+        </>
       )}
 
       {/* Room info bubble — appears when a room is tapped or selected from search */}
@@ -1306,6 +1430,28 @@ export default function MapScreen() {
           accentColor={brandRed}
           bottomOffset={isQuickPickOpen ? 320 : 160}
         />
+      )}
+
+      {/* POI info bubble — appears when a POI polygon is tapped */}
+      {indoor.isIndoorActive && selectedPoi && (
+        <View
+          style={[
+            styles.poiInfoBubble,
+            { bottom: isQuickPickOpen ? 320 : 160, backgroundColor: 'white' },
+          ]}
+        >
+          <View style={styles.poiInfoContent}>
+            <Text style={[styles.poiInfoTitle, { color: brandRed }]} numberOfLines={1}>
+              {getPoiTitle(selectedPoi)}
+            </Text>
+            {selectedPoi.level && (
+              <Text style={styles.poiInfoLevel}>Level {selectedPoi.level}</Text>
+            )}
+          </View>
+          <TouchableOpacity onPress={() => setSelectedPoi(null)} style={styles.poiInfoCloseButton}>
+            <Text style={styles.poiInfoCloseButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Top Controls: Search, Menu, Brand Badge */}
@@ -1468,7 +1614,12 @@ export default function MapScreen() {
       </NextClassPanel>
 
       {!isRoutePreviewOpen && !isDirectionsModeOpen && (
-        <MapMenu visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+        <MapMenu
+          visible={isMenuOpen}
+          onClose={() => setIsMenuOpen(false)}
+          visiblePoiAmenities={visiblePoiAmenities}
+          onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
+        />
       )}
 
       {buildingNotFoundToast ? (
@@ -1597,5 +1748,79 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+  poiInfoBubble: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    alignSelf: 'center',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  poiInfoContent: {
+    flex: 1,
+  },
+  poiInfoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  poiInfoRef: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  poiInfoLevel: {
+    fontSize: 12,
+    color: '#999',
+  },
+  poiInfoCloseButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  poiInfoCloseButtonText: {
+    fontSize: 18,
+    color: '#999',
+    fontWeight: '500',
+  },
+  indoorCategoryChips: {
+    position: 'absolute',
+    left: 16,
+    flexDirection: 'column',
+    gap: 10,
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  categoryChip: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 50,
+    height: 50,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
   },
 });
