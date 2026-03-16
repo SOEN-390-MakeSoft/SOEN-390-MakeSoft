@@ -17,14 +17,14 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View, Image } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { Marker, Polygon, Polyline } from 'react-native-maps';
 import type {
   IndoorFeature,
   IndoorRoom,
-  IndoorCorridor,
   IndoorStairs,
+  IndoorElevator,
   IndoorEscalator,
   IndoorLevelOutline,
   IndoorArea,
@@ -44,7 +44,6 @@ const COLORS = {
   roomStroke: 'rgba(120, 140, 170, 0.8)',
   roomSelectedFill: 'rgba(26, 115, 232, 0.35)',
   roomSelectedStroke: 'rgba(26, 115, 232, 0.9)',
-  corridor: 'rgba(160, 160, 160, 0.7)',
   stairs: 'rgba(180, 120, 40, 0.75)',
   escalator: 'rgba(140, 100, 180, 0.75)',
 };
@@ -91,6 +90,39 @@ function RoomLabelMarker({
   );
 }
 
+function IconMarker({
+  coordinate,
+  children,
+  zIndex = 10,
+}: {
+  coordinate: { latitude: number; longitude: number };
+  children: React.ReactNode;
+  zIndex?: number;
+}) {
+  const [tracked, setTracked] = useState(Platform.OS === 'android');
+
+  const handleLayout = useCallback(
+    (_e: LayoutChangeEvent) => {
+      if (Platform.OS === 'android' && tracked) {
+        setTimeout(() => setTracked(false), 100);
+      }
+    },
+    [tracked],
+  );
+
+  return (
+    <Marker
+      coordinate={coordinate}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracked}
+      zIndex={zIndex}
+    >
+      <View collapsable={false} onLayout={handleLayout} style={labelStyles.iconContainer}>
+        {children}
+      </View>
+    </Marker>
+  );
+}
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -126,12 +158,13 @@ export default function IndoorMapOverlay({
   routeColor = '#1a73e8',
 }: Readonly<IndoorMapOverlayProps>) {
   // ---- Categorise features --------------------------------------------------
-  const { outlines, areas, rooms, stairs, escalators } = useMemo(() => {
+  const { outlines, areas, rooms, stairs, escalators, elevators } = useMemo(() => {
     const out: IndoorLevelOutline[] = [];
     const ar: IndoorArea[] = [];
     const rm: IndoorRoom[] = [];
     const st: IndoorStairs[] = [];
     const es: IndoorEscalator[] = [];
+    const ev: IndoorElevator[] = [];
 
     for (const f of activeLevelFeatures) {
       switch (f.type) {
@@ -150,12 +183,15 @@ export default function IndoorMapOverlay({
         case 'escalator':
           es.push(f as IndoorEscalator);
           break;
+        case 'elevator':
+          ev.push(f as IndoorElevator);
+          break;
         default:
           break;
       }
     }
 
-    return { outlines: out, areas: ar, rooms: rm, stairs: st, escalators: es };
+    return { outlines: out, areas: ar, rooms: rm, stairs: st, escalators: es, elevators: ev };
   }, [activeLevelFeatures]);
 
   // ---- Route polyline filtered to this level --------------------------------
@@ -248,7 +284,7 @@ export default function IndoorMapOverlay({
         // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
         let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
         // Abbreviate facility names so they fit Android's marker bitmap limit
-        if (/^elevator/i.test(shortLabel)) shortLabel = 'Elev.';
+        if (/^elevator/i.test(shortLabel)) return null;
         else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
         else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
         else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
@@ -290,7 +326,7 @@ export default function IndoorMapOverlay({
               zIndex={5}
               tappable={false}
             />
-            <Marker
+            <IconMarker
               coordinate={(() => {
                 const sum = s.polygon.reduce(
                   (a, p) => ({
@@ -304,16 +340,14 @@ export default function IndoorMapOverlay({
                   longitude: sum.longitude / s.polygon.length,
                 };
               })()}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
               zIndex={10}
             >
-              <View style={labelStyles.labelContainer}>
-                <Text style={labelStyles.labelText} allowFontScaling={false}>
-                  Stairs
-                </Text>
-              </View>
-            </Marker>
+              {/* Staircase icon — plain symbol, no background */}
+              <Image
+                source={require('../../assets/images/stairs.png')}
+                style={labelStyles.iconImage}
+              />
+            </IconMarker>
           </React.Fragment>
         ) : null,
       )}
@@ -330,7 +364,7 @@ export default function IndoorMapOverlay({
               zIndex={5}
               tappable={false}
             />
-            <Marker
+            <IconMarker
               coordinate={(() => {
                 const sum = e.polygon.reduce(
                   (a, p) => ({
@@ -344,19 +378,28 @@ export default function IndoorMapOverlay({
                   longitude: sum.longitude / e.polygon.length,
                 };
               })()}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
               zIndex={10}
             >
-              <View style={labelStyles.labelContainer}>
-                <Text style={labelStyles.labelText} allowFontScaling={false}>
-                  Esc.
-                </Text>
-              </View>
-            </Marker>
+              {/* Ramp/escalator icon — plain symbol, no background */}
+              <Image
+                source={require('../../assets/images/escalator.png')}
+                style={labelStyles.iconImage}
+              />
+            </IconMarker>
           </React.Fragment>
         ) : null,
       )}
+
+      {/* 6b. Elevators — accessibility point markers with elevator icon */}
+      {elevators.map((ev) => (
+        <IconMarker key={ev.id} coordinate={ev.position} zIndex={15}>
+          {/* Elevator icon — plain symbol, no background */}
+          <Image
+            source={require('../../assets/images/elevator.png')}
+            style={labelStyles.iconImage}
+          />
+        </IconMarker>
+      ))}
 
       {/* 7. Indoor route polyline — Google Maps style with border + fill */}
       {routeSegmentsOnLevel.length > 1 && (
@@ -409,5 +452,17 @@ const labelStyles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     textAlign: 'center',
+  },
+  // Wrapper used by IconMarker — dark circle so the white icon stands out on the map
+  iconContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 14,
+    padding: 5,
+  },
+  // PNG icon rendered directly on the map — white tint so it reads against the dark circle
+  iconImage: {
+    width: 14,
+    height: 14,
+    tintColor: '#fff',
   },
 });
