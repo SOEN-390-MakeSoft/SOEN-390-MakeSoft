@@ -17,7 +17,6 @@ import BuildingInfoCard from './BuildingInfoCard';
 import QuickPickPanel from './QuickPickPanel';
 import MapMenu from './MapMenu';
 import NavigationScreen from './NavigationScreen';
-import type { SearchEntry } from './NavigationMenu';
 import RoutePreviewScreen from './RoutePreviewScreen';
 import DirectionsModeScreen from './DirectionsModeScreen';
 import SearchBar from './SearchBar';
@@ -49,6 +48,7 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { useMapUI } from '../hooks/useMapUI';
 import { useCampusContext } from '../hooks/useCampusContext';
 import { useIndoorNavigation } from '../hooks/useIndoorNavigation';
+import { useIndoorRoomPicker } from '../hooks/useIndoorRoomPicker';
 import {
   findBuildingAtOrNearCoordinate,
   getClosestCampusWithinBorderThreshold,
@@ -352,6 +352,10 @@ export default function MapScreen() {
   } = useMapUI();
   // Indoor navigation
   const indoor = useIndoorNavigation();
+  const { indoorRoomOptions, handleIndoorRoomSelect } = useIndoorRoomPicker({
+    indoor,
+    isIndoorOnlyRoute,
+  });
 
   // -----------------------------------------------------------------------
   // Room autocomplete: search rooms on-the-fly (even before indoor is active)
@@ -827,18 +831,7 @@ export default function MapScreen() {
 
   const handleNavigationBuildingSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
-      if (isIndoorOnlyRoute) {
-        const rooms = indoor.searchRooms(name, 1);
-        const room = rooms[0];
-        if (room) {
-          if (field === 'destination') {
-            indoor.navigateToRoom(room.ref);
-          } else if (field === 'start' && indoor.destinationRoom) {
-            indoor.navigateToRoom(indoor.destinationRoom.ref, room.position, room.level);
-          }
-        }
-        return;
-      }
+      if (handleIndoorRoomSelect(field, name)) return;
 
       const normalizedName = normalizeLabel(name);
       const isCurrentLocationStart =
@@ -859,8 +852,7 @@ export default function MapScreen() {
       goToUserLocation,
       handleSearchSelect,
       resolveDirectionsStartFromCoordinate,
-      isIndoorOnlyRoute,
-      indoor,
+      handleIndoorRoomSelect,
     ],
   );
 
@@ -1076,22 +1068,6 @@ export default function MapScreen() {
     if (secs == null || secs <= 0) return undefined;
     return `~${formatIndoorTime(secs)} walk`;
   }, [indoor.selectedRoom, indoor.estimateTimeToRoom]);
-
-  const indoorRoomOptions = useMemo<SearchEntry[] | undefined>(() => {
-    if (!isIndoorOnlyRoute || !indoor.isIndoorActive) return undefined;
-    const rooms = indoor.listRooms(500);
-    return rooms.map((room) => ({
-      name: room.ref,
-      code: indoor.activeBuildingCode,
-      address: `${indoor.buildingMeta?.name ?? ''} \u00B7 Floor ${room.level}`,
-    }));
-  }, [
-    isIndoorOnlyRoute,
-    indoor.isIndoorActive,
-    indoor.listRooms,
-    indoor.activeBuildingCode,
-    indoor.buildingMeta,
-  ]);
 
   const handleFloorSelect = useCallback(
     (level: string) => {
