@@ -74,14 +74,28 @@ function formatIndoorTime(seconds: number): string {
  * into total seconds, add extra seconds, then re-format.
  */
 function addSecondsToLabel(label: string, extraSeconds: number): string {
-  // Parse hours and minutes from the label
-  const hourMatch = /(\d+) ?hour/.exec(label);
-  const minMatch = /(\d+) ?min/.exec(label);
-  let totalSec =
-    (hourMatch ? Number.parseInt(hourMatch[1], 10) * 3600 : 0) +
-    (minMatch ? Number.parseInt(minMatch[1], 10) * 60 : 0);
-  // If neither matched, try bare number ("5" → 5 min)
-  if (!hourMatch && !minMatch) {
+  // Parse hours/minutes without regex to avoid backtracking hotspots.
+  const tokens = label.toLowerCase().split(/\s+/).filter(Boolean);
+  let hoursFromLabel = 0;
+  let minsFromLabel = 0;
+
+  for (let i = 0; i < tokens.length - 1; i += 1) {
+    const value = Number.parseInt(tokens[i], 10);
+    if (Number.isNaN(value)) continue;
+
+    const unit = tokens[i + 1];
+    if (unit.startsWith('hour')) {
+      hoursFromLabel = value;
+      continue;
+    }
+    if (unit.startsWith('min')) {
+      minsFromLabel = value;
+    }
+  }
+
+  let totalSec = hoursFromLabel * 3600 + minsFromLabel * 60;
+  // If neither unit matched, try bare number ("5" -> 5 min)
+  if (hoursFromLabel === 0 && minsFromLabel === 0) {
     const bare = Number.parseInt(label, 10);
     if (Number.isNaN(bare) === false) totalSec = bare * 60;
   }
