@@ -499,10 +499,16 @@ export default function MapScreen() {
     ],
   );
 
+  const roomPressedRef = useRef(false);
+
   /** Room marker tapped on the indoor overlay → toggle selection. */
   const handleRoomMarkerPress = useCallback(
     (room: any) => {
-      // If this room is already selected, deselect it
+      roomPressedRef.current = true;
+      requestAnimationFrame(() => {
+        roomPressedRef.current = false;
+      });
+
       if (indoor.selectedRoom?.featureId === room.featureId) {
         indoor.selectRoom(null);
       } else {
@@ -1291,8 +1297,9 @@ export default function MapScreen() {
           if (coordinate?.latitude != null && coordinate?.longitude != null) {
             // When indoor mode is active, tapping empty space on the map should
             // dismiss the selected room bubble rather than selecting the building.
+            // Skip if a room polygon was just tapped (iOS bubbles polygon press to map).
             if (indoor.isIndoorActive) {
-              indoor.selectRoom(null);
+              if (!roomPressedRef.current) indoor.selectRoom(null);
               return;
             }
             handleMapCoordinatePress(coordinate);
