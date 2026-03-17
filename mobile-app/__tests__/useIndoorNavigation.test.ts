@@ -505,3 +505,29 @@ describe('useIndoorNavigation — estimateTimeToRoom', () => {
     expect(result.current.estimateTimeToRoom(unreachableRoom)).toBeNull();
   });
 });
+
+describe('useIndoorNavigation � exit routing', () => {
+  it('correctly sets destination when __EXIT__ is passed', async () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    await waitFor(() => {
+      expect(result.current.isIndoorActive).toBe(true);
+      expect(result.current.buildingMeta).not.toBeNull();
+    });
+
+    act(() => {
+      // Trying to navigate to __EXIT__ from some start point
+      result.current.navigateToRoom('__EXIT__');
+    });
+
+    await waitFor(() => {
+      expect(result.current.destinationRoom).not.toBeNull();
+      expect(result.current.destinationRoom?.ref).toBe('Exit');
+      expect(result.current.indoorRoute).not.toBeNull();
+    });
+  });
+});

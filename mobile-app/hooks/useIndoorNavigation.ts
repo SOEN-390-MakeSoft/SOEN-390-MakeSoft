@@ -67,6 +67,7 @@ export interface UseIndoorNavigationReturn {
   indoorRoute: IndoorRoute | null;
   /** The resolved destination room details. */
   destinationRoom: ResolvedRoom | null;
+
   /** Currently selected room (tapped by user on the floor plan). */
   selectedRoom: ResolvedRoom | null;
   /** Set or clear the selected room. */
@@ -211,30 +212,12 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       fromPosition?: LatLng,
       fromLevel?: string,
     ) => {
-      const room = resolveRoom(roomQuery, data.roomIndex, bCode);
-      if (!room) {
-        setError(`Room "${roomQuery}" not found in building ${bCode}`);
-        setIndoorRoute(null);
-        setDestinationRoom(null);
-        return;
-      }
-
-      setDestinationRoom(room);
-      setActiveLevel(room.level);
-
-      // Find the destination graph node
-      const destNode = data.graph.findClosestNode(room.position, room.level);
-      if (!destNode) {
-        setError('Could not find a route to the destination — no nearby corridor node');
-        return;
-      }
-
-      // Determine start node — default to building entrance on level 1
       const meta = getBuildingMeta(bCode);
       const entrancePos = meta?.entrances?.[0];
       const startLevel = fromLevel ?? meta?.defaultLevel ?? '1';
       const startPos =
         fromPosition ?? entrancePos ?? data.graph.nodes.values().next().value?.position;
+
       if (!startPos) {
         setError('No start position available');
         return;
@@ -243,6 +226,46 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       const startNode = data.graph.findClosestNode(startPos, startLevel);
       if (!startNode) {
         setError('Could not find a route — no corridor node near the start position');
+        return;
+      }
+
+      let destNode;
+      if (roomQuery === '__EXIT__') {
+        if (!entrancePos) {
+          setError(`No exit found for building ${bCode}`);
+          setIndoorRoute(null);
+          setDestinationRoom(null);
+          return;
+        }
+        destNode = data.graph.findClosestNode(entrancePos, meta?.defaultLevel ?? '1');
+        setDestinationRoom({
+          id: 'exit',
+          ref: 'Exit',
+          level: meta?.defaultLevel ?? '1',
+          position: entrancePos,
+          centroid: entrancePos,
+          polygon: [],
+          type: 'door',
+          levels: [meta?.defaultLevel ?? '1'],
+        } as unknown as ResolvedRoom);
+        setActiveLevel(startLevel);
+      } else {
+        const room = resolveRoom(roomQuery, data.roomIndex, bCode);
+        if (!room) {
+          setError(`Room "${roomQuery}" not found in building ${bCode}`);
+          setIndoorRoute(null);
+          setDestinationRoom(null);
+          return;
+        }
+
+        setDestinationRoom(room);
+        setActiveLevel(room.level);
+
+        destNode = data.graph.findClosestNode(room.position, room.level);
+      }
+
+      if (!destNode) {
+        setError('Could not find a route to the destination — no nearby corridor node');
         return;
       }
 

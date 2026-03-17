@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
+import { getBuildingMeta } from '../services/indoor';
 import {
   coordsEqual,
   findBuildingAtOrNearCoordinate,
@@ -844,10 +845,13 @@ export function useNavigationBetweenBuildings({
       const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code ?? null;
       setIsDestinationLocked(false);
       setIsIndoorOnlyRoute(false);
+      setNavigationStart('Your location');
+      setNavigationOrigin(null);
       setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
       setActiveMode('driving');
       if (selectedBuilding) {
-        const destCentroid = polygonCentroid(selectedBuilding.polygon);
+        const meta = selectedBuilding.code ? getBuildingMeta(selectedBuilding.code) : null;
+        const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(selectedBuilding.polygon);
         setNavigationDestinationCoord(destCentroid);
         setTapMarkerCoordinate(destCentroid);
       }
@@ -863,7 +867,8 @@ export function useNavigationBetweenBuildings({
         destinationBuilding.name,
         destinationBuilding.code,
       );
-      const destCentroid = polygonCentroid(destinationBuilding.polygon);
+      const meta = destinationBuilding.code ? getBuildingMeta(destinationBuilding.code) : null;
+      const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(destinationBuilding.polygon);
       setNavigationStart('Your location');
       setNavigationOrigin(null);
       setNavigationDestination(destinationLabel);
@@ -982,13 +987,15 @@ export function useNavigationBetweenBuildings({
         if (name === 'Your location') {
           setNavigationOrigin(null);
         } else if (building) {
-          setNavigationOrigin(polygonCentroid(building.polygon));
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          setNavigationOrigin(meta?.entrances?.[0] ?? polygonCentroid(building.polygon));
         }
       } else {
         setIsDestinationLocked(false);
         setNavigationDestination(label);
         if (building) {
-          const destCentroid = polygonCentroid(building.polygon);
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(building.polygon);
           setNavigationDestinationCoord(destCentroid);
           setTapMarkerCoordinate(destCentroid);
         }
@@ -1020,6 +1027,10 @@ export function useNavigationBetweenBuildings({
   const closeNavigation = useCallback(() => {
     setIsNavigationOpen(false);
     setIsIndoorOnlyRoute(false);
+    setNavigationStart('Your location');
+    setNavigationOrigin(null);
+    setNavigationDestination('');
+    setNavigationDestinationCoord(null);
     setNavigationActiveFieldState(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);

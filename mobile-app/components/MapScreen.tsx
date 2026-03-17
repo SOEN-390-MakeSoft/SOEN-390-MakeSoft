@@ -26,12 +26,15 @@ import ClassesCalendarRequired from './ClassesCalendarRequired';
 import IndoorMapOverlay from './indoor/IndoorMapOverlay';
 import FloorSelector from './indoor/FloorSelector';
 import RoomInfoBubble from './indoor/RoomInfoBubble';
+import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
 import {
   findBuildingAtCoordinate,
   detectIndoorDestination,
   loadBuilding,
   searchRooms as searchIndoorRooms,
   getBuildingMeta,
+  hasIndoorMap,
+  findRoomAtCoordinate,
 } from '../services/indoor';
 import { useSettings } from '../context/settings';
 import { isClassesCalendarValid } from '../utils/calendarValidation';
@@ -259,10 +262,18 @@ export default function MapScreen() {
   const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
   const [isDirectionsModeOpen, setIsDirectionsModeOpen] = useState(false);
   const [previewStepIndex, setPreviewStepIndex] = useState(0);
+
+  // Indoor Location Detection Modal State
+  const [showFloorSelectModal, setShowFloorSelectModal] = useState(false);
+  const [indoorStartCoordPending, setIndoorStartCoordPending] = useState<LatLng | null>(null);
+  const [indoorStartBuildingPending, setIndoorStartBuildingPending] =
+    useState<ResolvedCampusBuilding | null>(null);
+
   const [pendingMapBuilding, setPendingMapBuilding] = useState<PendingMapBuilding | null>(null);
   const [pendingStartBuilding, setPendingStartBuilding] = useState<PendingStartBuilding | null>(
     null,
   );
+  const [pendingDestinationRef, setPendingDestinationRef] = useState<string | null>(null);
   const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
   const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
   const { colourBlindMode, simulatedNow } = useSettings();
@@ -457,26 +468,21 @@ export default function MapScreen() {
    *  if the user is far away → combined outdoor+indoor. */
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
-      indoor.navigateToRoom(room.ref);
       indoor.selectRoom(null);
       lastIndoorAutoRef.current = null;
       handleCloseCard();
-
-      const buildingName = indoor.buildingMeta?.name ?? 'Building entrance';
-
-      if (isIndoorOnlyRoute) {
-        openIndoorOnlyNavigation(room.ref, buildingName);
-        return;
-      }
 
       const userNearBuilding =
         userPositionRef.current &&
         findBuildingAtCoordinate(userPositionRef.current)?.code === indoor.activeBuildingCode;
 
-      if (userNearBuilding) {
-        openIndoorOnlyNavigation(room.ref, buildingName);
+      if (isIndoorOnlyRoute || userNearBuilding) {
+        setPendingDestinationRef(room.ref);
+        openIndoorOnlyNavigation(room.ref, 'Your location');
         return;
       }
+
+      indoor.navigateToRoom(room.ref);
 
       const outdoorBuilding = buildings.find(
         (b) => b.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase(),
@@ -485,7 +491,7 @@ export default function MapScreen() {
         handleSelectBuilding(outdoorBuilding.id);
         openNavigationForBuilding(outdoorBuilding, null);
       } else {
-        openIndoorOnlyNavigation(room.ref, buildingName);
+        openIndoorOnlyNavigation(room.ref, 'Your location');
       }
     },
     [
@@ -824,6 +830,13 @@ export default function MapScreen() {
     (coordinate: LatLng) => {
       const insideMatch = resolveInsideBuilding(coordinate);
       if (insideMatch) {
+        if (insideMatch.building.code && hasIndoorMap(insideMatch.building.code)) {
+          setIndoorStartCoordPending(coordinate);
+          setIndoorStartBuildingPending(insideMatch);
+          setShowFloorSelectModal(true);
+          return;
+        }
+
         setDirectionsStartToBuilding(insideMatch, coordinate);
         return;
       }
@@ -901,6 +914,7 @@ export default function MapScreen() {
     if (!isCurrentLocationStart) return;
     if (navigationOrigin) return;
     if (isLocating) return;
+    if (indoorStartCoordPending || showFloorSelectModal) return;
     void goToUserLocation({
       animateToUser: false,
       onResolved: resolveDirectionsStartFromCoordinate,
@@ -912,6 +926,8 @@ export default function MapScreen() {
     isNavigationOpen,
     navigationOrigin,
     resolveDirectionsStartFromCoordinate,
+    indoorStartCoordPending,
+    showFloorSelectModal,
   ]);
 
   const handleLocationPress = useCallback(async () => {
@@ -1016,7 +1032,7 @@ export default function MapScreen() {
    * Take elevator to floor 8 → Walk to room H-840".
    */
   const combinedNavigationSteps = useMemo(() => {
-    if (!indoor.isIndoorActive || !indoor.indoorRoute) return navigationSteps;
+    if (!indoor.indoorRoute) return navigationSteps;
 
     const indoorSteps = indoor.indoorRoute.steps.map((step) => ({
       instruction: step.instruction,
@@ -1032,22 +1048,35 @@ export default function MapScreen() {
       return indoorSteps;
     }
 
-    const entrance = indoor.buildingMeta?.entrances?.[0];
-    const enterStep = {
-      instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
-      distanceText: '',
-      durationText: '',
-      maneuver: 'enter-building' as const,
-      focusCoordinate: entrance,
-      _indoorLevel: indoor.indoorRoute.startLevel,
-    };
+    if (indoor.destinationRoom?.ref === 'Exit') {
+      const exitStep = {
+        instruction: `Exit ${indoor.buildingMeta?.name ?? 'the building'}`,
+        distanceText: '',
+        durationText: '',
+        maneuver: 'exit-building' as const,
+        focusCoordinate: indoor.buildingMeta?.entrances?.[0],
+        _indoorLevel: indoor.indoorRoute.endLevel,
+      };
+      return [...indoorSteps, exitStep, ...navigationSteps];
+    } else {
+      const entrance = indoor.buildingMeta?.entrances?.[0];
+      const enterStep = {
+        instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
+        distanceText: '',
+        durationText: '',
+        maneuver: 'enter-building' as const,
+        focusCoordinate: entrance,
+        _indoorLevel: indoor.indoorRoute.startLevel,
+      };
 
-    return [...navigationSteps, enterStep, ...indoorSteps];
+      return [...navigationSteps, enterStep, ...indoorSteps];
+    }
   }, [
     navigationSteps,
     indoor.isIndoorActive,
     indoor.indoorRoute,
     indoor.buildingMeta,
+    indoor.destinationRoom,
     isIndoorOnlyRoute,
   ]);
 
@@ -1201,9 +1230,9 @@ export default function MapScreen() {
   }, []);
 
   const handleOpenDirectionsMode = useCallback(() => {
-    if (navigationSteps.length === 0) return;
+    if (combinedNavigationSteps.length === 0) return;
     setIsDirectionsModeOpen(true);
-  }, [navigationSteps]);
+  }, [combinedNavigationSteps]);
 
   const handleCloseDirectionsMode = useCallback(() => {
     setIsDirectionsModeOpen(false);
@@ -1255,6 +1284,10 @@ export default function MapScreen() {
       if (wasOpen) {
         indoor.deactivate();
         lastIndoorAutoRef.current = null;
+        setIndoorStartCoordPending(null);
+        setIndoorStartBuildingPending(null);
+        setShowFloorSelectModal(false);
+        setPendingDestinationRef(null);
       }
     }
   }, [isNavigationOpen, indoor]);
@@ -1264,6 +1297,79 @@ export default function MapScreen() {
   const nextClassTitle = nextClassPreview?.event.summary ?? '';
   const nextClassLocationLabel =
     nextClassPreview?.building?.name ?? nextClassPreview?.event.location ?? 'Location unavailable';
+
+  const handleFloorSelected = useCallback(
+    (floor: string) => {
+      setShowFloorSelectModal(false);
+      if (!indoorStartCoordPending || !indoorStartBuildingPending) return;
+
+      const buildingCode = indoorStartBuildingPending.building.code;
+      const buildingData = buildingCode ? loadBuilding(buildingCode) : null;
+
+      const proceedWithStart = (startRef: string, startPos: LatLng, isHallway: boolean) => {
+        const destRef = indoor.destinationRoom?.ref || pendingDestinationRef;
+
+        if (
+          buildingCode &&
+          (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)
+        ) {
+          indoor.activateBuilding(buildingCode);
+        }
+
+        // If we are navigating indoor with an active indoor destination
+        if (isIndoorOnlyRoute && destRef) {
+          indoor.navigateToRoom(destRef, startPos, floor);
+          const startLabel = isHallway ? 'Hallway' : startRef;
+          setStartToCurrentLocationBuilding(startLabel, buildingCode ?? '', startPos);
+        } else {
+          // Normal outdoor start, but user is indoors
+          indoor.navigateToRoom('__EXIT__', startPos, floor);
+          const bMeta = buildingCode ? getBuildingMeta(buildingCode) : null;
+          const exitCoord = bMeta?.entrances?.[0] || startPos;
+          setDirectionsStartToBuilding(indoorStartBuildingPending, exitCoord);
+        }
+        setIndoorStartCoordPending(null);
+        setIndoorStartBuildingPending(null);
+        setPendingDestinationRef(null);
+      };
+
+      if (!buildingData) {
+        proceedWithStart(indoorStartBuildingPending.building.name, indoorStartCoordPending, false);
+        return;
+      }
+
+      const matchedRoom = findRoomAtCoordinate(
+        buildingData.features,
+        indoorStartCoordPending,
+        floor,
+      );
+
+      if (matchedRoom) {
+        Alert.alert('Room Detected', `Are you currently in ${matchedRoom.ref}?`, [
+          {
+            text: 'No, just near here',
+            style: 'cancel',
+            onPress: () => proceedWithStart('Hallway', indoorStartCoordPending, true),
+          },
+          {
+            text: 'Yes',
+            onPress: () =>
+              proceedWithStart(matchedRoom.ref ?? 'Unknown Room', matchedRoom.centroid, false),
+          },
+        ]);
+      } else {
+        proceedWithStart('Hallway', indoorStartCoordPending, true);
+      }
+    },
+    [
+      indoorStartCoordPending,
+      indoorStartBuildingPending,
+      isIndoorOnlyRoute,
+      indoor,
+      setStartToCurrentLocationBuilding,
+      setDirectionsStartToBuilding,
+    ],
+  );
 
   return (
     <View style={styles.container} testID="map-screen">
@@ -1386,7 +1492,7 @@ export default function MapScreen() {
           );
         })}
         {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
-        {indoor.isIndoorActive && (
+        {(indoor.isIndoorActive || indoor.indoorRoute) && (
           <IndoorMapOverlay
             activeLevelFeatures={indoor.activeLevelFeatures}
             route={indoor.indoorRoute}
@@ -1524,7 +1630,7 @@ export default function MapScreen() {
       />
       <DirectionsModeScreen
         visible={isDirectionsModeOpen}
-        steps={navigationSteps}
+        steps={combinedNavigationSteps}
         routePolyline={routePolyline}
         onOffRoute={handleOffRoute}
         onRecenterToUser={goToUserLocation}
@@ -1604,6 +1710,25 @@ export default function MapScreen() {
         onClose={() => setCalendarModalVisible(false)}
         onConnect={connectCalendar}
         onDisconnect={handleCalendarDisconnect}
+      />
+
+      <IndoorStartPromptModal
+        visible={showFloorSelectModal}
+        buildingCode={indoorStartBuildingPending?.building.code ?? ''}
+        levels={
+          indoorStartBuildingPending?.building.code
+            ? (getBuildingMeta(indoorStartBuildingPending.building.code)?.levels ?? [])
+            : []
+        }
+        onSelectLevel={handleFloorSelected}
+        onCancel={() => {
+          setShowFloorSelectModal(false);
+          if (indoorStartBuildingPending && indoorStartCoordPending) {
+            setDirectionsStartToBuilding(indoorStartBuildingPending, indoorStartCoordPending);
+          }
+          setIndoorStartCoordPending(null);
+          setIndoorStartBuildingPending(null);
+        }}
       />
     </View>
   );
