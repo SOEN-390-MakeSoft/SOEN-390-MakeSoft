@@ -20,9 +20,11 @@ interface UseIndoorRoomPickerArgs {
  * Extracted from MapScreen to keep indoor room-picker logic isolated.
  */
 export function useIndoorRoomPicker({ indoor, isIndoorOnlyRoute }: UseIndoorRoomPickerArgs) {
+  const MAX_ROOM_SEARCH_RESULTS = 500;
+
   const indoorRoomOptions = useMemo<SearchEntry[] | undefined>(() => {
     if (!isIndoorOnlyRoute || !indoor.isIndoorActive) return undefined;
-    const rooms = indoor.listRooms(500);
+    const rooms = indoor.listRooms(MAX_ROOM_SEARCH_RESULTS);
     return rooms.map((room) => ({
       name: room.ref,
       code: indoor.activeBuildingCode,
