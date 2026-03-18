@@ -8,19 +8,11 @@ type: Task
 
 ---
 
----
-name: Bug report
-about: Report a bug in the project
-title: "[BUG] "
-labels: bug
-assignees: ''
----
-
 🐛 **Bug**  
 Describe the bug clearly.
 
 📍 **Location**  
-Indicate where the bug happens (feature, page, module, screen, etc.).
+Indicate where the bug happens (feature, page, module, screen, etc.)
 
 ❌ **Current Behavior**  
 What is happening right now?
