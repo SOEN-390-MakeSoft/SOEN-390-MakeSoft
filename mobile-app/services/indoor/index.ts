@@ -38,7 +38,13 @@ export { findPath } from './pathfinder';
 export type { PathfinderOptions } from './pathfinder';
 
 // Room resolver & POI search
-export { buildRoomIndex, resolveRoom, searchRooms, findNearestPOI } from './roomResolver';
+export {
+  buildRoomIndex,
+  resolveRoom,
+  searchRooms,
+  findNearestPOI,
+  findRoomAtCoordinate,
+} from './roomResolver';
 export type { ResolvedRoom, POICategory, NearestPOIResult } from './roomResolver';
 
 // Building registry

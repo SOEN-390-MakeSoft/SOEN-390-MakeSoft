@@ -17,9 +17,10 @@ interface NavigationMenuProps {
   destinationLocked?: boolean;
   onActiveFieldChange?: (field: ActiveField) => void;
   onBuildingSelect?: (field: 'start' | 'destination', name: string, code: string | null) => void;
+  indoorRoomOptions?: SearchEntry[];
 }
 
-type SearchEntry = {
+export type SearchEntry = {
   name: string;
   code: string | null;
   address: string | null;
@@ -37,6 +38,7 @@ export default function NavigationMenu({
   destinationLocked = false,
   onActiveFieldChange,
   onBuildingSelect,
+  indoorRoomOptions,
 }: Readonly<NavigationMenuProps>) {
   const { colourBlindMode } = useSettings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -118,10 +120,15 @@ export default function NavigationMenu({
     return [...sgw, ...loyola];
   }, []);
 
+  const combinedOptions = useMemo<SearchEntry[]>(() => {
+    if (!indoorRoomOptions || indoorRoomOptions.length === 0) return buildingOptions;
+    return [...indoorRoomOptions, ...buildingOptions];
+  }, [buildingOptions, indoorRoomOptions]);
+
   const results = useMemo(() => {
     const query = normalizeLabel(activeQuery);
     if (!query) return [];
-    return buildingOptions
+    return combinedOptions
       .filter((entry) => {
         const name = normalizeLabel(entry.name);
         const code = entry.code ? normalizeLabel(entry.code) : '';
@@ -135,7 +142,7 @@ export default function NavigationMenu({
         );
       })
       .slice(0, 6);
-  }, [activeQuery, buildingOptions]);
+  }, [activeQuery, combinedOptions]);
 
   const handleSelect = (field: 'start' | 'destination', entry: SearchEntry) => {
     if (blurTimer.current) {

@@ -24,6 +24,8 @@ interface RoomInfoBubbleProps {
   onNavigate: (room: ResolvedRoom) => void;
   /** Called when the user closes/dismisses the bubble. */
   onClose: () => void;
+  /** Formatted estimated travel time, e.g. "~58 sec walk". Shown above the Navigate button. */
+  estimatedTimeText?: string;
   /** Accent colour (defaults to Concordia red). */
   accentColor?: string;
   /** Distance from the bottom of the screen (defaults to 160). */
@@ -52,6 +54,7 @@ export default function RoomInfoBubble({
   buildingName,
   onNavigate,
   onClose,
+  estimatedTimeText,
   accentColor = '#b21b2c',
   bottomOffset = 160,
 }: Readonly<RoomInfoBubbleProps>) {
@@ -80,6 +83,13 @@ export default function RoomInfoBubble({
         {buildingName ? `${buildingName} · ` : ''}
         {formatLevel(room.level)}
       </Text>
+
+      {estimatedTimeText ? (
+        <View style={styles.timeBadge} testID="room-time-badge">
+          <MaterialIcons name="directions-walk" size={14} color="#555" />
+          <Text style={styles.timeBadgeText}>{estimatedTimeText}</Text>
+        </View>
+      ) : null}
 
       {/* Navigate button */}
       <Pressable
@@ -137,7 +147,22 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 6,
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 4,
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  timeBadgeText: {
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '600',
   },
   navigateButton: {
     flexDirection: 'row',
