@@ -12,7 +12,7 @@ import { Platform } from 'react-native';
 const envHost = Constants?.expoConfig?.extra?.PC_IP ?? (Constants as any).manifest?.extra?.PC_IP;
 
 const ANDROID_EMULATOR_HOST = '10.0.2.2:8080';
-const IOS_SIMULATOR_HOST = '10.0.2.2:8080';
+const IOS_SIMULATOR_HOST = 'localhost:8080';
 
 // normalize env host (append :8080 if missing)
 let normalizedEnvHost: string | undefined;
@@ -32,8 +32,8 @@ const host = (() => {
   }
   if (Platform.OS === 'android' && !isDevice) return ANDROID_EMULATOR_HOST;
   if (Platform.OS === 'ios' && !isDevice) return IOS_SIMULATOR_HOST;
-  // Fallback: env host if present, otherwise 10.0.2.2:8080
-  return normalizedEnvHost ?? '10.0.2.2:8080';
+  // Fallback: env host if present, otherwise localhost:8080
+  return normalizedEnvHost ?? 'localhost:8080';
 })();
 
 // DEBUG: show the final chosen host

@@ -14,7 +14,7 @@ describe('Testing Network Configuration Logic', () => {
   /*
    * System Scenario 1: Android Emulator (On PC)
    */
-  it('should configure for the anroid emulator host address, i.e. 10.0.2.2:8081', () => {
+  it('should configure for the anroid emulator host address, i.e. 10.0.2.2:8080', () => {
     // Build Mocks
     jest.doMock('react-native', () => ({ Platform: { OS: 'android' } }));
     jest.doMock('expo-constants', () => ({
@@ -28,13 +28,13 @@ describe('Testing Network Configuration Logic', () => {
     const { API_BASE_URL } = require('../../services/api');
 
     // The Host IP is expected to be the host machine's local host in conjuction with the backend API (Android behaviour)
-    expect(API_BASE_URL).toBe('http://10.0.2.2:8081/api');
+    expect(API_BASE_URL).toBe('http://10.0.2.2:8080/api');
   });
 
   /*
    * System Scenario 2: iOS Emulator (On PC)
    */
-  it('should configure for the iOS emulator host address, i.e. localhost:8081', () => {
+  it('should configure for the iOS emulator host address, i.e. localhost:8080', () => {
     // Build Mocks
     jest.doMock('react-native', () => ({ Platform: { OS: 'ios' } }));
     jest.doMock('expo-constants', () => ({
@@ -48,7 +48,7 @@ describe('Testing Network Configuration Logic', () => {
     const { API_BASE_URL } = require('../../services/api');
 
     // The emulator URL is expected to share the host network's in conjuction with the backend API (iOS behaviour)
-    expect(API_BASE_URL).toBe('http://localhost:8081/api');
+    expect(API_BASE_URL).toBe('http://localhost:8080/api');
   });
 
   /*
@@ -74,8 +74,8 @@ describe('Testing Network Configuration Logic', () => {
     // Pretend that api.ts has just been opened by a user
     const { API_BASE_URL } = require('../../services/api');
 
-    // The logic should append the specified port (:8081, in this case) to the end of the IP
-    expect(API_BASE_URL).toBe(`http://${MOCK_PC_IP}:8081/api`);
+    // The logic should append the specified port (:8080, in this case) to the end of the IP
+    expect(API_BASE_URL).toBe(`http://${MOCK_PC_IP}:8080/api`);
   });
 
   /*
