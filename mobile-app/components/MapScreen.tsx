@@ -542,18 +542,17 @@ export default function MapScreen() {
   );
 
   /** Category chip tapped → filter POIs and escalators/elevators. */
-  const handleCategoryChipPress = useCallback(
-    (category: string) => {
+  const handleCategoryChipPress = useCallback((category: string) => {
+    setIndoorCategoryFilter((prevCategoryFilter) => {
       const { nextCategoryFilter, nextVisiblePoiAmenities } = resolveIndoorCategorySelection(
-        indoorCategoryFilter,
+        prevCategoryFilter,
         category,
       );
-      setIndoorCategoryFilter(nextCategoryFilter);
       setVisiblePoiAmenities(nextVisiblePoiAmenities);
-      setSelectedPoi(null); // Clear any open POI bubble
-    },
-    [indoorCategoryFilter],
-  );
+      return nextCategoryFilter;
+    });
+    setSelectedPoi(null); // Clear any open POI bubble
+  }, []);
 
   // Track the last map region for zoom-based indoor auto-show
   const lastIndoorAutoRef = useRef<string | null>(null);
@@ -1345,6 +1344,7 @@ export default function MapScreen() {
         {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
         {indoor.isIndoorActive && (
           <IndoorMapOverlay
+            key={`indoor-overlay-${indoor.activeLevel}-${indoorCategoryFilter ?? 'all'}-${visiblePoiAmenities.join(',')}`}
             activeLevelFeatures={indoor.activeLevelFeatures}
             route={indoor.indoorRoute}
             activeLevel={indoor.activeLevel}
