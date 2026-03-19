@@ -219,7 +219,7 @@ export default function IndoorMapOverlay({
         const isSelected = selectedRoom?.featureId === room.id;
         return (
           <Polygon
-            key={`${room.id}${isSelected ? '-sel' : ''}`}
+            key={room.id}
             coordinates={room.polygon}
             fillColor={isSelected ? COLORS.roomSelectedFill : COLORS.roomFill}
             strokeColor={isSelected ? COLORS.roomSelectedStroke : COLORS.roomStroke}

@@ -409,3 +409,125 @@ describe('useIndoorNavigation — route polyline integrity', () => {
     expect(lastPt.longitude).toBeCloseTo(-73.579, 2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. listRooms
+// ---------------------------------------------------------------------------
+
+describe('useIndoorNavigation — listRooms', () => {
+  it('returns [] when no building is active', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    expect(result.current.listRooms()).toEqual([]);
+  });
+
+  it('returns rooms sorted by ref', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    const rooms = result.current.listRooms();
+    expect(rooms.length).toBeGreaterThan(0);
+
+    for (let i = 1; i < rooms.length; i++) {
+      expect(rooms[i - 1].ref.localeCompare(rooms[i].ref)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it('respects the limit parameter', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    expect(result.current.listRooms(3)).toHaveLength(3);
+    expect(result.current.listRooms(1)).toHaveLength(1);
+  });
+
+  it('default limit returns up to 50 rooms', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    const rooms = result.current.listRooms();
+    expect(rooms.length).toBeGreaterThan(0);
+    expect(rooms.length).toBeLessThanOrEqual(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. estimateTimeToRoom
+// ---------------------------------------------------------------------------
+
+describe('useIndoorNavigation — estimateTimeToRoom', () => {
+  it('returns null when no building is active', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    const fakeRoom = {
+      featureId: 'fake',
+      ref: 'H-840',
+      level: '8',
+      buildingCode: 'H',
+      position: { latitude: 45.497, longitude: -73.579 },
+      polygon: [],
+    } as any;
+    expect(result.current.estimateTimeToRoom(fakeRoom)).toBeNull();
+  });
+
+  it('returns a positive number for a valid room', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    const rooms = result.current.searchRooms('H-840');
+    expect(rooms.length).toBeGreaterThan(0);
+
+    const seconds = result.current.estimateTimeToRoom(rooms[0]);
+    expect(seconds).not.toBeNull();
+    expect(seconds).toBeGreaterThan(0);
+  });
+
+  it('returns null for a room with unreachable position', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    const unreachableRoom = {
+      featureId: 'unreachable',
+      ref: 'FAKE-999',
+      level: '99',
+      buildingCode: 'H',
+      position: { latitude: 0, longitude: 0 },
+      polygon: [],
+    } as any;
+    expect(result.current.estimateTimeToRoom(unreachableRoom)).toBeNull();
+  });
+});
+
+describe('useIndoorNavigation � exit routing', () => {
+  it('correctly sets destination when __EXIT__ is passed', async () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    await waitFor(() => {
+      expect(result.current.isIndoorActive).toBe(true);
+      expect(result.current.buildingMeta).not.toBeNull();
+    });
+
+    act(() => {
+      // Trying to navigate to __EXIT__ from some start point
+      result.current.navigateToRoom('__EXIT__');
+    });
+
+    await waitFor(() => {
+      expect(result.current.destinationRoom).not.toBeNull();
+      expect(result.current.destinationRoom?.ref).toBe('Exit');
+      expect(result.current.indoorRoute).not.toBeNull();
+    });
+  });
+});

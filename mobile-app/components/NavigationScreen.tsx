@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { NavigationStep, ShuttleInfo } from '../hooks/useNavigationBetweenBuildings';
-import NavigationMenu from './NavigationMenu';
+import NavigationMenu, { type SearchEntry } from './NavigationMenu';
 import { useSettings } from '../context/settings';
 
 export type DirectionsErrorType = 'same_origin_destination' | 'missing_coordinates' | null;
@@ -45,6 +45,12 @@ interface NavigationScreenProps {
   isWeekend?: boolean;
   onOpenPreview?: () => void;
   onOpenDirections?: () => void;
+  /** Formatted indoor travel time text, e.g. "~2 min indoor walk". */
+  indoorTravelTimeText?: string;
+  /** True when navigating between rooms in the same building (no outdoor route). */
+  isIndoorOnlyRoute?: boolean;
+  /** Indoor room list for NavigationMenu dropdown in indoor-only mode. */
+  indoorRoomOptions?: SearchEntry[];
 }
 
 const DRAG_THRESHOLD = 40;
@@ -193,13 +199,19 @@ function getTripTitleText({
   selectedTransportMode,
   isShuttleRoute,
   isShuttleLoading,
+  isIndoorOnlyRoute,
 }: Readonly<{
   isLoading?: boolean;
   tripSummary?: NavigationScreenProps['tripSummary'];
   selectedTransportMode: TransportMode;
   isShuttleRoute: boolean;
   isShuttleLoading: boolean;
+  isIndoorOnlyRoute: boolean;
 }>): string {
+  if (isIndoorOnlyRoute && tripSummary) {
+    return 'Indoor directions';
+  }
+
   if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
     return isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
   }
@@ -327,6 +339,17 @@ function DirectionsErrorNotice({
   );
 }
 
+function IndoorTimeBadge({ text }: Readonly<{ text?: string }>) {
+  if (!text) return null;
+
+  return (
+    <View style={styles.indoorTimeBadge} testID="indoor-time-badge">
+      <MaterialIcons name="directions-walk" size={14} color="#fff" />
+      <Text style={styles.indoorTimeBadgeText}>{text}</Text>
+    </View>
+  );
+}
+
 function formatStepMeta(step: NavigationStep): string {
   if (step.durationText) {
     return `${step.distanceText} \u00B7 ${step.durationText}`;
@@ -439,13 +462,18 @@ export default function NavigationScreen({
   isWeekend = false,
   onOpenPreview,
   onOpenDirections,
+  indoorTravelTimeText,
+  isIndoorOnlyRoute = false,
+  indoorRoomOptions,
 }: Readonly<NavigationScreenProps>) {
   const { colourBlindMode } = useSettings();
   const [isMinimized, setIsMinimized] = useState(false);
   const isMinimizedRef = React.useRef(false);
 
   const hasSteps = navigationSteps.length > 0;
-  const isPreviewButtonDisabled = isGetDirectionsDisabled || !hasSteps;
+  const isPreviewButtonDisabled = isIndoorOnlyRoute
+    ? !hasSteps
+    : isGetDirectionsDisabled || !hasSteps;
   const themeColors = getThemeColors(colourBlindMode);
   const tripTitleText = getTripTitleText({
     isLoading,
@@ -453,6 +481,7 @@ export default function NavigationScreen({
     selectedTransportMode,
     isShuttleRoute,
     isShuttleLoading,
+    isIndoorOnlyRoute,
   });
   const showShuttlePanel =
     selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && !!shuttleInfo;
@@ -512,6 +541,7 @@ export default function NavigationScreen({
         destinationLocked={destinationLocked}
         onActiveFieldChange={onActiveFieldChange}
         onBuildingSelect={onBuildingSelect}
+        indoorRoomOptions={indoorRoomOptions}
       />
 
       <View
@@ -533,48 +563,62 @@ export default function NavigationScreen({
         </Pressable>
         <View style={styles.bottomHeader}>
           <View style={styles.tripModeRow}>
-            <ModeChip
-              mode="driving"
-              icon="directions-car"
-              label={modeDurations?.driving ?? '--'}
-              isSelected={selectedTransportMode === 'driving'}
-              isDisabled={isModeDisabled('driving')}
-              chipColor={themeColors.chipColor}
-              chipMutedColor={themeColors.chipMutedColor}
-              onPress={() => {
-                if (isModeDisabled('driving')) {
-                  onDisabledTransportModePress?.('driving');
-                  return;
-                }
-                onTransportModeChange?.('driving');
-              }}
-            />
-            <ModeChip
-              mode="walking"
-              icon="directions-walk"
-              label={modeDurations?.walking ?? '--'}
-              isSelected={selectedTransportMode === 'walking'}
-              isDisabled={isModeDisabled('walking')}
-              chipColor={themeColors.chipColor}
-              chipMutedColor={themeColors.chipMutedColor}
-              onPress={() => {
-                if (isModeDisabled('walking')) {
-                  onDisabledTransportModePress?.('walking');
-                  return;
-                }
-                onTransportModeChange?.('walking');
-              }}
-            />
-            {renderShuttleChip({
-              isShuttleRoute,
-              isWeekend,
-              isDisabled: isModeDisabled('shuttle'),
-              selectedTransportMode,
-              chipColor: themeColors.chipColor,
-              chipMutedColor: themeColors.chipMutedColor,
-              onTransportModeChange,
-              onDisabledTransportModePress,
-            })}
+            {isIndoorOnlyRoute ? (
+              <ModeChip
+                mode="walking"
+                icon="directions-walk"
+                label={modeDurations?.walking ?? '--'}
+                isSelected
+                chipColor={themeColors.chipColor}
+                chipMutedColor={themeColors.chipMutedColor}
+                onPress={() => {}}
+              />
+            ) : (
+              <>
+                <ModeChip
+                  mode="driving"
+                  icon="directions-car"
+                  label={modeDurations?.driving ?? '--'}
+                  isSelected={selectedTransportMode === 'driving'}
+                  isDisabled={isModeDisabled('driving')}
+                  chipColor={themeColors.chipColor}
+                  chipMutedColor={themeColors.chipMutedColor}
+                  onPress={() => {
+                    if (isModeDisabled('driving')) {
+                      onDisabledTransportModePress?.('driving');
+                      return;
+                    }
+                    onTransportModeChange?.('driving');
+                  }}
+                />
+                <ModeChip
+                  mode="walking"
+                  icon="directions-walk"
+                  label={modeDurations?.walking ?? '--'}
+                  isSelected={selectedTransportMode === 'walking'}
+                  isDisabled={isModeDisabled('walking')}
+                  chipColor={themeColors.chipColor}
+                  chipMutedColor={themeColors.chipMutedColor}
+                  onPress={() => {
+                    if (isModeDisabled('walking')) {
+                      onDisabledTransportModePress?.('walking');
+                      return;
+                    }
+                    onTransportModeChange?.('walking');
+                  }}
+                />
+                {renderShuttleChip({
+                  isShuttleRoute,
+                  isWeekend,
+                  isDisabled: isModeDisabled('shuttle'),
+                  selectedTransportMode,
+                  chipColor: themeColors.chipColor,
+                  chipMutedColor: themeColors.chipMutedColor,
+                  onTransportModeChange,
+                  onDisabledTransportModePress,
+                })}
+              </>
+            )}
           </View>
           <Pressable
             onPress={onClose}
@@ -588,10 +632,16 @@ export default function NavigationScreen({
             <Text style={styles.tripTitle} numberOfLines={2}>
               {tripTitleText}
             </Text>
-            <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
-            <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
-            <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
-            <DirectionsErrorNotice directionsError={directionsError} />
+            <TripMeta
+              tripSummary={tripSummary}
+              selectedTransportMode={isIndoorOnlyRoute ? 'walking' : selectedTransportMode}
+            />
+            <IndoorTimeBadge text={isIndoorOnlyRoute ? undefined : indoorTravelTimeText} />
+            {!isIndoorOnlyRoute && (
+              <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
+            )}
+            {!isIndoorOnlyRoute && <ShuttleWeekendNotice show={showShuttleWeekendNotice} />}
+            <DirectionsErrorNotice directionsError={isIndoorOnlyRoute ? null : directionsError} />
             <PreviewAndSteps
               hasSteps={hasSteps}
               isPreviewButtonDisabled={isPreviewButtonDisabled}
@@ -807,5 +857,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  indoorTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    columnGap: 4,
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  indoorTimeBadgeText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
