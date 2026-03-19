@@ -10,6 +10,10 @@ interface MapMenuProps {
   visible: boolean;
   onClose: () => void;
   fullScreen?: boolean;
+  /** POI amenity types currently visible. */
+  visiblePoiAmenities?: string[];
+  /** Callback when POI visibility changes. */
+  onVisiblePoiAmenitiesChange?: (amenities: string[]) => void;
 }
 
 function pad2(value: number): string {
@@ -54,7 +58,13 @@ function parseLocalDateTime(dateText: string, timeText: string): Date | null {
   return parsed;
 }
 
-export default function MapMenu({ visible, onClose, fullScreen = false }: Readonly<MapMenuProps>) {
+export default function MapMenu({
+  visible,
+  onClose,
+  fullScreen = false,
+  visiblePoiAmenities = ['toilets', 'drinking_water'],
+  onVisiblePoiAmenitiesChange,
+}: Readonly<MapMenuProps>) {
   const { colourBlindMode, setColourBlindMode, simulatedNow, setSimulatedNow, resetSimulatedNow } =
     useSettings();
   const theme = useTheme();
@@ -111,6 +121,45 @@ export default function MapMenu({ visible, onClose, fullScreen = false }: Readon
           thumbColor={colourBlindMode ? brandRed : '#fff'}
         />
       </View>
+
+      {/* POI Visibility Filters */}
+      <View style={[styles.menuRow, styles.simulationRow]}>
+        <View style={styles.simulationHeader}>
+          <MaterialIcons name="place" size={21} color={brandRed} />
+          <Text style={styles.menuRowText}>Indoor Points of Interest</Text>
+        </View>
+        <View style={styles.poiFilterRow}>
+          <View style={styles.poiFilterItem}>
+            <Text style={styles.poiFilterLabel}>Washrooms</Text>
+            <Switch
+              value={visiblePoiAmenities.includes('toilets')}
+              onValueChange={(enabled) => {
+                const updated = enabled
+                  ? [...visiblePoiAmenities, 'toilets']
+                  : visiblePoiAmenities.filter((a) => a !== 'toilets');
+                onVisiblePoiAmenitiesChange?.(updated);
+              }}
+              trackColor={{ false: '#ddd', true: '#f3b6bf' }}
+              thumbColor={visiblePoiAmenities.includes('toilets') ? brandRed : '#fff'}
+            />
+          </View>
+          <View style={styles.poiFilterItem}>
+            <Text style={styles.poiFilterLabel}>Water Fountains</Text>
+            <Switch
+              value={visiblePoiAmenities.includes('drinking_water')}
+              onValueChange={(enabled) => {
+                const updated = enabled
+                  ? [...visiblePoiAmenities, 'drinking_water']
+                  : visiblePoiAmenities.filter((a) => a !== 'drinking_water');
+                onVisiblePoiAmenitiesChange?.(updated);
+              }}
+              trackColor={{ false: '#ddd', true: '#f3b6bf' }}
+              thumbColor={visiblePoiAmenities.includes('drinking_water') ? brandRed : '#fff'}
+            />
+          </View>
+        </View>
+      </View>
+
       <View style={[styles.menuRow, styles.simulationRow]}>
         <View style={styles.simulationHeader}>
           <MaterialIcons name="schedule" size={21} color={brandRed} />
@@ -300,4 +349,20 @@ const styles = StyleSheet.create({
   },
   menuRowLeft: { flexDirection: 'row', alignItems: 'center', columnGap: 10 },
   menuRowText: { fontSize: 19, color: '#4a4a4a', fontWeight: '600' },
+  poiFilterRow: {
+    marginTop: 12,
+    flexDirection: 'column',
+    rowGap: 10,
+  },
+  poiFilterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  poiFilterLabel: {
+    fontSize: 16,
+    color: '#4a4a4a',
+    fontWeight: '500',
+  },
 });

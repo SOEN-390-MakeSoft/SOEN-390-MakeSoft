@@ -95,12 +95,23 @@ export interface IndoorDoor extends IndoorFeatureBase {
   isEntrance: boolean;
 }
 
-/** A POI like a café or theatre. */
+/** A POI like a café, toilet, water fountain, etc. */
 export interface IndoorPOI extends IndoorFeatureBase {
   type: 'poi';
-  position: LatLng;
+  /** Position for point-based POIs (cafés, water fountains, etc.). */
+  position?: LatLng;
+  /** Polygon for area-based POIs (bathrooms, etc.). */
+  polygon?: LatLng[];
+  /** Centroid for area-based POIs (calculated from polygon). */
+  centroid?: LatLng;
   amenity: string;
   name: string | null;
+  /** Path to icon/image for rendering on the map. */
+  image_path?: string;
+  /** For amenity=toilets: Whether this facility accommodates males. */
+  male?: boolean;
+  /** For amenity=toilets: Whether this facility accommodates females. */
+  female?: boolean;
 }
 
 /** Full building floor outline. */
