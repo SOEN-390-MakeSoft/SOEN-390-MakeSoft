@@ -230,6 +230,7 @@ const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
 const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 // When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
 const INDOOR_ZOOM_THRESHOLD = 0.002;
+const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
 // Google Maps style that hides POI labels/icons (used when indoor overlay is active)
 const HIDE_POIS_MAP_STYLE = [
@@ -350,10 +351,30 @@ export default function MapScreen() {
   } = useMapUI();
   // Indoor navigation
   const indoor = useIndoorNavigation();
+  const [accessibleNavAttempt, setAccessibleNavAttempt] = useState(0);
+  const lastAlertedAccessibleAttemptRef = useRef(0);
+
+  useEffect(() => {
+    if (!isAccessibleRouteEnabled) {
+      lastAlertedAccessibleAttemptRef.current = 0;
+      return;
+    }
+
+    if (accessibleNavAttempt === 0) return;
+    if (indoor.error !== INDOOR_NO_PATH_ERROR) return;
+    if (lastAlertedAccessibleAttemptRef.current === accessibleNavAttempt) return;
+
+    lastAlertedAccessibleAttemptRef.current = accessibleNavAttempt;
+    Alert.alert(
+      'No wheelchair-accessible route available',
+      'We could not find a wheelchair-accessible path to that destination. Try a different room or contact building services for assistance.',
+    );
+  }, [accessibleNavAttempt, indoor.error, isAccessibleRouteEnabled]);
 
   const navigateToIndoorRoom = useCallback(
     (roomRef: string) => {
       if (isAccessibleRouteEnabled) {
+        setAccessibleNavAttempt((prev) => prev + 1);
         indoor.navigateToRoomAccessible(roomRef, { avoidStairs: true });
         return;
       }
