@@ -38,7 +38,11 @@ interface GeoJSONPolygon {
   type: 'Polygon';
   coordinates: GeoCoord[][];
 }
-type GeoJSONGeometry = GeoJSONPoint | GeoJSONLineString | GeoJSONPolygon;
+interface GeoJSONMultiPolygon {
+  type: 'MultiPolygon';
+  coordinates: GeoCoord[][][];
+}
+type GeoJSONGeometry = GeoJSONPoint | GeoJSONLineString | GeoJSONPolygon | GeoJSONMultiPolygon;
 
 interface GeoJSONFeature {
   type: 'Feature';
@@ -171,11 +175,26 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
       case 'room': {
         if (geom.type === 'Polygon') {
           const poly = ringToLatLngs(geom.coordinates[0]);
+          const holes = geom.coordinates.slice(1).map(ringToLatLngs);
           features.push({
             ...base,
             id: nextId('room'),
             type: 'room',
             polygon: poly,
+            holes: holes.length > 0 ? holes : undefined,
+            centroid: centroid(poly),
+          } satisfies IndoorRoom);
+        } else if (geom.type === 'MultiPolygon') {
+          // Assume the first Polygon in the MultiPolygon represents the main room
+          const mainPoly = geom.coordinates[0];
+          const poly = ringToLatLngs(mainPoly[0]);
+          const holes = mainPoly.slice(1).map(ringToLatLngs);
+          features.push({
+            ...base,
+            id: nextId('room'),
+            type: 'room',
+            polygon: poly,
+            holes: holes.length > 0 ? holes : undefined,
             centroid: centroid(poly),
           } satisfies IndoorRoom);
         } else if (geom.type === 'Point') {
@@ -305,7 +324,32 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
     }
   }
 
-  return features;
+  // Post-processing: Merge Point rooms into Polygon rooms when they share the same ref and level.
+  // This ensures room labels appear exactly at the explicit GeoJSON node rather than the calculated geometric center.
+  const polygonRooms = features.filter(
+    (f) => f.type === 'room' && (f as IndoorRoom).polygon.length > 0,
+  ) as IndoorRoom[];
+  const mergedPointIds = new Set<string>();
+
+  for (const f of features) {
+    if (f.type !== 'room') continue;
+    const room = f as IndoorRoom;
+    if (room.polygon.length === 0 && room.ref) {
+      // Find ALL matching polygons for this room (in case the room consists of multiple separate polygons)
+      const matches = polygonRooms.filter(
+        (p) => p.ref === room.ref && p.levels.some((l) => room.levels.includes(l)),
+      );
+      if (matches.length > 0) {
+        // Update all associated polygons with this point's centroid to align labels
+        for (const match of matches) {
+          match.centroid = room.centroid;
+        }
+        mergedPointIds.add(room.id);
+      }
+    }
+  }
+
+  return features.filter((f) => !mergedPointIds.has(f.id));
 }
 
 /**

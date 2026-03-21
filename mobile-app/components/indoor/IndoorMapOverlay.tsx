@@ -221,6 +221,7 @@ export default function IndoorMapOverlay({
           <Polygon
             key={`${room.id}${isSelected ? '-sel' : ''}`}
             coordinates={room.polygon}
+            holes={room.holes}
             fillColor={isSelected ? COLORS.roomSelectedFill : COLORS.roomFill}
             strokeColor={isSelected ? COLORS.roomSelectedStroke : COLORS.roomStroke}
             strokeWidth={isSelected ? 2 : 1}
@@ -243,37 +244,44 @@ export default function IndoorMapOverlay({
       })}
 
       {/* 3b. Room number labels — placed at each room's centroid */}
-      {rooms.map((room) => {
-        if (!room.ref || room.polygon.length < 3) return null;
-        // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
-        let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
-        // Abbreviate facility names so they fit Android's marker bitmap limit
-        if (/^elevator/i.test(shortLabel)) shortLabel = 'Elev.';
-        else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
-        else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
-        else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
-        else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
-        else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
-        return (
-          <RoomLabelMarker
-            key={`label-${room.id}`}
-            room={room}
-            shortLabel={shortLabel}
-            onPress={
-              onRoomPress && room.ref
-                ? () =>
-                    onRoomPress({
-                      featureId: room.id,
-                      ref: room.ref!,
-                      level: room.levels[0] ?? '0',
-                      position: room.centroid,
-                      polygon: room.polygon,
-                    })
-                : undefined
-            }
-          />
-        );
-      })}
+      {(() => {
+        const renderedRefs = new Set<string>();
+        return rooms.map((room) => {
+          if (!room.ref) return null;
+          // Prevent duplicate labels if a room has multiple polygons with the same ref
+          if (renderedRefs.has(room.ref)) return null;
+          renderedRefs.add(room.ref);
+
+          // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
+          let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
+          // Abbreviate facility names so they fit Android's marker bitmap limit
+          if (/^elevator/i.test(shortLabel)) shortLabel = 'Elev.';
+          else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
+          else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
+          else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
+          else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
+          else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
+          return (
+            <RoomLabelMarker
+              key={`label-${room.ref}`}
+              room={room}
+              shortLabel={shortLabel}
+              onPress={
+                onRoomPress && room.ref
+                  ? () =>
+                      onRoomPress({
+                        featureId: room.id,
+                        ref: room.ref!,
+                        level: room.levels[0] ?? '0',
+                        position: room.centroid,
+                        polygon: room.polygon,
+                      })
+                  : undefined
+              }
+            />
+          );
+        });
+      })()}
 
       {/* 4. Corridors — intentionally not rendered; rooms + outlines give
            sufficient context and the walkway lines add visual clutter. */}
