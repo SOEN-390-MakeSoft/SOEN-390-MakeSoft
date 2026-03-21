@@ -190,6 +190,47 @@ export function searchRooms(
 }
 
 // ---------------------------------------------------------------------------
+// Point-in-polygon & Spatial location
+// ---------------------------------------------------------------------------
+
+function pointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
+  let isInside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].latitude,
+      yi = polygon[i].longitude;
+    const xj = polygon[j].latitude,
+      yj = polygon[j].longitude;
+
+    const intersect =
+      yi > point.longitude !== yj > point.longitude &&
+      point.latitude < ((xj - xi) * (point.longitude - yi)) / (yj - yi) + xi;
+    if (intersect) isInside = !isInside;
+  }
+  return isInside;
+}
+
+/**
+ * Finds if a given coordinate is physically inside a room polygon on a specific level.
+ */
+export function findRoomAtCoordinate(
+  features: IndoorFeature[],
+  coord: LatLng,
+  level: string,
+): IndoorRoom | null {
+  for (const feature of features) {
+    if (feature.type === 'room' && feature.levels.includes(level)) {
+      const room = feature as IndoorRoom;
+      if (room.polygon && room.polygon.length >= 3) {
+        if (pointInPolygon(coord, room.polygon)) {
+          return room;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
