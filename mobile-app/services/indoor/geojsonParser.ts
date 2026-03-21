@@ -128,10 +128,10 @@ function classify(props: Record<string, string | undefined>): IndoorFeatureType 
   // Ref-based fallback — catch features named like escalators / stairs
   if (isEscalatorByRef(props.ref)) return 'escalator';
   if (isStairsByRef(props.ref)) return 'stairs';
-  // Amenity-tagged POI (check before indoor=room to prioritize bathrooms, cafes, etc.)
-  if (props.amenity) return 'poi';
-  // Explicit indoor room
+  // Explicit indoor room (check before amenity to ensure bathrooms/cafes render as rooms)
   if (props.indoor === 'room') return 'room';
+  // Amenity-tagged POI
+  if (props.amenity) return 'poi';
   // Building-level outline
   if (props.indoor === 'level') return 'level_outline';
   // Open area
@@ -195,6 +195,15 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             type: 'room',
             polygon: poly,
             holes: holes.length > 0 ? holes : undefined,
+            centroid: centroid(poly),
+          } satisfies IndoorRoom);
+        } else if (geom.type === 'LineString') {
+          const poly = ringToLatLngs(geom.coordinates);
+          features.push({
+            ...base,
+            id: nextId('room'),
+            type: 'room',
+            polygon: poly,
             centroid: centroid(poly),
           } satisfies IndoorRoom);
         } else if (geom.type === 'MultiPolygon') {
@@ -329,6 +338,14 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             polygon: ringToLatLngs(geom.coordinates[0]),
             name: props.name ?? null,
           } satisfies IndoorLevelOutline);
+        } else if (geom.type === 'LineString') {
+          features.push({
+            ...base,
+            id: nextId('level'),
+            type: 'level_outline',
+            polygon: ringToLatLngs(geom.coordinates),
+            name: props.name ?? null,
+          } satisfies IndoorLevelOutline);
         }
         break;
       }
@@ -340,6 +357,13 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             id: nextId('area'),
             type: 'area',
             polygon: ringToLatLngs(geom.coordinates[0]),
+          } satisfies IndoorArea);
+        } else if (geom.type === 'LineString') {
+          features.push({
+            ...base,
+            id: nextId('area'),
+            type: 'area',
+            polygon: ringToLatLngs(geom.coordinates),
           } satisfies IndoorArea);
         }
         break;
