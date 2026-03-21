@@ -247,7 +247,7 @@ export default function IndoorMapOverlay({
       {(() => {
         const renderedRefs = new Set<string>();
         return rooms.map((room) => {
-          if (!room.ref) return null;
+          if (!room.ref || room.polygon.length < 3) return null;
           // Prevent duplicate labels if a room has multiple polygons with the same ref
           if (renderedRefs.has(room.ref)) return null;
           renderedRefs.add(room.ref);
@@ -255,7 +255,7 @@ export default function IndoorMapOverlay({
           // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
           let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
           // Abbreviate facility names so they fit Android's marker bitmap limit
-          if (/^elevator/i.test(shortLabel)) shortLabel = 'Elev.';
+          if (/^elevator/i.test(shortLabel)) return null;
           else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
           else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
           else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
