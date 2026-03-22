@@ -556,6 +556,24 @@ function computeModeRouteDisplayState(
   };
 }
 
+function selectActiveModeRoute(
+  selectedTransportMode: TransportMode,
+  routes: AllModeRoutes,
+): { route: ModeRoute | null | undefined; shouldAutoSelectWalking: boolean } {
+  const shouldAutoSelectWalking =
+    selectedTransportMode === 'driving' && routes.walking?.viaText === TUNNEL_ROUTE_VIA_TEXT;
+
+  if (shouldAutoSelectWalking) {
+    return { route: routes.walking, shouldAutoSelectWalking: true };
+  }
+
+  if (selectedTransportMode === 'driving') {
+    return { route: routes.driving, shouldAutoSelectWalking: false };
+  }
+
+  return { route: routes.walking, shouldAutoSelectWalking: false };
+}
+
 /** Returns shuttle final arrival time in ms, or null if not computable. */
 function getShuttleFinalArrivalMs(shuttleInfo: ShuttleInfo | null, nowMs: number): number | null {
   if (!shuttleInfo) return null;
@@ -806,13 +824,10 @@ export function useNavigationBetweenBuildings({
         setAllModeRoutes({ driving, walking });
 
         // Show polyline + steps for the currently selected mode
-        const shouldAutoSelectWalking =
-          selectedTransportMode === 'driving' && walking?.viaText === TUNNEL_ROUTE_VIA_TEXT;
-        const active = shouldAutoSelectWalking
-          ? walking
-          : selectedTransportMode === 'driving'
-            ? driving
-            : walking;
+        const { route: active, shouldAutoSelectWalking } = selectActiveModeRoute(
+          selectedTransportMode,
+          { driving, walking },
+        );
         if (active?.polyline && active.polyline.length > 0) {
           setRoutePolyline(active.polyline);
           setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
