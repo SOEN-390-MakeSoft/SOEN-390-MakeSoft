@@ -434,4 +434,41 @@ describe('NavigationScreen', () => {
       expect(screen.getByText('10 m')).toBeTruthy();
     });
   });
+
+  describe('walking route comparison', () => {
+    it('should display tunnel and outdoor walking options and switch to the selected variant', () => {
+      const onTransportModeChange = jest.fn();
+      const onWalkingRouteVariantChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="driving"
+          onTransportModeChange={onTransportModeChange}
+          onWalkingRouteVariantChange={onWalkingRouteVariantChange}
+          walkingRouteComparison={{
+            originLabel: 'Hall',
+            destinationLabel: 'EV',
+            activeVariant: 'tunnel',
+            fastestVariant: 'tunnel',
+            tunnel: { durationText: '4 min', distanceText: '320 m' },
+            outdoor: { durationText: '6 min', distanceText: '480 m' },
+          }}
+        />,
+      );
+
+      expect(screen.getByTestId('walking-route-comparison')).toBeTruthy();
+      expect(
+        screen.getByText('Hall -> EV: 4 min underground / 6 min walking outside'),
+      ).toBeTruthy();
+      expect(screen.getByText('Fastest')).toBeTruthy();
+      expect(screen.getByText('320 m')).toBeTruthy();
+      expect(screen.getByText('480 m')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('walking-option-outdoor'));
+
+      expect(onTransportModeChange).toHaveBeenCalledWith('walking');
+      expect(onWalkingRouteVariantChange).toHaveBeenCalledWith('outdoor');
+    });
+  });
 });

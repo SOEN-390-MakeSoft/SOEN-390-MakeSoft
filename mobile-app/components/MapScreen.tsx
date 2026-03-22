@@ -364,6 +364,8 @@ export default function MapScreen() {
     tapMarkerCoordinate,
     selectedTransportMode,
     setSelectedTransportMode,
+    setSelectedWalkingRouteVariant,
+    walkingRouteComparison,
     routePolyline,
     routeRegion,
     navigationSteps,
@@ -1198,6 +1200,24 @@ export default function MapScreen() {
     };
   }, [isIndoorOnlyRoute, indoorTimeSec, modeDurations]);
 
+  const augmentedWalkingRouteComparison = useMemo(() => {
+    if (!walkingRouteComparison || isIndoorOnlyRoute || indoorTimeSec <= 0) {
+      return walkingRouteComparison;
+    }
+
+    return {
+      ...walkingRouteComparison,
+      outdoor: {
+        ...walkingRouteComparison.outdoor,
+        durationText: addSecondsToLabel(walkingRouteComparison.outdoor.durationText, indoorTimeSec),
+      },
+      tunnel: {
+        ...walkingRouteComparison.tunnel,
+        durationText: addSecondsToLabel(walkingRouteComparison.tunnel.durationText, indoorTimeSec),
+      },
+    };
+  }, [indoorTimeSec, isIndoorOnlyRoute, walkingRouteComparison]);
+
   const indoorTravelTimeText = useMemo(() => {
     if (indoorTimeSec <= 0) return undefined;
     return `~${formatIndoorTime(indoorTimeSec)} indoor walk`;
@@ -1756,12 +1776,14 @@ export default function MapScreen() {
         onActiveFieldChange={setNavigationActiveField}
         onBuildingSelect={handleNavigationBuildingSelect}
         modeDurations={augmentedModeDurations}
+        walkingRouteComparison={augmentedWalkingRouteComparison}
         tripSummary={augmentedRouteSummary}
         isLoading={isRouteLoading}
         directionsError={directionsError}
         isGetDirectionsDisabled={isGetDirectionsDisabled}
         selectedTransportMode={selectedTransportMode}
         onTransportModeChange={handleTransportModeChange}
+        onWalkingRouteVariantChange={setSelectedWalkingRouteVariant}
         disabledTransportModes={lateTransportModes}
         onDisabledTransportModePress={handleDisabledTransportModePress}
         navigationSteps={combinedNavigationSteps}

@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { NavigationStep, ShuttleInfo } from '../hooks/useNavigationBetweenBuildings';
+import type {
+  NavigationStep,
+  ShuttleInfo,
+  WalkingRouteComparison,
+  WalkingRouteVariant,
+} from '../hooks/useNavigationBetweenBuildings';
 import NavigationMenu, { type SearchEntry } from './NavigationMenu';
 import { useSettings } from '../context/settings';
 
@@ -21,6 +26,7 @@ interface NavigationScreenProps {
     driving?: string;
     walking?: string;
   };
+  walkingRouteComparison?: WalkingRouteComparison | null;
   tripSummary?: {
     arrivalText: string;
     distanceText: string;
@@ -32,6 +38,7 @@ interface NavigationScreenProps {
   isGetDirectionsDisabled?: boolean;
   selectedTransportMode?: TransportMode;
   onTransportModeChange?: (mode: TransportMode) => void;
+  onWalkingRouteVariantChange?: (variant: WalkingRouteVariant) => void;
   disabledTransportModes?: TransportMode[];
   onDisabledTransportModePress?: (mode: TransportMode) => void;
   navigationSteps?: NavigationStep[];
@@ -243,6 +250,84 @@ function TripMeta({
   );
 }
 
+function WalkingRouteComparisonPanel({
+  comparison,
+  isWalkingDisabled,
+  onTransportModeChange,
+  onWalkingRouteVariantChange,
+  onDisabledTransportModePress,
+}: Readonly<{
+  comparison: WalkingRouteComparison;
+  isWalkingDisabled: boolean;
+  onTransportModeChange?: (mode: TransportMode) => void;
+  onWalkingRouteVariantChange?: (variant: WalkingRouteVariant) => void;
+  onDisabledTransportModePress?: (mode: TransportMode) => void;
+}>) {
+  const handleSelect = (variant: WalkingRouteVariant) => {
+    if (isWalkingDisabled) {
+      onDisabledTransportModePress?.('walking');
+      return;
+    }
+    onTransportModeChange?.('walking');
+    onWalkingRouteVariantChange?.(variant);
+  };
+
+  const summaryText = `${comparison.originLabel} -> ${comparison.destinationLabel}: ${comparison.tunnel.durationText} underground / ${comparison.outdoor.durationText} walking outside`;
+
+  const renderOption = (
+    variant: WalkingRouteVariant,
+    title: string,
+    durationText: string,
+    distanceText: string,
+    testId: string,
+  ) => {
+    const isSelected = comparison.activeVariant === variant;
+    const isFastest = comparison.fastestVariant === variant;
+
+    return (
+      <Pressable
+        onPress={() => handleSelect(variant)}
+        testID={testId}
+        style={[
+          styles.walkingOptionCard,
+          isSelected && styles.walkingOptionCardSelected,
+          isWalkingDisabled && styles.walkingOptionCardDisabled,
+        ]}
+      >
+        <View style={styles.walkingOptionHeader}>
+          <Text style={styles.walkingOptionTitle}>{title}</Text>
+          {isFastest ? <Text style={styles.walkingOptionBadge}>Fastest</Text> : null}
+        </View>
+        <Text style={styles.walkingOptionMeta}>{durationText}</Text>
+        <Text style={styles.walkingOptionSubMeta}>{distanceText}</Text>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.walkingComparisonPanel} testID="walking-route-comparison">
+      <Text style={styles.walkingComparisonTitle}>Walking route options</Text>
+      <Text style={styles.walkingComparisonSummary}>{summaryText}</Text>
+      <View style={styles.walkingOptionsRow}>
+        {renderOption(
+          'tunnel',
+          'Underground',
+          comparison.tunnel.durationText,
+          comparison.tunnel.distanceText,
+          'walking-option-tunnel',
+        )}
+        {renderOption(
+          'outdoor',
+          'Outside',
+          comparison.outdoor.durationText,
+          comparison.outdoor.distanceText,
+          'walking-option-outdoor',
+        )}
+      </View>
+    </View>
+  );
+}
+
 function ShuttleDeparturesPanel({
   show,
   shuttleInfo,
@@ -447,12 +532,14 @@ export default function NavigationScreen({
   onActiveFieldChange,
   onBuildingSelect,
   modeDurations,
+  walkingRouteComparison = null,
   tripSummary,
   isLoading,
   directionsError = null,
   isGetDirectionsDisabled = true,
   selectedTransportMode = 'driving',
   onTransportModeChange,
+  onWalkingRouteVariantChange,
   disabledTransportModes = [],
   onDisabledTransportModePress,
   navigationSteps = [],
@@ -636,6 +723,15 @@ export default function NavigationScreen({
               tripSummary={tripSummary}
               selectedTransportMode={isIndoorOnlyRoute ? 'walking' : selectedTransportMode}
             />
+            {!isIndoorOnlyRoute && walkingRouteComparison ? (
+              <WalkingRouteComparisonPanel
+                comparison={walkingRouteComparison}
+                isWalkingDisabled={isModeDisabled('walking')}
+                onTransportModeChange={onTransportModeChange}
+                onWalkingRouteVariantChange={onWalkingRouteVariantChange}
+                onDisabledTransportModePress={onDisabledTransportModePress}
+              />
+            ) : null}
             <IndoorTimeBadge text={isIndoorOnlyRoute ? undefined : indoorTravelTimeText} />
             {!isIndoorOnlyRoute && (
               <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
@@ -755,6 +851,75 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   tripMeta: { marginTop: 4, fontSize: 14, color: '#f3d7dc' },
+  walkingComparisonPanel: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  walkingComparisonTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  walkingComparisonSummary: {
+    marginTop: 4,
+    color: '#f7e7ea',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  walkingOptionsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    columnGap: 10,
+  },
+  walkingOptionCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  walkingOptionCardSelected: {
+    borderColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  walkingOptionCardDisabled: {
+    opacity: 0.55,
+  },
+  walkingOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: 8,
+  },
+  walkingOptionTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  walkingOptionBadge: {
+    color: '#7f1f2a',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: '#f6dce0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  walkingOptionMeta: {
+    marginTop: 8,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  walkingOptionSubMeta: {
+    marginTop: 2,
+    color: '#f3d7dc',
+    fontSize: 12,
+  },
   errorText: {
     marginTop: 8,
     fontSize: 14,
