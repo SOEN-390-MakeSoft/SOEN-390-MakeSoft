@@ -137,7 +137,7 @@ function classify(props: Record<string, string | undefined>): IndoorFeatureType 
   // Open area
   if (props.indoor === 'area') return 'area';
   // Walkable corridor
-  if (props.highway === 'footway') return 'corridor';
+  if (props.indoor === 'corridor' || props.highway === 'footway') return 'corridor';
   // Door / entrance
   if (props.door || props.entrance) return 'door';
   // Implicit room: has a ref and level but no other classification
