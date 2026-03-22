@@ -21,6 +21,7 @@ import {
   resolveRoom,
   searchRooms,
   findNearestPOI,
+  findRoomAtCoordinate,
 } from '../services/indoor/roomResolver';
 import {
   detectIndoorDestination,
@@ -783,6 +784,45 @@ describe('findBuildingAtCoordinate', () => {
 
   it('returns null for a coordinate far from any indoor building', () => {
     const result = findBuildingAtCoordinate({ latitude: 0, longitude: 0 });
+    expect(result).toBeNull();
+  });
+});
+
+describe('findRoomAtCoordinate', () => {
+  const dummyFeatures = [
+    {
+      id: 'room-1',
+      type: 'room',
+      levels: ['8'],
+      ref: 'H-820',
+      polygon: [
+        { latitude: 45.4971, longitude: -73.5791 },
+        { latitude: 45.4975, longitude: -73.5791 },
+        { latitude: 45.4975, longitude: -73.5786 },
+        { latitude: 45.4971, longitude: -73.5786 },
+      ],
+    },
+  ];
+
+  it('identifies if a coordinate is inside the room polygon on the correct level', () => {
+    const insideCoord = { latitude: 45.4973, longitude: -73.5788 };
+    // @ts-ignore
+    const result = findRoomAtCoordinate(dummyFeatures, insideCoord, '8');
+    expect(result).not.toBeNull();
+    expect(result?.ref).toBe('H-820');
+  });
+
+  it('returns null if coordinate is outside the polygon', () => {
+    const outsideCoord = { latitude: 45.498, longitude: -73.5799 };
+    // @ts-ignore
+    const result = findRoomAtCoordinate(dummyFeatures, outsideCoord, '8');
+    expect(result).toBeNull();
+  });
+
+  it('returns null if wrong level is given', () => {
+    const insideCoord = { latitude: 45.4973, longitude: -73.5788 };
+    // @ts-ignore
+    const result = findRoomAtCoordinate(dummyFeatures, insideCoord, '9');
     expect(result).toBeNull();
   });
 });
