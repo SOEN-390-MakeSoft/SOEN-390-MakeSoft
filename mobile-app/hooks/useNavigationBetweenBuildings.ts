@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
-import { findPath, loadBuildingGraph } from '../services/indoor';
+import { findPath, loadTunnelGraph } from '../services/indoor';
 import { getBuildingMeta } from '../services/indoor';
 import {
   coordsEqual,
@@ -188,14 +188,14 @@ function buildTunnelModeRoute(
   if (!originTunnel || !destinationTunnel) return null;
   if (originTunnel.access.code === destinationTunnel.access.code) return null;
 
-  const hallGraph = loadBuildingGraph('H');
-  if (!hallGraph) return null;
+  const tunnelGraph = loadTunnelGraph('SGW');
+  if (!tunnelGraph) return null;
 
-  const startNode = hallGraph.findClosestNode(
+  const startNode = tunnelGraph.findClosestNode(
     originTunnel.access.position,
     originTunnel.access.level,
   );
-  const endNode = hallGraph.findClosestNode(
+  const endNode = tunnelGraph.findClosestNode(
     destinationTunnel.access.position,
     destinationTunnel.access.level,
   );
@@ -210,7 +210,7 @@ function buildTunnelModeRoute(
     return null;
   }
 
-  const tunnelRoute = findPath(hallGraph, startNode.id, endNode.id);
+  const tunnelRoute = findPath(tunnelGraph, startNode.id, endNode.id);
   if (!tunnelRoute) return null;
 
   const walkToTunnelDistance = distanceMeters(origin, originTunnel.access.position);

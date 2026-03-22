@@ -55,6 +55,7 @@ export {
   getBuildingMeta,
   loadBuilding,
   loadBuildingGraph,
+  loadTunnelGraph,
   findBuildingAtCoordinate,
   detectIndoorDestination,
   getFloorPlanImage,

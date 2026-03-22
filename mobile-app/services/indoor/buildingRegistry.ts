@@ -124,6 +124,7 @@ interface CachedBuildingData {
 const cache = new Map<string, CachedBuildingData>();
 const graphCache = new Map<string, { features: IndoorFeature[]; graph: IndoorGraph }>();
 const featureCache = new Map<string, IndoorFeature[]>();
+const tunnelGraphCache = new Map<string, IndoorGraph>();
 
 // GeoJSON asset loaders — maps asset key to the raw JSON.
 // In a React Native / Expo context, these are resolved via `require()` or
@@ -217,6 +218,31 @@ export function loadBuildingGraph(buildingCode: string): IndoorGraph | null {
 }
 
 /**
+ * Load a cached graph for a standalone tunnel network dataset.
+ */
+export function loadTunnelGraph(networkCode: 'SGW'): IndoorGraph | null {
+  const code = networkCode.toUpperCase();
+  if (tunnelGraphCache.has(code)) return tunnelGraphCache.get(code)!;
+
+  let assetKey: keyof typeof ASSET_LOADERS;
+  switch (code) {
+    case 'SGW':
+      assetKey = 'SGW_Tunnel_Network';
+      break;
+    default:
+      return null;
+  }
+
+  const loader = ASSET_LOADERS[assetKey];
+  if (!loader) return null;
+
+  resetIdCounter();
+  const graph = IndoorGraph.build(parseIndoorGeoJSON(loader()));
+  tunnelGraphCache.set(code, graph);
+  return graph;
+}
+
+/**
  * Determine which indoor building (if any) a coordinate is near.
  * Uses a simple closest-entrance heuristic within a 100 m radius.
  */
@@ -268,6 +294,7 @@ export function clearCache(): void {
   cache.clear();
   graphCache.clear();
   featureCache.clear();
+  tunnelGraphCache.clear();
 }
 
 function loadBuildingGraphData(

@@ -198,60 +198,69 @@ export class IndoorGraph {
       corridor.raw.tunnel === 'yes' || corridor.ref?.toLowerCase().includes('tunnel') === true;
 
     for (const level of corridor.levels) {
-      // Map every corridor coordinate to a (possibly snapped) graph node.
-      // We use the ORIGINAL coordinates so node snapping preserves graph
-      // connectivity (corridors sharing a coordinate share a node).
-      const entries: { nodeId: string; coord: LatLng }[] = [];
-      for (const coord of corridor.path) {
-        const nodeId = this.getOrCreateNode(coord, level, corridor.id);
-        entries.push({ nodeId, coord });
-      }
-
-      // Group consecutive entries that snapped to the same node so that
-      // edges only connect *different* nodes.  Accumulate the original
-      // corridor coordinates between transitions so the rendered polyline
-      // follows the real walkway geometry instead of cutting through walls.
-      let runStart = 0;
-      for (let i = 1; i < entries.length; i++) {
-        if (entries[i].nodeId !== entries[runStart].nodeId) {
-          // Collect original coordinates from the run-start through this
-          // transition point (inclusive on both ends).
-          const pathCoords: LatLng[] = [];
-          for (let j = runStart; j <= i; j++) {
-            pathCoords.push(entries[j].coord);
-          }
-
-          // Compute edge weight from actual corridor geometry, not from
-          // the (potentially shifted) snapped node positions.
-          let weight = 0;
-          for (let j = 1; j < pathCoords.length; j++) {
-            weight += haversine(pathCoords[j - 1], pathCoords[j]);
-          }
-
-          // Trim the rendering path at room polygon boundaries so the
-          // polyline stops at doorways instead of going inside rooms.
-          // Graph topology and weights remain unchanged (node positions
-          // are NOT affected — only the visual geometry).
-          const renderPath = trimPathAtRoomBoundaries(pathCoords, level, roomPolysByLevel);
-
-          this.addEdge({
-            from: entries[runStart].nodeId,
-            to: entries[i].nodeId,
-            weight,
-            isLevelChange: false,
-            edgeType: isTunnel ? 'tunnel' : 'walk',
-            // Use trimmed path when available.  If the entire edge is
-            // inside a room (trim returned empty), omit the path so
-            // the reconstruction uses a straight line between nodes
-            // instead of following corridor geometry through the room.
-            path: renderPath.length >= 2 ? renderPath : undefined,
-          });
-
-          // The next run starts at the current transition point
-          runStart = i;
-        }
-      }
+      const entries = this.createCorridorEntries(corridor, level);
+      this.addCorridorEdges(entries, level, roomPolysByLevel, isTunnel);
     }
+  }
+
+  private createCorridorEntries(
+    corridor: IndoorCorridor,
+    level: string,
+  ): { nodeId: string; coord: LatLng }[] {
+    // We use the original coordinates so snapping preserves shared junctions.
+    return corridor.path.map((coord) => ({
+      nodeId: this.getOrCreateNode(coord, level, corridor.id),
+      coord,
+    }));
+  }
+
+  private addCorridorEdges(
+    entries: { nodeId: string; coord: LatLng }[],
+    level: string,
+    roomPolysByLevel: Map<string, LatLng[][]>,
+    isTunnel: boolean,
+  ): void {
+    let runStart = 0;
+
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].nodeId === entries[runStart].nodeId) continue;
+
+      this.addCorridorSegment(entries, runStart, i, level, roomPolysByLevel, isTunnel);
+      runStart = i;
+    }
+  }
+
+  private addCorridorSegment(
+    entries: { nodeId: string; coord: LatLng }[],
+    startIndex: number,
+    endIndex: number,
+    level: string,
+    roomPolysByLevel: Map<string, LatLng[][]>,
+    isTunnel: boolean,
+  ): void {
+    const pathCoords = entries.slice(startIndex, endIndex + 1).map((entry) => entry.coord);
+    const renderPath = trimPathAtRoomBoundaries(pathCoords, level, roomPolysByLevel);
+
+    this.addEdge({
+      from: entries[startIndex].nodeId,
+      to: entries[endIndex].nodeId,
+      weight: this.getPathDistance(pathCoords),
+      isLevelChange: false,
+      edgeType: isTunnel ? 'tunnel' : 'walk',
+      // If trimming removes the whole interior path, let reconstruction
+      // fall back to a straight line between the edge endpoints.
+      path: renderPath.length >= 2 ? renderPath : undefined,
+    });
+  }
+
+  private getPathDistance(path: LatLng[]): number {
+    let distance = 0;
+
+    for (let i = 1; i < path.length; i++) {
+      distance += haversine(path[i - 1], path[i]);
+    }
+
+    return distance;
   }
 
   private addStairs(stairs: IndoorStairs, doorsByLevel: Map<string, IndoorDoor[]>): void {
