@@ -499,6 +499,12 @@ describe('useNavigationBetweenBuildings', () => {
           distanceText: '650 m',
         },
       });
+      expect(result.current.walkingRouteComparison?.tunnel.durationText).toBe(
+        result.current.routeSummary?.durationText,
+      );
+      expect(result.current.walkingRouteComparison?.tunnel.distanceText).toBe(
+        result.current.routeSummary?.distanceText,
+      );
       expect(
         result.current.navigationSteps.some((step: { instruction: string }) =>
           step.instruction.includes('Take the tunnel'),
