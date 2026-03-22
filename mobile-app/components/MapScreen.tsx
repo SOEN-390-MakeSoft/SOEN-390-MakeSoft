@@ -268,6 +268,20 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
+
+function getConflictLabel(c: LocationConflict): string {
+  switch (c.type) {
+    case 'unresolvable_location':
+      return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
+    case 'building_not_in_polygons':
+      return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
+    case 'campus_inferred':
+      return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
+    case 'campus_mismatch':
+      return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
+  }
+}
+
 const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
 const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 // When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
@@ -460,6 +474,37 @@ export default function MapScreen() {
     return [...roomSearchResults, ...searchResults];
   }, [roomSearchResults, searchResults]);
 
+  const handleSelectRoomResult = useCallback(
+    (result: RoomSearchResult) => {
+      const room = result._room;
+      const buildingCode = (result as any)._buildingCode as string | undefined;
+
+      // Auto-activate indoor mode if not already on the right building
+      if (buildingCode && (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)) {
+        indoor.activateBuilding(buildingCode);
+        lastIndoorAutoRef.current = buildingCode;
+      }
+
+      indoor.selectRoom(room);
+      indoor.setActiveLevel(room.level);
+      setSearchQuery(room.ref);
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+
+      // Zoom to the room position
+      mapRef.current?.animateToRegion(
+        {
+          latitude: room.position.latitude,
+          longitude: room.position.longitude,
+          latitudeDelta: 0.001,
+          longitudeDelta: 0.001,
+        },
+        500,
+      );
+    },
+    [indoor, setSearchQuery, setIsSearchFocused],
+  );
+
   /** Handle selecting an autocomplete result — room or building. */
   const handleSelectMergedResult = useCallback(
     (result: {
@@ -471,34 +516,7 @@ export default function MapScreen() {
     }) => {
       // If it's a room result, select the room and show the bubble
       if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
-        const room = (result as RoomSearchResult)._room;
-        const buildingCode = (result as any)._buildingCode as string | undefined;
-
-        // Auto-activate indoor mode if not already on the right building
-        if (
-          buildingCode &&
-          (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)
-        ) {
-          indoor.activateBuilding(buildingCode);
-          lastIndoorAutoRef.current = buildingCode;
-        }
-
-        indoor.selectRoom(room);
-        indoor.setActiveLevel(room.level);
-        setSearchQuery(room.ref);
-        setIsSearchFocused(false);
-        searchInputRef.current?.blur();
-
-        // Zoom to the room position
-        mapRef.current?.animateToRegion(
-          {
-            latitude: room.position.latitude,
-            longitude: room.position.longitude,
-            latitudeDelta: 0.001,
-            longitudeDelta: 0.001,
-          },
-          500,
-        );
+        handleSelectRoomResult(result as RoomSearchResult);
         return;
       }
       // Otherwise delegate to the normal building search handler
@@ -697,20 +715,8 @@ export default function MapScreen() {
 
     // Log conflict / warning
     if (conflict) {
-      const conflictLabel = (c: LocationConflict): string => {
-        switch (c.type) {
-          case 'unresolvable_location':
-            return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
-          case 'building_not_in_polygons':
-            return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
-          case 'campus_inferred':
-            return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
-          case 'campus_mismatch':
-            return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
-        }
-      };
       console.warn(
-        `[handleDirectionsToNextClass] Location conflict detected:\n  ${conflictLabel(conflict)}`,
+        `[handleDirectionsToNextClass] Location conflict detected:\n  ${getConflictLabel(conflict)}`,
       );
     }
 

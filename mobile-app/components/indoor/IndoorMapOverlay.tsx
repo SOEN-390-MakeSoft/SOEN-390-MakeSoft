@@ -159,12 +159,7 @@ function renderPointPoi(
   if (!imageSource) return null;
 
   return (
-    <PoiMarker
-      key={poi.id}
-      coordinate={poi.position}
-      zIndex={15}
-      opacity={isHighlighted ? 1.0 : 0.3}
-    >
+    <PoiMarker key={poi.id} coordinate={poi.position} zIndex={15} opacity={isHighlighted ? 1 : 0.3}>
       <Image source={imageSource} style={labelStyles.poiIconImage} />
     </PoiMarker>
   );
@@ -196,7 +191,7 @@ function renderPolygonPoi(
         onPress={onPoiPress ? () => onPoiPress(poi) : undefined}
       />
       {imageSource && (
-        <PoiMarker coordinate={poi.centroid} zIndex={12} opacity={isHighlighted ? 1.0 : 0.3}>
+        <PoiMarker coordinate={poi.centroid} zIndex={12} opacity={isHighlighted ? 1 : 0.3}>
           <Image source={imageSource} style={labelStyles.poiIconImage} />
         </PoiMarker>
       )}
@@ -486,7 +481,7 @@ export default function IndoorMapOverlay({
               Math.pow(curr.centroid.latitude - levelCentroid.latitude, 2) +
               Math.pow(curr.centroid.longitude - levelCentroid.longitude, 2);
             return dCurr < dBest ? curr : best;
-          });
+          }, siblings[0]);
           return room.id === bestSibling.id;
         }
       }
@@ -678,7 +673,7 @@ export default function IndoorMapOverlay({
               })()}
               zIndex={10}
               onPress={onPoiPress ? () => onPoiPress({ ...e, type: 'escalator' }) : undefined}
-              opacity={isHighlighted ? 1.0 : 0.3}
+              opacity={isHighlighted ? 1 : 0.3}
             >
               {/* Ramp/escalator icon — plain symbol, no background */}
               <Image
@@ -734,7 +729,7 @@ export default function IndoorMapOverlay({
                   Math.pow(curr.position.latitude - levelCentroid.latitude, 2) +
                   Math.pow(curr.position.longitude - levelCentroid.longitude, 2);
                 return dCurr < dBest ? curr : best;
-              });
+              }, group[0]);
             });
 
         // Only display the elevator icon if it is contained within an elevator shaft polygon
@@ -752,7 +747,7 @@ export default function IndoorMapOverlay({
               coordinate={ev.position}
               zIndex={15}
               onPress={onPoiPress ? () => onPoiPress({ ...ev, type: 'elevator' }) : undefined}
-              opacity={isHighlighted ? 1.0 : 0.3}
+              opacity={isHighlighted ? 1 : 0.3}
             >
               <Image
                 source={require('../../assets/images/elevator.png')}
