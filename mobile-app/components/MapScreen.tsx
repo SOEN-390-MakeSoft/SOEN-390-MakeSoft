@@ -439,6 +439,10 @@ export default function MapScreen() {
   // Accessible indoor routing support
   const [accessibleNavAttempt, setAccessibleNavAttempt] = useState(0);
   const lastAlertedAccessibleAttemptRef = useRef(0);
+  const markAccessibleRouteAttempt = useCallback(() => {
+    if (!isAccessibleRouteEnabled) return;
+    setAccessibleNavAttempt((prev) => prev + 1);
+  }, [isAccessibleRouteEnabled]);
 
   useEffect(() => {
     if (!isAccessibleRouteEnabled) {
@@ -463,12 +467,10 @@ export default function MapScreen() {
         ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
         : {};
 
-      if (isAccessibleRouteEnabled) {
-        setAccessibleNavAttempt((prev) => prev + 1);
-      }
+      markAccessibleRouteAttempt();
       indoor.navigateToRoomAccessible(roomRef, routeOptions);
     },
-    [indoor, isAccessibleRouteEnabled],
+    [indoor, isAccessibleRouteEnabled, markAccessibleRouteAttempt],
   );
 
   const previousAccessibleRouteEnabledRef = useRef(isAccessibleRouteEnabled);
@@ -483,12 +485,15 @@ export default function MapScreen() {
       ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
       : {};
 
-    if (isAccessibleRouteEnabled) {
-      setAccessibleNavAttempt((prev) => prev + 1);
-    }
+    markAccessibleRouteAttempt();
 
     indoor.rerouteCurrent(routeOptions);
-  }, [indoor.destinationRoom, indoor.rerouteCurrent, isAccessibleRouteEnabled]);
+  }, [
+    indoor.destinationRoom,
+    indoor.rerouteCurrent,
+    isAccessibleRouteEnabled,
+    markAccessibleRouteAttempt,
+  ]);
 
   // -----------------------------------------------------------------------
   // Room autocomplete: search rooms on-the-fly (even before indoor is active)
@@ -1035,9 +1040,7 @@ export default function MapScreen() {
   const handleNavigationBuildingSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
       if (handleIndoorRoomSelect(field, name)) {
-        if (isAccessibleRouteEnabled) {
-          setAccessibleNavAttempt((prev) => prev + 1);
-        }
+        markAccessibleRouteAttempt();
         return;
       }
 
@@ -1061,7 +1064,7 @@ export default function MapScreen() {
       handleSearchSelect,
       resolveDirectionsStartFromCoordinate,
       handleIndoorRoomSelect,
-      isAccessibleRouteEnabled,
+      markAccessibleRouteAttempt,
     ],
   );
 
@@ -1482,17 +1485,13 @@ export default function MapScreen() {
 
         // If we are navigating indoor with an active indoor destination
         if (isIndoorOnlyRoute && destRef) {
-          if (isAccessibleRouteEnabled) {
-            setAccessibleNavAttempt((prev) => prev + 1);
-          }
+          markAccessibleRouteAttempt();
           indoor.navigateToRoomAccessible(destRef, routeOptions, startPos, floor);
           const startLabel = isHallway ? 'Hallway' : startRef;
           setStartToCurrentLocationBuilding(startLabel, buildingCode ?? '', startPos);
         } else {
           // Normal outdoor start, but user is indoors
-          if (isAccessibleRouteEnabled) {
-            setAccessibleNavAttempt((prev) => prev + 1);
-          }
+          markAccessibleRouteAttempt();
           indoor.navigateToRoomAccessible('__EXIT__', routeOptions, startPos, floor);
           const bMeta = buildingCode ? getBuildingMeta(buildingCode) : null;
           const exitCoord = bMeta?.entrances?.[0] || startPos;
@@ -1537,6 +1536,7 @@ export default function MapScreen() {
       isIndoorOnlyRoute,
       isAccessibleRouteEnabled,
       indoor,
+      markAccessibleRouteAttempt,
       setStartToCurrentLocationBuilding,
       setDirectionsStartToBuilding,
     ],
