@@ -459,7 +459,7 @@ export default function MapScreen() {
     (roomRef) => {
       if (isAccessibleRouteEnabled) {
         setAccessibleNavAttempt((prev) => prev + 1);
-        indoor.navigateToRoomAccessible(roomRef, { avoidStairs: true });
+        indoor.navigateToRoomAccessible(roomRef, { avoidStairs: true, avoidEscalators: true });
         return;
       }
       indoor.navigateToRoom(roomRef);
