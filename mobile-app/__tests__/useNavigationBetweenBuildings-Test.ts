@@ -443,11 +443,23 @@ describe('useNavigationBetweenBuildings', () => {
       expect(result.current.navigationSteps[1].maneuver).toBe('turn-left');
     });
 
-    it('should prefer the SGW tunnel graph for Hall to EV walking directions', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        json: () => Promise.resolve(makeMockDirectionsResponse('Driving route')),
+    it('should compare outdoor and tunnel walking routes for Hall to EV and default to the faster tunnel route', async () => {
+      const { mockFetch } = createDrivingWalkingFetch(makeMockDirectionsResponse('Driving route'), {
+        status: 'OK',
+        routes: [
+          {
+            summary: 'Outdoor walking route',
+            overview_polyline: { points: MOCK_POLYLINE },
+            legs: [
+              {
+                duration: { text: '6 mins', value: 360 },
+                distance: { text: '650 m', value: 650 },
+                steps: MOCK_STEPS,
+              },
+            ],
+          },
+        ],
       });
-      globalThis.fetch = mockFetch;
 
       const { result } = renderHook(() =>
         useNavigationBetweenBuildings({
@@ -470,10 +482,29 @@ describe('useNavigationBetweenBuildings', () => {
         expect(result.current.selectedTransportMode).toBe('walking');
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toContain('mode=driving');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls.some((call: any[]) => call[0].includes('mode=driving'))).toBe(
+        true,
+      );
+      expect(mockFetch.mock.calls.some((call: any[]) => call[0].includes('mode=walking'))).toBe(
+        true,
+      );
       expect(result.current.routeSummary?.viaText).toBe('Underground tunnel network');
       expect(result.current.routePolyline.length).toBeGreaterThan(0);
+      expect(result.current.walkingRouteComparison).toMatchObject({
+        activeVariant: 'tunnel',
+        fastestVariant: 'tunnel',
+        outdoor: {
+          durationText: '6 mins',
+          distanceText: '650 m',
+        },
+      });
+      expect(result.current.walkingRouteComparison?.tunnel.durationText).toBe(
+        result.current.routeSummary?.durationText,
+      );
+      expect(result.current.walkingRouteComparison?.tunnel.distanceText).toBe(
+        result.current.routeSummary?.distanceText,
+      );
       expect(
         result.current.navigationSteps.some((step: { instruction: string }) =>
           step.instruction.includes('Take the tunnel'),
@@ -484,6 +515,16 @@ describe('useNavigationBetweenBuildings', () => {
           step.instruction.includes('Enter the tunnel'),
         ),
       ).toBe(true);
+
+      act(() => {
+        result.current.setSelectedWalkingRouteVariant('outdoor');
+      });
+
+      await waitFor(() => {
+        expect(result.current.routeSummary?.viaText).toBe('Outdoor walking route');
+      });
+      expect(result.current.walkingRouteComparison?.activeVariant).toBe('outdoor');
+      expect(result.current.navigationSteps[0].instruction).toBe('Head north on Rue Guy');
     });
 
     it('should handle API returning non-OK status', async () => {

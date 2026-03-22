@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
-import { findPath, loadTunnelGraph } from '../services/indoor';
-import { getBuildingMeta } from '../services/indoor';
+import { findPath, getBuildingMeta, loadTunnelGraph } from '../services/indoor';
 import {
   coordsEqual,
   distanceMeters,
@@ -310,6 +309,7 @@ type ModeDurations = {
 };
 
 type TransportMode = 'driving' | 'walking' | 'shuttle';
+export type WalkingRouteVariant = 'outdoor' | 'tunnel';
 
 export type NavigationStep = {
   instruction: string;
@@ -334,9 +334,29 @@ type ModeRoute = {
   steps: NavigationStep[];
 };
 
+type WalkingModeRoutes = {
+  outdoor?: ModeRoute | null;
+  tunnel?: ModeRoute | null;
+};
+
 type AllModeRoutes = {
   driving?: ModeRoute | null;
-  walking?: ModeRoute | null;
+  walking?: WalkingModeRoutes;
+};
+
+export type WalkingRouteComparison = {
+  originLabel: string;
+  destinationLabel: string;
+  activeVariant: WalkingRouteVariant;
+  fastestVariant: WalkingRouteVariant;
+  outdoor: {
+    durationText: string;
+    distanceText: string;
+  };
+  tunnel: {
+    durationText: string;
+    distanceText: string;
+  };
 };
 
 type MapRegion = {
@@ -556,22 +576,76 @@ function computeModeRouteDisplayState(
   };
 }
 
+function getFastestWalkingRouteVariant(
+  routes: WalkingModeRoutes | null | undefined,
+): WalkingRouteVariant | null {
+  const outdoor = routes?.outdoor;
+  const tunnel = routes?.tunnel;
+  if (outdoor && tunnel) {
+    return tunnel.durationSec <= outdoor.durationSec ? 'tunnel' : 'outdoor';
+  }
+  if (tunnel) return 'tunnel';
+  if (outdoor) return 'outdoor';
+  return null;
+}
+
+function getWalkingRoute(
+  routes: WalkingModeRoutes | null | undefined,
+  preferredVariant: WalkingRouteVariant | null | undefined,
+): ModeRoute | null | undefined {
+  if (!routes) return null;
+  if (preferredVariant === 'tunnel' && routes.tunnel) return routes.tunnel;
+  if (preferredVariant === 'outdoor' && routes.outdoor) return routes.outdoor;
+
+  const fastestVariant = getFastestWalkingRouteVariant(routes);
+  if (fastestVariant === 'tunnel') return routes.tunnel;
+  if (fastestVariant === 'outdoor') return routes.outdoor;
+  return null;
+}
+
+function buildWalkingRouteComparison(
+  originLabel: string,
+  destinationLabel: string,
+  routes: WalkingModeRoutes | null | undefined,
+  activeVariant: WalkingRouteVariant,
+): WalkingRouteComparison | null {
+  const outdoor = routes?.outdoor;
+  const tunnel = routes?.tunnel;
+  if (!outdoor || !tunnel) return null;
+
+  return {
+    originLabel,
+    destinationLabel,
+    activeVariant,
+    fastestVariant: getFastestWalkingRouteVariant(routes) ?? 'outdoor',
+    outdoor: {
+      durationText: outdoor.durationText,
+      distanceText: outdoor.distanceText,
+    },
+    tunnel: {
+      durationText: tunnel.durationText,
+      distanceText: tunnel.distanceText,
+    },
+  };
+}
+
 function selectActiveModeRoute(
   selectedTransportMode: TransportMode,
   routes: AllModeRoutes,
+  selectedWalkingRouteVariant: WalkingRouteVariant,
 ): { route: ModeRoute | null | undefined; shouldAutoSelectWalking: boolean } {
-  const shouldAutoSelectWalking =
-    selectedTransportMode === 'driving' && routes.walking?.viaText === TUNNEL_ROUTE_VIA_TEXT;
+  const activeWalkingRoute = getWalkingRoute(routes.walking, selectedWalkingRouteVariant);
+  const shouldAutoSelectWalking = selectedTransportMode === 'driving' && !!routes.walking?.tunnel;
 
   if (shouldAutoSelectWalking) {
-    return { route: routes.walking, shouldAutoSelectWalking: true };
+    return { route: activeWalkingRoute, shouldAutoSelectWalking: true };
   }
 
   if (selectedTransportMode === 'driving') {
     return { route: routes.driving, shouldAutoSelectWalking: false };
   }
 
-  return { route: routes.walking, shouldAutoSelectWalking: false };
+  return { route: activeWalkingRoute, shouldAutoSelectWalking: false };
 }
 
 /** Returns shuttle final arrival time in ms, or null if not computable. */
@@ -596,6 +670,7 @@ function computeLateTransportModes(
   arriveByMs: number,
   nowMs: number,
   allModeRoutes: AllModeRoutes,
+  selectedWalkingRouteVariant: WalkingRouteVariant,
   shuttleInfo: ShuttleInfo | null,
 ): TransportMode[] {
   const late: TransportMode[] = [];
@@ -603,8 +678,9 @@ function computeLateTransportModes(
     const drivingArrivalMs = nowMs + allModeRoutes.driving.durationSec * 1000;
     if (drivingArrivalMs > arriveByMs) late.push('driving');
   }
-  if (allModeRoutes.walking?.durationSec != null) {
-    const walkingArrivalMs = nowMs + allModeRoutes.walking.durationSec * 1000;
+  const activeWalkingRoute = getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
+  if (activeWalkingRoute?.durationSec != null) {
+    const walkingArrivalMs = nowMs + activeWalkingRoute.durationSec * 1000;
     if (walkingArrivalMs > arriveByMs) late.push('walking');
   }
   const shuttleFinalMs = getShuttleFinalArrivalMs(shuttleInfo, nowMs);
@@ -649,14 +725,21 @@ export function useNavigationBetweenBuildings({
   const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
   const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});
   const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
+  const [selectedWalkingRouteVariant, setSelectedWalkingRouteVariant] =
+    useState<WalkingRouteVariant>('outdoor');
   const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
   const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
   const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
+  const selectedTransportModeRef = useRef<TransportMode>('driving');
 
   // --- Shuttle state ---
   const [isShuttleRoute, setIsShuttleRoute] = useState(false);
   const [shuttleInfo, setShuttleInfo] = useState<ShuttleInfo | null>(null);
   const [isShuttleLoading, setIsShuttleLoading] = useState(false);
+
+  useEffect(() => {
+    selectedTransportModeRef.current = selectedTransportMode;
+  }, [selectedTransportMode]);
 
   // Combined building list across both campuses for search/coordinate resolution
   const allBuildings = useMemo<Building[]>(() => {
@@ -741,9 +824,6 @@ export function useNavigationBetweenBuildings({
     }
 
     const fetchDirections = async (mode: 'driving' | 'walking'): Promise<ModeRoute | null> => {
-      if (mode === 'walking' && tunnelWalkingRoute) {
-        return tunnelWalkingRoute;
-      }
       if (!key) return null;
 
       const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
@@ -813,20 +893,30 @@ export function useNavigationBetweenBuildings({
 
     const load = async () => {
       setIsRouteLoading(true);
-      setModeDurations({});
       try {
-        const [driving, walking] = await Promise.all([
+        const [driving, outdoorWalking] = await Promise.all([
           fetchDirections('driving'),
           fetchDirections('walking'),
         ]);
         if (cancelled) return;
 
-        setAllModeRoutes({ driving, walking });
+        const walkingRoutes: WalkingModeRoutes = {
+          outdoor: outdoorWalking,
+          tunnel: tunnelWalkingRoute,
+        };
+        const preferredWalkingVariant = getFastestWalkingRouteVariant(walkingRoutes) ?? 'outdoor';
+        setSelectedWalkingRouteVariant(preferredWalkingVariant);
+        setAllModeRoutes({ driving, walking: walkingRoutes });
+        setModeDurations({
+          driving: driving?.durationText,
+          walking: getWalkingRoute(walkingRoutes, preferredWalkingVariant)?.durationText,
+        });
 
         // Show polyline + steps for the currently selected mode
         const { route: active, shouldAutoSelectWalking } = selectActiveModeRoute(
-          selectedTransportMode,
-          { driving, walking },
+          selectedTransportModeRef.current,
+          { driving, walking: walkingRoutes },
+          preferredWalkingVariant,
         );
         if (active?.polyline && active.polyline.length > 0) {
           setRoutePolyline(active.polyline);
@@ -837,7 +927,9 @@ export function useNavigationBetweenBuildings({
           setSelectedTransportMode('walking');
         }
 
-        const primary = shouldAutoSelectWalking ? walking : (driving ?? walking);
+        const primary = shouldAutoSelectWalking
+          ? getWalkingRoute(walkingRoutes, preferredWalkingVariant)
+          : (driving ?? getWalkingRoute(walkingRoutes, preferredWalkingVariant));
         if (primary) {
           const arrival = new Date(baseNowMs + primary.durationSec * 1000);
           const arrivalText = arrival.toLocaleTimeString([], {
@@ -851,10 +943,6 @@ export function useNavigationBetweenBuildings({
             viaText: primary.viaText || 'Suggested route',
           });
         }
-        setModeDurations({
-          driving: driving?.durationText,
-          walking: walking?.durationText,
-        });
       } finally {
         if (!cancelled) setIsRouteLoading(false);
       }
@@ -1004,7 +1092,9 @@ export function useNavigationBetweenBuildings({
       return;
     }
     const route =
-      selectedTransportMode === 'driving' ? allModeRoutes.driving : allModeRoutes.walking;
+      selectedTransportMode === 'driving'
+        ? allModeRoutes.driving
+        : getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
     if (route?.polyline && route.polyline.length > 0) {
       const { routeSummary: summary, navigationSteps: steps } = computeModeRouteDisplayState(
         route,
@@ -1014,19 +1104,34 @@ export function useNavigationBetweenBuildings({
       setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
       setRouteSummary(summary);
       setNavigationSteps(steps);
-    } else if (allModeRoutes.driving || allModeRoutes.walking) {
+    } else if (
+      allModeRoutes.driving ||
+      allModeRoutes.walking?.outdoor ||
+      allModeRoutes.walking?.tunnel
+    ) {
       setRoutePolyline([]);
       setRouteRegion(null);
       setNavigationSteps([]);
     }
   }, [
     selectedTransportMode,
+    selectedWalkingRouteVariant,
     allModeRoutes,
     isNavigationOpen,
     currentTime,
     shuttleInfo,
     navigationDestinationCoord,
   ]);
+
+  useEffect(() => {
+    const activeWalkingRoute = getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
+    if (!allModeRoutes.driving && !activeWalkingRoute) return;
+
+    setModeDurations((current) => ({
+      driving: allModeRoutes.driving?.durationText ?? current.driving,
+      walking: activeWalkingRoute?.durationText ?? current.walking,
+    }));
+  }, [allModeRoutes, selectedWalkingRouteVariant]);
 
   /** Clear stale trip text and invalidate cached routes so the next fetch
    *  overwrites everything.  We set isRouteLoading immediately so the UI
@@ -1040,6 +1145,7 @@ export function useNavigationBetweenBuildings({
     setShuttleInfo(null);
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
+    setSelectedWalkingRouteVariant('outdoor');
   }, []);
 
   /**
@@ -1264,6 +1370,7 @@ export function useNavigationBetweenBuildings({
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
     setIsDestinationLocked(false);
+    setSelectedWalkingRouteVariant('outdoor');
   }, []);
 
   const lateTransportModes = useMemo<TransportMode[]>(() => {
@@ -1271,8 +1378,28 @@ export function useNavigationBetweenBuildings({
     const arriveByMs = arriveBy.getTime();
     if (!Number.isFinite(arriveByMs)) return [];
     const nowMs = currentTime?.getTime() ?? Date.now();
-    return computeLateTransportModes(arriveByMs, nowMs, allModeRoutes, shuttleInfo);
-  }, [arriveBy, currentTime, allModeRoutes, shuttleInfo]);
+    return computeLateTransportModes(
+      arriveByMs,
+      nowMs,
+      allModeRoutes,
+      selectedWalkingRouteVariant,
+      shuttleInfo,
+    );
+  }, [arriveBy, currentTime, allModeRoutes, selectedWalkingRouteVariant, shuttleInfo]);
+
+  const walkingRouteComparison = useMemo(() => {
+    const activeVariant =
+      getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant) ===
+      allModeRoutes.walking?.tunnel
+        ? 'tunnel'
+        : 'outdoor';
+    return buildWalkingRouteComparison(
+      navigationStart,
+      navigationDestination,
+      allModeRoutes.walking,
+      activeVariant,
+    );
+  }, [allModeRoutes.walking, navigationDestination, navigationStart, selectedWalkingRouteVariant]);
 
   return {
     isNavigationOpen,
@@ -1302,6 +1429,9 @@ export function useNavigationBetweenBuildings({
     tapMarkerCoordinate,
     selectedTransportMode,
     setSelectedTransportMode,
+    selectedWalkingRouteVariant,
+    setSelectedWalkingRouteVariant,
+    walkingRouteComparison,
     routePolyline,
     routeRegion,
     navigationSteps,
