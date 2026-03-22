@@ -21,6 +21,7 @@ export type {
   IndoorRoute,
   IndoorNavStep,
   IndoorBuildingMeta,
+  LevelledEntrance,
   OverlayBounds,
   GraphNode,
   GraphEdge,

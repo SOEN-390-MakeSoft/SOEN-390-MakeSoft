@@ -26,6 +26,18 @@ export const INDOOR_BUILDINGS: IndoorBuildingMeta[] = [
     entrances: [
       { latitude: 45.49704433962407, longitude: -73.5786497963592 }, // main De Maisonneuve entrance
     ],
+    tunnelEntrances: [
+      {
+        ref: 'entry-H-b1-north',
+        position: { latitude: 45.49703, longitude: -73.57862 },
+        level: '-1',
+      },
+      {
+        ref: 'entry-H-b1-metro',
+        position: { latitude: 45.49684, longitude: -73.57881 },
+        level: '-1',
+      },
+    ],
     geojsonAsset: 'Hall_Building',
     defaultLevel: '1',
     imageBounds: {
@@ -71,6 +83,9 @@ const ASSET_LOADERS: Record<string, () => GeoJSONFeatureCollection> = {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   Hall_Building: () =>
     require('../../assets/geo/Hall_Building.geojson') as GeoJSONFeatureCollection,
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  SGW_Tunnel_Network: () =>
+    require('../../assets/geo/SGW_Tunnel_Network.geojson') as GeoJSONFeatureCollection,
 };
 
 // ---------------------------------------------------------------------------
@@ -132,7 +147,16 @@ export function loadBuilding(buildingCode: string): CachedBuildingData | null {
 
   resetIdCounter();
   const geojson = loader();
-  const features = parseIndoorGeoJSON(geojson);
+  const baseFeatures = parseIndoorGeoJSON(geojson);
+  const features = [...baseFeatures];
+
+  if ((meta.tunnelEntrances?.length ?? 0) > 0) {
+    const baseGraph = IndoorGraph.build(baseFeatures);
+    const tunnelConnectorFeatures = buildTunnelConnectorFeatures(meta, baseGraph);
+    const tunnelFeatures = parseIndoorGeoJSON(ASSET_LOADERS.SGW_Tunnel_Network());
+    features.push(...tunnelConnectorFeatures, ...tunnelFeatures);
+  }
+
   const graph = IndoorGraph.build(features);
   const roomIndex = buildRoomIndex(features);
   const levels = extractLevels(features);
@@ -151,7 +175,11 @@ export function findBuildingAtCoordinate(point: LatLng): IndoorBuildingMeta | nu
   let closestDist = 100; // max 100 m from an entrance
 
   for (const meta of INDOOR_BUILDINGS) {
-    for (const entrance of meta.entrances) {
+    const entrances = [
+      ...meta.entrances,
+      ...(meta.tunnelEntrances ?? []).map((entrance) => entrance.position),
+    ];
+    for (const entrance of entrances) {
       const d = haversine(point, entrance);
       if (d < closestDist) {
         closestDist = d;
@@ -202,4 +230,43 @@ function haversine(a: LatLng, b: LatLng): number {
   const lat2 = (b.latitude * Math.PI) / 180;
   const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+const TUNNEL_CONNECT_MAX_METERS = 80;
+
+function buildTunnelConnectorFeatures(
+  meta: IndoorBuildingMeta,
+  baseGraph: IndoorGraph,
+): IndoorFeature[] {
+  const connectorCollection: GeoJSONFeatureCollection = {
+    type: 'FeatureCollection',
+    features: [],
+  };
+
+  for (const entrance of meta.tunnelEntrances ?? []) {
+    const nearestNode = baseGraph.findClosestNode(entrance.position, entrance.level);
+    if (!nearestNode) continue;
+    if (haversine(entrance.position, nearestNode.position) > TUNNEL_CONNECT_MAX_METERS) continue;
+
+    connectorCollection.features.push({
+      type: 'Feature',
+      properties: {
+        ref: entrance.ref
+          ? `connector-${meta.code}-${entrance.ref}`
+          : `connector-${meta.code}-${entrance.level}`,
+        level: entrance.level,
+        indoor: 'corridor',
+        highway: 'footway',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [entrance.position.longitude, entrance.position.latitude],
+          [nearestNode.position.longitude, nearestNode.position.latitude],
+        ],
+      },
+    });
+  }
+
+  return parseIndoorGeoJSON(connectorCollection);
 }

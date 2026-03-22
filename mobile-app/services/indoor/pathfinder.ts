@@ -317,6 +317,8 @@ function estimateStepSeconds(
       return ELEVATOR_WAIT_SECS + floors * ELEVATOR_TRAVEL_SECS_PER_FLOOR;
     case 'escalator':
       return floors > 0 ? floors * ESCALATOR_SECS_PER_FLOOR : distanceMeters / WALK_SPEED_MPS;
+    case 'tunnel':
+      return distanceMeters / WALK_SPEED_MPS;
     default: // walk
       return distanceMeters / WALK_SPEED_MPS;
   }
@@ -351,6 +353,12 @@ function buildStep(
         fromLevel === toLevel
           ? `Take the escalator on level ${fromLevel}`
           : `Take the escalator from level ${fromLevel} to level ${toLevel}`;
+      break;
+    case 'tunnel':
+      instruction =
+        fromLevel === toLevel
+          ? `Take the tunnel for ${Math.round(distanceMeters)}m on level ${fromLevel}`
+          : `Take the tunnel from level ${fromLevel} to level ${toLevel}`;
       break;
     default:
       instruction =

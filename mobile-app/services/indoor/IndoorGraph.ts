@@ -194,6 +194,9 @@ export class IndoorGraph {
   private addCorridor(corridor: IndoorCorridor, roomPolysByLevel: Map<string, LatLng[][]>): void {
     // A corridor may span multiple levels (e.g. "2;8").
     // Create nodes and walk edges on EACH level so pathfinding works on all.
+    const isTunnel =
+      corridor.raw.tunnel === 'yes' || corridor.ref?.toLowerCase().includes('tunnel') === true;
+
     for (const level of corridor.levels) {
       // Map every corridor coordinate to a (possibly snapped) graph node.
       // We use the ORIGINAL coordinates so node snapping preserves graph
@@ -236,7 +239,7 @@ export class IndoorGraph {
             to: entries[i].nodeId,
             weight,
             isLevelChange: false,
-            edgeType: 'walk',
+            edgeType: isTunnel ? 'tunnel' : 'walk',
             // Use trimmed path when available.  If the entire edge is
             // inside a room (trim returned empty), omit the path so
             // the reconstruction uses a straight line between nodes
