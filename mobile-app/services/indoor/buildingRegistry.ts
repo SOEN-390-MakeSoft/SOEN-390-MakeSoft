@@ -74,6 +74,8 @@ interface CachedBuildingData {
 }
 
 const cache = new Map<string, CachedBuildingData>();
+const graphCache = new Map<string, { features: IndoorFeature[]; graph: IndoorGraph }>();
+const featureCache = new Map<string, IndoorFeature[]>();
 
 // GeoJSON asset loaders — maps asset key to the raw JSON.
 // In a React Native / Expo context, these are resolved via `require()` or
@@ -136,34 +138,25 @@ export function loadBuilding(buildingCode: string): CachedBuildingData | null {
   const code = buildingCode.toUpperCase();
   if (cache.has(code)) return cache.get(code)!;
 
-  const meta = META_BY_CODE.get(code);
-  if (!meta) return null;
+  const graphData = loadBuildingGraphData(code);
+  if (!graphData) return null;
 
-  const loader = ASSET_LOADERS[meta.geojsonAsset];
-  if (!loader) {
-    console.warn(`[indoor] No asset loader found for "${meta.geojsonAsset}"`);
-    return null;
-  }
-
-  resetIdCounter();
-  const geojson = loader();
-  const baseFeatures = parseIndoorGeoJSON(geojson);
-  const features = [...baseFeatures];
-
-  if ((meta.tunnelEntrances?.length ?? 0) > 0) {
-    const baseGraph = IndoorGraph.build(baseFeatures);
-    const tunnelConnectorFeatures = buildTunnelConnectorFeatures(meta, baseGraph);
-    const tunnelFeatures = parseIndoorGeoJSON(ASSET_LOADERS.SGW_Tunnel_Network());
-    features.push(...tunnelConnectorFeatures, ...tunnelFeatures);
-  }
-
-  const graph = IndoorGraph.build(features);
+  const { features, graph } = graphData;
   const roomIndex = buildRoomIndex(features);
   const levels = extractLevels(features);
 
   const data: CachedBuildingData = { features, graph, roomIndex, levels };
   cache.set(code, data);
   return data;
+}
+
+/**
+ * Load (or return cached) only the navigation graph for a building.
+ * This is cheaper than `loadBuilding()` because it skips room indexing.
+ */
+export function loadBuildingGraph(buildingCode: string): IndoorGraph | null {
+  const code = buildingCode.toUpperCase();
+  return loadBuildingGraphData(code)?.graph ?? null;
 }
 
 /**
@@ -216,6 +209,54 @@ export function detectIndoorDestination(
  */
 export function clearCache(): void {
   cache.clear();
+  graphCache.clear();
+  featureCache.clear();
+}
+
+function loadBuildingGraphData(
+  buildingCode: string,
+): { features: IndoorFeature[]; graph: IndoorGraph } | null {
+  const code = buildingCode.toUpperCase();
+  if (graphCache.has(code)) return graphCache.get(code)!;
+
+  const meta = META_BY_CODE.get(code);
+  if (!meta) return null;
+
+  const features = loadBuildingFeatures(meta);
+  if (!features) return null;
+
+  const data = {
+    features,
+    graph: IndoorGraph.build(features),
+  };
+  graphCache.set(code, data);
+  return data;
+}
+
+function loadBuildingFeatures(meta: IndoorBuildingMeta): IndoorFeature[] | null {
+  const code = meta.code.toUpperCase();
+  if (featureCache.has(code)) return featureCache.get(code)!;
+
+  const loader = ASSET_LOADERS[meta.geojsonAsset];
+  if (!loader) {
+    console.warn(`[indoor] No asset loader found for "${meta.geojsonAsset}"`);
+    return null;
+  }
+
+  resetIdCounter();
+  const geojson = loader();
+  const baseFeatures = parseIndoorGeoJSON(geojson);
+  const features = [...baseFeatures];
+
+  if ((meta.tunnelEntrances?.length ?? 0) > 0) {
+    const baseGraph = IndoorGraph.build(baseFeatures);
+    const tunnelConnectorFeatures = buildTunnelConnectorFeatures(meta, baseGraph);
+    const tunnelFeatures = parseIndoorGeoJSON(ASSET_LOADERS.SGW_Tunnel_Network());
+    features.push(...tunnelConnectorFeatures, ...tunnelFeatures);
+  }
+
+  featureCache.set(code, features);
+  return features;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuil
 import { Platform } from 'react-native';
 import { getNextShuttles } from '../services/api';
 import * as Location from 'expo-location';
+import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 
 jest.mock('expo-location');
 
@@ -53,6 +54,26 @@ const SOUTH_BUILDING = createTestBuilding('B2', 'Beta Hall', {
 });
 
 const mockBuildings: Building[] = [NORTH_BUILDING, SOUTH_BUILDING];
+
+function getCampusBuildingByPrefix(codePrefix: string): Building {
+  const entry = Object.entries(BUILDING_POLYGONS).find(([, record]) =>
+    record.name.startsWith(`${codePrefix} - `),
+  );
+  if (!entry) {
+    throw new Error(`Missing campus building polygon for ${codePrefix}`);
+  }
+
+  const [id, record] = entry;
+  return {
+    id,
+    name: record.name,
+    code: codePrefix,
+    polygon: record.polygon,
+  };
+}
+
+const HALL_BUILDING = getCampusBuildingByPrefix('H');
+const EV_BUILDING = getCampusBuildingByPrefix('EV');
 type HookArgs = {
   buildings: Building[];
   onSelectBuilding: (id: string) => void;
@@ -420,6 +441,49 @@ describe('useNavigationBetweenBuildings', () => {
         'Turn left onto Blvd de Maisonneuve',
       );
       expect(result.current.navigationSteps[1].maneuver).toBe('turn-left');
+    });
+
+    it('should prefer the SGW tunnel graph for Hall to EV walking directions', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        json: () => Promise.resolve(makeMockDirectionsResponse('Driving route')),
+      });
+      globalThis.fetch = mockFetch;
+
+      const { result } = renderHook(() =>
+        useNavigationBetweenBuildings({
+          buildings: [HALL_BUILDING, EV_BUILDING],
+          onSelectBuilding: jest.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.openNavigationForBuilding(EV_BUILDING, null);
+      });
+      act(() => {
+        result.current.setNavigationActiveField('start');
+      });
+      act(() => {
+        result.current.handleMapBuildingPress(HALL_BUILDING.id);
+      });
+
+      await waitFor(() => {
+        expect(result.current.selectedTransportMode).toBe('walking');
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain('mode=driving');
+      expect(result.current.routeSummary?.viaText).toBe('Underground tunnel network');
+      expect(result.current.routePolyline.length).toBeGreaterThan(0);
+      expect(
+        result.current.navigationSteps.some((step: { instruction: string }) =>
+          step.instruction.includes('Take the tunnel'),
+        ),
+      ).toBe(true);
+      expect(
+        result.current.navigationSteps.some((step: { instruction: string }) =>
+          step.instruction.includes('Enter the tunnel'),
+        ),
+      ).toBe(true);
     });
 
     it('should handle API returning non-OK status', async () => {

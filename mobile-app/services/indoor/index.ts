@@ -48,6 +48,7 @@ export {
   hasIndoorMap,
   getBuildingMeta,
   loadBuilding,
+  loadBuildingGraph,
   findBuildingAtCoordinate,
   detectIndoorDestination,
   getFloorPlanImage,
