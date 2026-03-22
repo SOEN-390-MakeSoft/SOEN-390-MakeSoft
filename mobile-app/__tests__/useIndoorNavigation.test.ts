@@ -149,15 +149,48 @@ describe('useIndoorNavigation — route computation', () => {
     act(() => {
       result.current.navigateToRoomAccessible('H-840', {
         avoidStairs: true,
+        avoidEscalators: true,
         preferElevator: true,
       });
     });
 
     expect(result.current.indoorRoute).not.toBeNull();
-    // Verify no stairs steps in the route
     const hasStairs = result.current.indoorRoute!.steps.some((s) => s.edgeType === 'stairs');
+    const hasEscalators = result.current.indoorRoute!.steps.some((s) => s.edgeType === 'escalator');
+    const hasElevator = result.current.indoorRoute!.steps.some((s) => s.edgeType === 'elevator');
     expect(hasStairs).toBe(false);
+    expect(hasEscalators).toBe(false);
+    expect(hasElevator).toBe(true);
+    expect(
+      result.current
+        .indoorRoute!.steps.filter((s) => s.edgeType === 'elevator')
+        .every((s) => s.instruction.includes('elevator')),
+    ).toBe(true);
     expect(result.current.indoorRoute!.totalDistanceMeters).toBeGreaterThan(0);
+  });
+
+  it('reroutes the current path when accessibility preferences change', () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+    act(() => {
+      result.current.activateBuilding('H');
+      result.current.navigateToRoom('H-840');
+    });
+
+    expect(result.current.indoorRoute).not.toBeNull();
+
+    act(() => {
+      result.current.rerouteCurrent({
+        avoidStairs: true,
+        avoidEscalators: true,
+        preferElevator: true,
+      });
+    });
+
+    expect(result.current.indoorRoute).not.toBeNull();
+    expect(result.current.destinationRoom?.ref).toContain('840');
+    expect(result.current.indoorRoute!.steps.some((s) => s.edgeType === 'stairs')).toBe(false);
+    expect(result.current.indoorRoute!.steps.some((s) => s.edgeType === 'escalator')).toBe(false);
+    expect(result.current.indoorRoute!.steps.some((s) => s.edgeType === 'elevator')).toBe(true);
   });
 
   it('sets error for a non-existent room', () => {
