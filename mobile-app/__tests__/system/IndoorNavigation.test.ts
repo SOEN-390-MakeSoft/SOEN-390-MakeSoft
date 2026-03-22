@@ -27,6 +27,7 @@ import {
   clearCache,
 } from '../../services/indoor/buildingRegistry';
 import type { IndoorFeature, IndoorRoute } from '../../services/indoor/types';
+import sgwTunnelNetwork from '../../assets/geo/SGW_Tunnel_Network.geojson';
 
 // ---------------------------------------------------------------------------
 // Load the real GeoJSON asset once for all tests
@@ -279,6 +280,33 @@ describe('Indoor Navigation System Tests — Hall Building', () => {
       expect(data!.graph.nodes.size).toBeGreaterThan(100);
       expect(data!.roomIndex.size).toBeGreaterThan(30);
       expect(data!.levels.length).toBeGreaterThanOrEqual(7);
+    });
+
+    it('should route from Hall tunnel access to the EV tunnel entry through the merged graph', () => {
+      const data = loadBuilding('H');
+      expect(data).not.toBeNull();
+
+      const hallTunnelStart = { latitude: 45.49684, longitude: -73.57881 };
+      const evTunnelEntryFeature = sgwTunnelNetwork.features.find(
+        (feature) => feature.properties.ref === 'entry-EV-b1-metro',
+      );
+      expect(evTunnelEntryFeature).toBeDefined();
+
+      const evTunnelEntry = {
+        latitude: evTunnelEntryFeature!.geometry.coordinates[1],
+        longitude: evTunnelEntryFeature!.geometry.coordinates[0],
+      };
+
+      const startNode = data!.graph.findClosestNode(hallTunnelStart, '-1');
+      const endNode = data!.graph.findClosestNode(evTunnelEntry, '-1');
+      expect(startNode).not.toBeNull();
+      expect(endNode).not.toBeNull();
+
+      const route = findPath(data!.graph, startNode!.id, endNode!.id);
+      expect(route).not.toBeNull();
+      expect(route!.polyline.length).toBeGreaterThan(1);
+      expect(route!.steps.some((step) => step.edgeType === 'tunnel')).toBe(true);
+      expect(route!.steps.some((step) => /tunnel/i.test(step.instruction))).toBe(true);
     });
 
     it('should return cached data on second load', () => {

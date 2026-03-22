@@ -1,0 +1,258 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-LB-b1",
+        "name": "LB basement tunnel entry",
+        "level": "-1",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "LB"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57839, 45.4969]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-H-b1-north",
+        "name": "Hall north basement tunnel entry",
+        "level": "-1",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "H"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57862, 45.49703]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-H-b1-metro",
+        "name": "Hall Guy-Concordia basement entry",
+        "level": "-1",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "H"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57881, 45.49684]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-GM-b1",
+        "name": "GM metro concourse entry",
+        "level": "-1",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "GM"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57872, 45.49608]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-EV-b1-metro",
+        "name": "EV metro concourse entry",
+        "level": "-1",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "EV"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57845, 45.49593]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "entry-MB-b2",
+        "name": "MB lower tunnel entry",
+        "level": "-2",
+        "entrance": "yes",
+        "indoor": "yes",
+        "building": "MB"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57852, 45.49523]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "junction-LB-H",
+        "name": "LB Hall tunnel junction",
+        "level": "-1",
+        "indoor": "yes",
+        "junction": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.5785, 45.49697]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "junction-H-metro",
+        "name": "Hall metro junction",
+        "level": "-1",
+        "indoor": "yes",
+        "junction": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57867, 45.49669]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "junction-Guy-Concordia",
+        "name": "Guy-Concordia metro concourse junction",
+        "level": "-1",
+        "indoor": "yes",
+        "junction": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57863, 45.49634]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "junction-EV-south",
+        "name": "EV south tunnel junction",
+        "level": "-2",
+        "indoor": "yes",
+        "junction": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.57842, 45.4958]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "tunnel-LB-H",
+        "name": "LB to Hall basement tunnel",
+        "level": "-1",
+        "indoor": "corridor",
+        "highway": "footway",
+        "tunnel": "yes"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.57839, 45.4969],
+          [-73.57845, 45.49694],
+          [-73.5785, 45.49697],
+          [-73.57856, 45.497],
+          [-73.57862, 45.49703]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "tunnel-H-metro",
+        "name": "Hall to Guy-Concordia metro tunnel",
+        "level": "-1",
+        "indoor": "corridor",
+        "highway": "footway",
+        "tunnel": "yes"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.57881, 45.49684],
+          [-73.57876, 45.49678],
+          [-73.57872, 45.49673],
+          [-73.57867, 45.49669],
+          [-73.57865, 45.49655],
+          [-73.57863, 45.49634]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "tunnel-GM-metro",
+        "name": "GM to Guy-Concordia metro tunnel",
+        "level": "-1",
+        "indoor": "corridor",
+        "highway": "footway",
+        "tunnel": "yes"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.57872, 45.49608],
+          [-73.57868, 45.49614],
+          [-73.57865, 45.49621],
+          [-73.57863, 45.49628],
+          [-73.57863, 45.49634]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "tunnel-EV-metro",
+        "name": "EV to Guy-Concordia metro tunnel",
+        "level": "-1",
+        "indoor": "corridor",
+        "highway": "footway",
+        "tunnel": "yes"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.57845, 45.49593],
+          [-73.5785, 45.49601],
+          [-73.57855, 45.49611],
+          [-73.57859, 45.49622],
+          [-73.57863, 45.49634]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ref": "tunnel-EV-MB",
+        "name": "EV to MB metro tunnel",
+        "level": "-2",
+        "indoor": "corridor",
+        "highway": "footway",
+        "tunnel": "yes"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-73.57845, 45.49593],
+          [-73.57842, 45.4958],
+          [-73.57839, 45.49565],
+          [-73.57841, 45.4955],
+          [-73.57846, 45.49537],
+          [-73.57852, 45.49523]
+        ]
+      }
+    }
+  ]
+}

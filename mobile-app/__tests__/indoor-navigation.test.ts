@@ -212,6 +212,30 @@ describe('geojsonParser', () => {
     expect(stairs!.levels).toEqual(['1', '2']);
   });
 
+  it('parses indoor=corridor line strings as corridors', () => {
+    const geo: GeoJSONFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { indoor: 'corridor', level: '-1', ref: 'tunnel-test' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [-73.579, 45.497],
+              [-73.5789, 45.4971],
+            ],
+          },
+        },
+      ],
+    };
+
+    const features = parseIndoorGeoJSON(geo);
+    expect(features).toHaveLength(1);
+    expect(features[0].type).toBe('corridor');
+    expect(features[0].levels).toEqual(['-1']);
+  });
+
   it('extracts levels correctly', () => {
     const features = parseIndoorGeoJSON(makeTestGeoJSON());
     const levels = extractLevels(features);

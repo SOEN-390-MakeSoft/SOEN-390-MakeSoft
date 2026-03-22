@@ -164,7 +164,7 @@ export interface GraphEdge {
   /** Whether this edge crosses levels. */
   isLevelChange: boolean;
   /** Edge type hint for step-by-step instructions. */
-  edgeType: 'walk' | 'stairs' | 'elevator' | 'escalator';
+  edgeType: 'walk' | 'tunnel' | 'stairs' | 'elevator' | 'escalator';
   /**
    * Original corridor geometry for this edge (from → to direction).
    * When present the pathfinder uses these coordinates instead of just the
@@ -188,7 +188,7 @@ export interface IndoorNavStep {
   distanceMeters: number;
   /** Estimated time in seconds for this step. */
   estimatedSeconds: number;
-  edgeType: 'walk' | 'stairs' | 'elevator' | 'escalator';
+  edgeType: 'walk' | 'tunnel' | 'stairs' | 'elevator' | 'escalator';
 }
 
 /** The result returned by the pathfinder. */
@@ -221,6 +221,16 @@ export interface OverlayBounds {
   ne: LatLng;
 }
 
+/** An indoor access point anchored to a specific level. */
+export interface LevelledEntrance {
+  /** Entrance coordinate. */
+  position: LatLng;
+  /** Indoor level where the access point lands. */
+  level: string;
+  /** Optional stable reference used to match external datasets. */
+  ref?: string;
+}
+
 /** Metadata about an available indoor map. */
 export interface IndoorBuildingMeta {
   /** Building code, e.g. "H". */
@@ -231,6 +241,8 @@ export interface IndoorBuildingMeta {
   levels: string[];
   /** Building entrance coordinate (used to bridge outdoor → indoor). */
   entrances: LatLng[];
+  /** Underground access points used to join tunnel and indoor graphs. */
+  tunnelEntrances?: LevelledEntrance[];
   /** Path (or require key) to the GeoJSON asset. */
   geojsonAsset: string;
   /** Geographic bounds for the floor plan image overlay. */
