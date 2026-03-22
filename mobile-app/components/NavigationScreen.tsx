@@ -287,6 +287,15 @@ function WalkingRouteComparisonPanel({
     return (
       <Pressable
         onPress={() => handleSelect(variant)}
+        accessibilityRole="button"
+        accessibilityLabel={`${title} walking route, ${durationText}, ${distanceText}`}
+        accessibilityHint={
+          isWalkingDisabled
+            ? 'Walking is currently unavailable for this trip.'
+            : 'Select this walking route option.'
+        }
+        accessibilityState={{ disabled: isWalkingDisabled, selected: isSelected }}
+        disabled={isWalkingDisabled}
         testID={testId}
         style={[
           styles.walkingOptionCard,
