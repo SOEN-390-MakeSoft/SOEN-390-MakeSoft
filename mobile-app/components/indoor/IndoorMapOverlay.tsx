@@ -20,6 +20,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, View, Image } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { Marker, Polygon, Polyline } from 'react-native-maps';
+import { pointInPolygon } from '../../utils/mapUtils';
 import type {
   IndoorFeature,
   IndoorRoom,
@@ -446,6 +447,30 @@ export default function IndoorMapOverlay({
     return count > 0 ? { latitude: lat / count, longitude: lng / count } : null;
   }, [rooms]);
 
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((room) => {
+      if (!room.ref || !levelCentroid) return true;
+      // If this room has multiple identical copies in the `rooms` list (meaning it was parsed multiple times due to `level: x;y`),
+      // we only keep the one closest to the current floor's visual centroid.
+      if (/elevator/i.test(room.ref)) {
+        const siblings = rooms.filter((r) => r.ref === room.ref);
+        if (siblings.length > 1) {
+          const bestSibling = siblings.reduce((best, curr) => {
+            const dBest =
+              Math.pow(best.centroid.latitude - levelCentroid.latitude, 2) +
+              Math.pow(best.centroid.longitude - levelCentroid.longitude, 2);
+            const dCurr =
+              Math.pow(curr.centroid.latitude - levelCentroid.latitude, 2) +
+              Math.pow(curr.centroid.longitude - levelCentroid.longitude, 2);
+            return dCurr < dBest ? curr : best;
+          });
+          return room.id === bestSibling.id;
+        }
+      }
+      return true;
+    });
+  }, [rooms, levelCentroid]);
+
   // Nothing to draw?
   if (activeLevelFeatures.length === 0) return null;
 
@@ -489,30 +514,6 @@ export default function IndoorMapOverlay({
 
       {/* 3. Rooms — tappable when onRoomPress is provided */}
       {(() => {
-        // For rooms that are elevators/multi-level that duplicate across offset maps,
-        // we only want to show the polygon meant for the current floor.
-        const filteredRooms = rooms.filter((room) => {
-          if (!room.ref || !levelCentroid) return true;
-          // If this room has multiple identical copies in the `rooms` list (meaning it was parsed multiple times due to `level: x;y`),
-          // we only keep the one closest to the current floor's visual centroid.
-          if (/elevator/i.test(room.ref)) {
-            const siblings = rooms.filter((r) => r.ref === room.ref);
-            if (siblings.length > 1) {
-              const bestSibling = siblings.reduce((best, curr) => {
-                const dBest =
-                  Math.pow(best.centroid.latitude - levelCentroid.latitude, 2) +
-                  Math.pow(best.centroid.longitude - levelCentroid.longitude, 2);
-                const dCurr =
-                  Math.pow(curr.centroid.latitude - levelCentroid.latitude, 2) +
-                  Math.pow(curr.centroid.longitude - levelCentroid.longitude, 2);
-                return dCurr < dBest ? curr : best;
-              });
-              return room.id === bestSibling.id;
-            }
-          }
-          return true;
-        });
-
         return filteredRooms.map((room) => {
           if (room.polygon.length < 3) return null;
           const isSelected = selectedRoom?.featureId === room.id;
@@ -712,7 +713,14 @@ export default function IndoorMapOverlay({
               });
             });
 
-        return bestElevators.map((ev) => {
+        // Only display the elevator icon if it is contained within an elevator shaft polygon
+        const elevatorPolygons = filteredRooms.filter((r) => /elevator/i.test(r.ref || ''));
+        const displayedElevators = bestElevators.filter((ev) => {
+          if (elevatorPolygons.length === 0) return true; // If no shaft polygons exist on this map, default to show
+          return elevatorPolygons.some((r) => pointInPolygon(ev.position, r.polygon));
+        });
+
+        return displayedElevators.map((ev) => {
           const isHighlighted = categoryFilter === 'elevators' || categoryFilter === null;
           return (
             <IconMarker

@@ -1580,7 +1580,7 @@ export default function MapScreen() {
       </MapView>
 
       {/* Category filter chips */}
-      {indoor.isIndoorActive && !isNavigationOpen && (
+      {indoor.isIndoorActive && !isNavigationOpen && !isMenuOpen && !isSearchFocused && (
         <View style={styles.indoorCategoryChips} pointerEvents="auto">
           <Pressable
             testID="indoor-chip-washrooms"
@@ -1639,17 +1639,21 @@ export default function MapScreen() {
       )}
 
       {/* Indoor floor selector pill — visible during navigation so users can switch floors */}
-      {indoor.isIndoorActive && !isRoutePreviewOpen && !isDirectionsModeOpen && (
-        <FloorSelector
-          levels={indoor.levels}
-          activeLevel={indoor.activeLevel}
-          onSelectLevel={handleFloorSelect}
-          accentColor={brandRed}
-        />
-      )}
+      {indoor.isIndoorActive &&
+        !isRoutePreviewOpen &&
+        !isDirectionsModeOpen &&
+        !isMenuOpen &&
+        !isSearchFocused && (
+          <FloorSelector
+            levels={indoor.levels}
+            activeLevel={indoor.activeLevel}
+            onSelectLevel={handleFloorSelect}
+            accentColor={brandRed}
+          />
+        )}
 
       {/* Room info bubble — appears when a room is tapped or selected from search */}
-      {indoor.isIndoorActive && indoor.selectedRoom && (
+      {indoor.isIndoorActive && indoor.selectedRoom && !isMenuOpen && !isSearchFocused && (
         <RoomInfoBubble
           room={indoor.selectedRoom}
           buildingName={indoor.buildingMeta?.name}
@@ -1662,7 +1666,7 @@ export default function MapScreen() {
       )}
 
       {/* POI info bubble — appears when a POI polygon is tapped */}
-      {indoor.isIndoorActive && selectedPoi && (
+      {indoor.isIndoorActive && selectedPoi && !isMenuOpen && !isSearchFocused && (
         <PoiInfoBubble
           poiTitle={getPoiTitle(selectedPoi)}
           level={indoor.activeLevel}
