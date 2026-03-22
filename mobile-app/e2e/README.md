@@ -59,6 +59,17 @@ File: `e2e/indoor-room.e2e.js`
 
 1. Launch app
 2. Tap **Get Started** to open the map
-3. Search for room **H-843** and select it
-4. Verify indoor view is active and room info is shown
-5. Tap **Navigate here** and verify navigation UI opens
+3. Search for room **H-822** and select it
+4. Verify room info and the **Navigate here** button are visible
+
+## Test steps (ES-4 / US-4.2)
+
+File: `e2e/indoor-path.e2e.js`
+
+1. Launch app
+2. Tap **Get Started** to open the map
+3. Set location in **H-811** (current location)
+4. Search for room **H-822** and select it
+5. Tap **Navigate here** to open indoor navigation
+6. Select **Floor 8** and confirm **H-811** if prompted
+7. Verify indoor route steps are shown

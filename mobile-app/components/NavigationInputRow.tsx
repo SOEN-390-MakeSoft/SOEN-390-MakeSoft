@@ -14,6 +14,8 @@ interface NavigationInputRowProps {
   clearIconColor: string;
   clearButtonBg: string;
   locked?: boolean;
+  testID?: string;
+  accessibilityLabel?: string;
 }
 
 export default function NavigationInputRow({
@@ -28,6 +30,8 @@ export default function NavigationInputRow({
   clearIconColor,
   clearButtonBg,
   locked = false,
+  testID,
+  accessibilityLabel,
 }: Readonly<NavigationInputRowProps>) {
   return (
     <View style={styles.routeRow}>
@@ -46,6 +50,8 @@ export default function NavigationInputRow({
           placeholderTextColor="#6b6b6b"
           style={[styles.routeInput, locked && styles.routeInputLocked]}
           editable={!locked}
+          testID={testID}
+          accessibilityLabel={accessibilityLabel}
         />
         {!!value && !locked && (
           <Pressable

@@ -185,6 +185,8 @@ export default function NavigationMenu({
             clearLabel="Clear start"
             clearIconColor={clearIconColor}
             clearButtonBg={routeCardColor}
+            testID="navigation-start-input"
+            accessibilityLabel="Navigation start input"
           />
           <View style={[styles.routeDivider, { backgroundColor: dividerColor }]} />
           <NavigationInputRow
@@ -199,6 +201,8 @@ export default function NavigationMenu({
             clearIconColor={clearIconColor}
             clearButtonBg={routeCardColor}
             locked={destinationLocked}
+            testID="navigation-destination-input"
+            accessibilityLabel="Navigation destination input"
           />
         </View>
 
@@ -229,6 +233,9 @@ export default function NavigationMenu({
                 <Pressable
                   key={`${entry.code}-${index}`}
                   style={[styles.resultItem, index < results.length - 1 && styles.resultDivider]}
+                  testID={`navigation-result-${index}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Navigation result ${label}`}
                   onPress={() => handleSelect(activeField, entry)}
                 >
                   <Text style={styles.resultTitle} numberOfLines={1}>

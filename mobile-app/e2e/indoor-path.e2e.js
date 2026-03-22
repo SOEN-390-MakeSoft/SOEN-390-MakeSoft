@@ -1,5 +1,5 @@
-describe('US-4.1 Indoor rooms', () => {
-  it('shows rooms and lets the user navigate to a room', async () => {
+describe('US-4.2 Indoor shortest path', () => {
+  it('builds an indoor route between two rooms', async () => {
     const e2eCalendarUrl = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
     const pause = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms));
     const step = (label) => {
@@ -58,7 +58,13 @@ describe('US-4.1 Indoor rooms', () => {
     doneMapReady();
     await pause();
 
-    const doneSearch = step('Search for room H-822 and select result');
+    const doneLocation = step('Set location in room H-811');
+    await device.setLocation(45.49704375081571, -73.57867847659573);
+    await pause(1200);
+    doneLocation();
+    await pause();
+
+    const doneSearch = step('Search for destination room H-822');
     await element(by.id('map-search-input')).tap();
     await pause();
     await element(by.id('map-search-input')).replaceText('H-822');
@@ -74,13 +80,36 @@ describe('US-4.1 Indoor rooms', () => {
     doneSearch();
     await pause();
 
-    const doneIndoorUi = step('Navigation to room available');
-    await waitFor(element(by.id('floor-selector')))
+    const doneNavigate = step('Open indoor navigation');
+    await waitFor(element(by.id('room-info-bubble')))
       .toBeVisible()
       .withTimeout(15000);
-    await expect(element(by.id('room-info-bubble'))).toBeVisible();
     await expect(element(by.text('Navigate here'))).toBeVisible();
-    doneIndoorUi();
+    await element(by.text('Navigate here')).tap();
+    await pause(1200);
+    doneNavigate();
+    await pause();
+
+    const doneFloor = step('Select floor 8 if prompted');
+    try {
+      await waitFor(element(by.id('floor-select-modal')))
+        .toBeVisible()
+        .withTimeout(4000);
+      await element(by.id('floor-select-8')).tap();
+      await pause(800);
+    } catch {}
+    doneFloor();
+    await pause();
+
+    const doneRoomDetected = step('Confirm start room H-811 if prompted');
+    try {
+      await waitFor(element(by.text('Yes')))
+        .toBeVisible()
+        .withTimeout(4000);
+      await element(by.text('Yes')).tap();
+      await pause(800);
+    } catch {}
+    doneRoomDetected();
     await pause(2000);
     await device.sendToHome();
   });

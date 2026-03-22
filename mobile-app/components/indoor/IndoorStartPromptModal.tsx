@@ -28,7 +28,7 @@ export default function IndoorStartPromptModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} testID="floor-select-modal">
         <View style={styles.container}>
           <Text style={styles.title}>You are in {buildingCode}</Text>
           <Text style={styles.subtitle}>Which floor are you currently on?</Text>
@@ -40,13 +40,15 @@ export default function IndoorStartPromptModal({
                 style={styles.levelButton}
                 onPress={() => onSelectLevel(level)}
                 android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
+                testID={`floor-select-${level}`}
+                accessibilityLabel={`Select floor ${getFloorLabel(level)}`}
               >
                 <Text style={styles.levelText}>Floor {getFloorLabel(level)}</Text>
               </Pressable>
             ))}
           </ScrollView>
 
-          <Pressable style={styles.cancelButton} onPress={onCancel}>
+          <Pressable style={styles.cancelButton} onPress={onCancel} testID="floor-select-cancel">
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
         </View>
