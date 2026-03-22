@@ -266,8 +266,19 @@ function parseFeature(f: GeoJSONFeature): IndoorFeature[] {
           type: 'elevator',
           position: toLatLng(geom.coordinates),
         } satisfies IndoorElevator);
+      } else if (geom.type === 'LineString') {
+        const path = ringToLatLngs(geom.coordinates);
+        features.push({
+          ...base,
+          id: nextId('elevator_line'),
+          type: 'escalator',
+          isElevator: true,
+          polygon: [],
+          path,
+          oneway: null,
+        } satisfies IndoorEscalator);
       }
-      // LineString elevator edges are handled as graph edges, not standalone features
+      // Polygon elevator bases could be handled here too if needed
       break;
     }
 

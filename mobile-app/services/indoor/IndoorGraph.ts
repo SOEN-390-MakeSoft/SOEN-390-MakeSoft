@@ -46,16 +46,18 @@ import type {
 const SNAP_DISTANCE_METERS = 3;
 
 /** Maximum distance to connect a room centroid to a corridor node. */
-const ROOM_CONNECT_MAX_METERS = 50;
-
+const ROOM_CONNECT_MAX_METERS = 200;
 /** Approximate penalty (meters) added to a level-change edge via stairs. */
-const STAIRS_PENALTY_METERS = 15;
+const STAIRS_PENALTY_METERS = 25;
 
-/** Approximate penalty (meters) added to a level-change edge via elevator. */
-const ELEVATOR_PENALTY_METERS = 10;
+/** Approximate base wait penalty (meters) for taking an elevator. */
+const ELEVATOR_BASE_PENALTY_METERS = 45;
+
+/** Approximate penalty (meters) per floor added to an elevator edge. */
+const ELEVATOR_FLOOR_PENALTY_METERS = 10;
 
 /** Approximate penalty (meters) added to a level-change edge via escalator. */
-const ESCALATOR_PENALTY_METERS = 12;
+const ESCALATOR_PENALTY_METERS = 20;
 
 /** Maximum distance (meters) to search for a door near a transition feature. */
 const DOOR_SEARCH_RADIUS_METERS = 15;
@@ -172,19 +174,27 @@ export class IndoorGraph {
     return result;
   }
 
-  /** Find the closest graph node to a point on a given level. */
+  /** Find the closest graph node to a point on a given level. Prefer non-transition (walkable corridor) nodes. */
   findClosestNode(position: LatLng, level: string): GraphNode | null {
-    let best: GraphNode | null = null;
-    let bestDist = Infinity;
+    let bestWalkable: GraphNode | null = null;
+    let bestWalkableDist = Infinity;
+    let bestAny: GraphNode | null = null;
+    let bestAnyDist = Infinity;
+
     for (const node of this.nodes.values()) {
       if (node.level !== level) continue;
+
       const d = haversine(position, node.position);
-      if (d < bestDist) {
-        bestDist = d;
-        best = node;
+      if (!node.isTransition && d < bestWalkableDist) {
+        bestWalkableDist = d;
+        bestWalkable = node;
+      }
+      if (d < bestAnyDist) {
+        bestAnyDist = d;
+        bestAny = node;
       }
     }
-    return best;
+    return bestWalkable ?? bestAny;
   }
 
   // -----------------------------------------------------------------------
@@ -344,7 +354,8 @@ export class IndoorGraph {
         this.addEdge({
           from: levelNodes[i],
           to: levelNodes[j],
-          weight: ELEVATOR_PENALTY_METERS * Math.max(levelDiff, 1),
+          weight:
+            ELEVATOR_BASE_PENALTY_METERS + ELEVATOR_FLOOR_PENALTY_METERS * Math.max(levelDiff, 1),
           isLevelChange: true,
           edgeType: 'elevator',
         });
@@ -395,7 +406,10 @@ export class IndoorGraph {
         );
       }
 
-      const weight = ESCALATOR_PENALTY_METERS * Math.abs(Number(toLevel) - Number(fromLevel));
+      const levelDiff = Math.abs(Number(toLevel) - Number(fromLevel));
+      const weight = escalator.isElevator
+        ? ELEVATOR_BASE_PENALTY_METERS + ELEVATOR_FLOOR_PENALTY_METERS * levelDiff
+        : ESCALATOR_PENALTY_METERS * levelDiff;
 
       if (escalator.oneway === 'up') {
         this.addDirectedEdge({
@@ -403,7 +417,7 @@ export class IndoorGraph {
           to: toNode,
           weight,
           isLevelChange: true,
-          edgeType: 'escalator',
+          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
         });
       } else if (escalator.oneway === 'down') {
         this.addDirectedEdge({
@@ -411,7 +425,7 @@ export class IndoorGraph {
           to: fromNode,
           weight,
           isLevelChange: true,
-          edgeType: 'escalator',
+          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
         });
       } else {
         this.addEdge({
@@ -419,7 +433,7 @@ export class IndoorGraph {
           to: toNode,
           weight,
           isLevelChange: true,
-          edgeType: 'escalator',
+          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
         });
       }
     }
@@ -564,24 +578,32 @@ export class IndoorGraph {
     }
   }
 
-  /** Find the closest node on a level, excluding specific node IDs. */
+  /** Find the closest node on a level, excluding specific node IDs. Prefer non-transition (walkable corridor) nodes. */
   private findClosestNodeExcluding(
     position: LatLng,
     level: string,
     excludeIds: Set<string>,
   ): GraphNode | null {
-    let best: GraphNode | null = null;
-    let bestDist = Infinity;
+    let bestWalkable: GraphNode | null = null;
+    let bestWalkableDist = Infinity;
+    let bestAny: GraphNode | null = null;
+    let bestAnyDist = Infinity;
+
     for (const node of this.nodes.values()) {
       if (node.level !== level) continue;
       if (excludeIds.has(node.id)) continue;
+
       const d = haversine(position, node.position);
-      if (d < bestDist) {
-        bestDist = d;
-        best = node;
+      if (!node.isTransition && d < bestWalkableDist) {
+        bestWalkableDist = d;
+        bestWalkable = node;
+      }
+      if (d < bestAnyDist) {
+        bestAnyDist = d;
+        bestAny = node;
       }
     }
-    return best;
+    return bestWalkable ?? bestAny;
   }
 
   /**
