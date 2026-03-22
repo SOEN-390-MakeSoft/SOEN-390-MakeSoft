@@ -4,6 +4,7 @@ import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
 import { findPath, loadBuildingGraph } from '../services/indoor';
+import { getBuildingMeta } from '../services/indoor';
 import {
   coordsEqual,
   distanceMeters,
@@ -338,21 +339,6 @@ type AllModeRoutes = {
   walking?: ModeRoute | null;
 };
 
-function selectActiveModeRoute(
-  selectedTransportMode: TransportMode,
-  driving: ModeRoute | null,
-  walking: ModeRoute | null,
-  shouldAutoSelectWalking: boolean,
-): ModeRoute | null {
-  if (shouldAutoSelectWalking) {
-    return walking;
-  }
-  if (selectedTransportMode === 'driving') {
-    return driving;
-  }
-  return walking;
-}
-
 type MapRegion = {
   latitude: number;
   longitude: number;
@@ -629,6 +615,7 @@ export function useNavigationBetweenBuildings({
   arriveBy = null,
 }: UseNavigationBetweenBuildingsParams) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isIndoorOnlyRoute, setIsIndoorOnlyRoute] = useState(false);
   const [navigationStart, setNavigationStart] = useState<string>('Your location');
   const [navigationDestination, setNavigationDestination] = useState<string>('');
   const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
@@ -821,12 +808,11 @@ export function useNavigationBetweenBuildings({
         // Show polyline + steps for the currently selected mode
         const shouldAutoSelectWalking =
           selectedTransportMode === 'driving' && walking?.viaText === TUNNEL_ROUTE_VIA_TEXT;
-        const active = selectActiveModeRoute(
-          selectedTransportMode,
-          driving,
-          walking,
-          shouldAutoSelectWalking,
-        );
+        const active = shouldAutoSelectWalking
+          ? walking
+          : selectedTransportMode === 'driving'
+            ? driving
+            : walking;
         if (active?.polyline && active.polyline.length > 0) {
           setRoutePolyline(active.polyline);
           setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
@@ -1063,10 +1049,14 @@ export function useNavigationBetweenBuildings({
       const destinationName = remoteBuilding?.name ?? selectedBuilding?.name ?? 'Destination';
       const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code ?? null;
       setIsDestinationLocked(false);
+      setIsIndoorOnlyRoute(false);
+      setNavigationStart('Your location');
+      setNavigationOrigin(null);
       setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
       setActiveMode('driving');
       if (selectedBuilding) {
-        const destCentroid = polygonCentroid(selectedBuilding.polygon);
+        const meta = selectedBuilding.code ? getBuildingMeta(selectedBuilding.code) : null;
+        const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(selectedBuilding.polygon);
         setNavigationDestinationCoord(destCentroid);
         setTapMarkerCoordinate(destCentroid);
       }
@@ -1082,7 +1072,8 @@ export function useNavigationBetweenBuildings({
         destinationBuilding.name,
         destinationBuilding.code,
       );
-      const destCentroid = polygonCentroid(destinationBuilding.polygon);
+      const meta = destinationBuilding.code ? getBuildingMeta(destinationBuilding.code) : null;
+      const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(destinationBuilding.polygon);
       setNavigationStart('Your location');
       setNavigationOrigin(null);
       setNavigationDestination(destinationLabel);
@@ -1095,6 +1086,22 @@ export function useNavigationBetweenBuildings({
       setIsNavigationOpen(true);
     },
     [formatBuildingLabel, resetRouteState],
+  );
+
+  const openIndoorOnlyNavigation = useCallback(
+    (destinationLabel: string, startLabel?: string) => {
+      setIsIndoorOnlyRoute(true);
+      setNavigationDestination(destinationLabel);
+      setNavigationStart(startLabel ?? 'Building entrance');
+      setNavigationOrigin(null);
+      setNavigationDestinationCoord(null);
+      setNavigationActiveFieldState(null);
+      setIsDestinationLocked(false);
+      setTapMarkerCoordinate(null);
+      resetRouteState();
+      setIsNavigationOpen(true);
+    },
+    [resetRouteState],
   );
 
   const handleMapBuildingPress = useCallback(
@@ -1185,13 +1192,15 @@ export function useNavigationBetweenBuildings({
         if (name === 'Your location') {
           setNavigationOrigin(null);
         } else if (building) {
-          setNavigationOrigin(polygonCentroid(building.polygon));
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          setNavigationOrigin(meta?.entrances?.[0] ?? polygonCentroid(building.polygon));
         }
       } else {
         setIsDestinationLocked(false);
         setNavigationDestination(label);
         if (building) {
-          const destCentroid = polygonCentroid(building.polygon);
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(building.polygon);
           setNavigationDestinationCoord(destCentroid);
           setTapMarkerCoordinate(destCentroid);
         }
@@ -1222,6 +1231,11 @@ export function useNavigationBetweenBuildings({
 
   const closeNavigation = useCallback(() => {
     setIsNavigationOpen(false);
+    setIsIndoorOnlyRoute(false);
+    setNavigationStart('Your location');
+    setNavigationOrigin(null);
+    setNavigationDestination('');
+    setNavigationDestinationCoord(null);
     setNavigationActiveFieldState(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);
@@ -1260,6 +1274,8 @@ export function useNavigationBetweenBuildings({
     setActiveMode,
     openNavigationForBuilding,
     openNavigationForResolvedDestination,
+    openIndoorOnlyNavigation,
+    isIndoorOnlyRoute,
     handleMapBuildingPress,
     handleMapCoordinatePress,
     handleSearchSelect,
