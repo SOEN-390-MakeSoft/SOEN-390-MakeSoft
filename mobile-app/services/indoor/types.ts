@@ -49,6 +49,7 @@ export interface IndoorFeatureBase {
 export interface IndoorRoom extends IndoorFeatureBase {
   type: 'room';
   polygon: LatLng[];
+  holes?: LatLng[][];
   centroid: LatLng;
 }
 

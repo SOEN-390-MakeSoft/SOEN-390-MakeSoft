@@ -27,6 +27,7 @@ import ClassesCalendarRequired from './ClassesCalendarRequired';
 import IndoorMapOverlay from './indoor/IndoorMapOverlay';
 import FloorSelector from './indoor/FloorSelector';
 import RoomInfoBubble from './indoor/RoomInfoBubble';
+import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
 import {
   findBuildingAtCoordinate,
@@ -267,6 +268,20 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
+
+function getConflictLabel(c: LocationConflict): string {
+  switch (c.type) {
+    case 'unresolvable_location':
+      return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
+    case 'building_not_in_polygons':
+      return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
+    case 'campus_inferred':
+      return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
+    case 'campus_mismatch':
+      return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
+  }
+}
+
 const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
 const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 // When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
@@ -459,6 +474,37 @@ export default function MapScreen() {
     return [...roomSearchResults, ...searchResults];
   }, [roomSearchResults, searchResults]);
 
+  const handleSelectRoomResult = useCallback(
+    (result: RoomSearchResult) => {
+      const room = result._room;
+      const buildingCode = (result as any)._buildingCode as string | undefined;
+
+      // Auto-activate indoor mode if not already on the right building
+      if (buildingCode && (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)) {
+        indoor.activateBuilding(buildingCode);
+        lastIndoorAutoRef.current = buildingCode;
+      }
+
+      indoor.selectRoom(room);
+      indoor.setActiveLevel(room.level);
+      setSearchQuery(room.ref);
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+
+      // Zoom to the room position
+      mapRef.current?.animateToRegion(
+        {
+          latitude: room.position.latitude,
+          longitude: room.position.longitude,
+          latitudeDelta: 0.001,
+          longitudeDelta: 0.001,
+        },
+        500,
+      );
+    },
+    [indoor, setSearchQuery, setIsSearchFocused],
+  );
+
   /** Handle selecting an autocomplete result — room or building. */
   const handleSelectMergedResult = useCallback(
     (result: {
@@ -470,34 +516,7 @@ export default function MapScreen() {
     }) => {
       // If it's a room result, select the room and show the bubble
       if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
-        const room = (result as RoomSearchResult)._room;
-        const buildingCode = (result as any)._buildingCode as string | undefined;
-
-        // Auto-activate indoor mode if not already on the right building
-        if (
-          buildingCode &&
-          (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)
-        ) {
-          indoor.activateBuilding(buildingCode);
-          lastIndoorAutoRef.current = buildingCode;
-        }
-
-        indoor.selectRoom(room);
-        indoor.setActiveLevel(room.level);
-        setSearchQuery(room.ref);
-        setIsSearchFocused(false);
-        searchInputRef.current?.blur();
-
-        // Zoom to the room position
-        mapRef.current?.animateToRegion(
-          {
-            latitude: room.position.latitude,
-            longitude: room.position.longitude,
-            latitudeDelta: 0.001,
-            longitudeDelta: 0.001,
-          },
-          500,
-        );
+        handleSelectRoomResult(result as RoomSearchResult);
         return;
       }
       // Otherwise delegate to the normal building search handler
@@ -696,20 +715,8 @@ export default function MapScreen() {
 
     // Log conflict / warning
     if (conflict) {
-      const conflictLabel = (c: LocationConflict): string => {
-        switch (c.type) {
-          case 'unresolvable_location':
-            return `[WARN] unresolvable_location — algorithm could not match "${c.rawLocation}". The place may exist but the string format is unrecognised.`;
-          case 'building_not_in_polygons':
-            return `[WARN] building_not_in_polygons — resolveBuilding matched id="${c.resolvedId}" but it was absent from the runtime polygon arrays. Possible data shape mismatch.`;
-          case 'campus_inferred':
-            return `[INFO] campus_inferred — no campus in location string; inferred campus="${c.inferredCampus}" from polygon dataset (building id="${c.buildingId}").`;
-          case 'campus_mismatch':
-            return `[WARN] campus_mismatch — string said campus="${c.parsedCampus}" but polygon data says campus="${c.actualCampus}" for building id="${c.buildingId}". Trusting polygon data.`;
-        }
-      };
       console.warn(
-        `[handleDirectionsToNextClass] Location conflict detected:\n  ${conflictLabel(conflict)}`,
+        `[handleDirectionsToNextClass] Location conflict detected:\n  ${getConflictLabel(conflict)}`,
       );
     }
 
@@ -1574,12 +1581,13 @@ export default function MapScreen() {
             routeColor={routeColor}
             visiblePoiAmenities={visiblePoiAmenities}
             categoryFilter={indoorCategoryFilter}
+            isColorBlind={isColorBlind}
           />
         )}
       </MapView>
 
       {/* Category filter chips */}
-      {indoor.isIndoorActive && !isNavigationOpen && (
+      {indoor.isIndoorActive && !isNavigationOpen && !isMenuOpen && !isSearchFocused && (
         <View style={styles.indoorCategoryChips} pointerEvents="auto">
           <Pressable
             testID="indoor-chip-washrooms"
@@ -1638,17 +1646,21 @@ export default function MapScreen() {
       )}
 
       {/* Indoor floor selector pill — visible during navigation so users can switch floors */}
-      {indoor.isIndoorActive && !isRoutePreviewOpen && !isDirectionsModeOpen && (
-        <FloorSelector
-          levels={indoor.levels}
-          activeLevel={indoor.activeLevel}
-          onSelectLevel={handleFloorSelect}
-          accentColor={brandRed}
-        />
-      )}
+      {indoor.isIndoorActive &&
+        !isRoutePreviewOpen &&
+        !isDirectionsModeOpen &&
+        !isMenuOpen &&
+        !isSearchFocused && (
+          <FloorSelector
+            levels={indoor.levels}
+            activeLevel={indoor.activeLevel}
+            onSelectLevel={handleFloorSelect}
+            accentColor={brandRed}
+          />
+        )}
 
       {/* Room info bubble — appears when a room is tapped or selected from search */}
-      {indoor.isIndoorActive && indoor.selectedRoom && (
+      {indoor.isIndoorActive && indoor.selectedRoom && !isMenuOpen && !isSearchFocused && (
         <RoomInfoBubble
           room={indoor.selectedRoom}
           buildingName={indoor.buildingMeta?.name}
@@ -1661,25 +1673,15 @@ export default function MapScreen() {
       )}
 
       {/* POI info bubble — appears when a POI polygon is tapped */}
-      {indoor.isIndoorActive && selectedPoi && (
-        <View
-          style={[
-            styles.poiInfoBubble,
-            { bottom: isQuickPickOpen ? 320 : 160, backgroundColor: 'white' },
-          ]}
-        >
-          <View style={styles.poiInfoContent}>
-            <Text style={[styles.poiInfoTitle, { color: brandRed }]} numberOfLines={1}>
-              {getPoiTitle(selectedPoi)}
-            </Text>
-            {selectedPoi.level && (
-              <Text style={styles.poiInfoLevel}>Level {selectedPoi.level}</Text>
-            )}
-          </View>
-          <TouchableOpacity onPress={() => setSelectedPoi(null)} style={styles.poiInfoCloseButton}>
-            <Text style={styles.poiInfoCloseButtonText}>✕</Text>
-          </TouchableOpacity>
-        </View>
+      {indoor.isIndoorActive && selectedPoi && !isMenuOpen && !isSearchFocused && (
+        <PoiInfoBubble
+          poiTitle={getPoiTitle(selectedPoi)}
+          level={indoor.activeLevel}
+          buildingName={indoor.buildingMeta?.name}
+          onClose={() => setSelectedPoi(null)}
+          accentColor={brandRed}
+          bottomOffset={isQuickPickOpen ? 320 : 160}
+        />
       )}
 
       {/* Top Controls: Search, Menu, Brand Badge */}

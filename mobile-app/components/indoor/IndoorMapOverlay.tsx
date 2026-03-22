@@ -20,6 +20,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, View, Image } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { Marker, Polygon, Polyline } from 'react-native-maps';
+import { pointInPolygon } from '../../utils/mapUtils';
 import type {
   IndoorFeature,
   IndoorRoom,
@@ -37,21 +38,21 @@ import type { ResolvedRoom } from '../../services/indoor/roomResolver';
 // Colour palette for indoor features
 // ---------------------------------------------------------------------------
 
-const COLORS = {
+const getColors = (isColorBlind: boolean) => ({
   outlineFill: 'rgba(230, 230, 230, 0.65)',
   outlineStroke: 'rgba(180, 180, 180, 0.8)',
-  areaFill: 'rgba(215, 225, 235, 0.5)',
-  roomFill: 'rgba(200, 210, 225, 0.6)',
-  roomStroke: 'rgba(120, 140, 170, 0.8)',
-  roomSelectedFill: 'rgba(26, 115, 232, 0.35)',
-  roomSelectedStroke: 'rgba(26, 115, 232, 0.9)',
+  areaFill: isColorBlind ? 'rgba(235, 225, 215, 0.5)' : 'rgba(215, 225, 235, 0.5)',
+  roomFill: isColorBlind ? 'rgba(235, 210, 200, 0.6)' : 'rgba(200, 210, 225, 0.6)',
+  roomStroke: isColorBlind ? 'rgba(170, 140, 120, 0.8)' : 'rgba(120, 140, 170, 0.8)',
+  roomSelectedFill: isColorBlind ? 'rgba(178, 27, 44, 0.35)' : 'rgba(26, 115, 232, 0.35)', // Use Red for selection in colorblind mode to contrast with blue route
+  roomSelectedStroke: isColorBlind ? 'rgba(178, 27, 44, 0.9)' : 'rgba(26, 115, 232, 0.9)',
   stairs: 'rgba(180, 120, 40, 0.75)',
   escalator: 'rgba(140, 100, 180, 0.75)',
-  bathroomFill: 'rgba(100, 150, 255, 0.15)',
-  bathroomStroke: 'rgba(100, 150, 255, 0.6)',
-  waterFountainFill: 'rgba(100, 200, 255, 0.15)',
-  waterFountainStroke: 'rgba(100, 200, 255, 0.6)',
-};
+  bathroomFill: isColorBlind ? 'rgba(255, 150, 100, 0.15)' : 'rgba(100, 150, 255, 0.15)',
+  bathroomStroke: isColorBlind ? 'rgba(255, 150, 100, 0.6)' : 'rgba(100, 150, 255, 0.6)',
+  waterFountainFill: isColorBlind ? 'rgba(255, 200, 100, 0.15)' : 'rgba(100, 200, 255, 0.15)',
+  waterFountainStroke: isColorBlind ? 'rgba(255, 200, 100, 0.6)' : 'rgba(100, 200, 255, 0.6)',
+});
 
 // ---------------------------------------------------------------------------
 // Helper to map POI image paths to require() calls
@@ -86,7 +87,7 @@ function getBathroomImagePath(
   // Only female
   if (female && !male) return 'assets/images/women_bathroom.png';
 
-  return undefined;
+  return 'assets/images/unisex_bathroom.png';
 }
 
 // Helper to determine the correct image path based on amenity type
@@ -104,32 +105,52 @@ function getImagePathForAmenity(
   return undefined;
 }
 
-// Helper to get POI stroke color based on amenity type
-function getPoiStrokeColor(amenity: string): string {
+// Helper to get POI fill color based on amenity type
+function getPoiFillColor(
+  amenity: string,
+  isHighlighted: boolean = true,
+  isColorBlind: boolean = false,
+): string {
+  const alpha = isHighlighted ? '0.15' : '0.05';
+  const c = isColorBlind ? '255, 150, 100' : '100, 150, 255';
+  const cw = isColorBlind ? '255, 200, 100' : '100, 200, 255';
+
   switch (amenity) {
     case 'toilets':
-      return COLORS.bathroomStroke;
+      return `rgba(${c}, ${alpha})`;
     case 'drinking_water':
-      return COLORS.waterFountainStroke;
+      return `rgba(${cw}, ${alpha})`;
     default:
-      return 'rgba(100, 150, 255, 0.6)';
+      return `rgba(${c}, ${alpha})`;
   }
 }
 
-// Helper to get POI fill color based on amenity type
-function getPoiFillColor(amenity: string): string {
+// Helper to get POI stroke color based on amenity type
+function getPoiStrokeColor(
+  amenity: string,
+  isHighlighted: boolean = true,
+  isColorBlind: boolean = false,
+): string {
+  const alpha = isHighlighted ? '0.6' : '0.2';
+  const c = isColorBlind ? '255, 150, 100' : '100, 150, 255';
+  const cw = isColorBlind ? '255, 200, 100' : '100, 200, 255';
+
   switch (amenity) {
     case 'toilets':
-      return COLORS.bathroomFill;
+      return `rgba(${c}, ${alpha})`;
     case 'drinking_water':
-      return COLORS.waterFountainFill;
+      return `rgba(${cw}, ${alpha})`;
     default:
-      return 'rgba(100, 150, 255, 0.15)';
+      return `rgba(${c}, ${alpha})`;
   }
 }
 
 // Helper to render point-based POI
-function renderPointPoi(poi: IndoorPOI): React.ReactNode {
+function renderPointPoi(
+  poi: IndoorPOI,
+  isHighlighted: boolean,
+  isColorBlind: boolean = false,
+): React.ReactNode {
   if (!poi.position) return null;
 
   const imagePath = getImagePathForAmenity(poi.amenity, poi.male, poi.female);
@@ -138,18 +159,23 @@ function renderPointPoi(poi: IndoorPOI): React.ReactNode {
   if (!imageSource) return null;
 
   return (
-    <PoiMarker key={poi.id} coordinate={poi.position} zIndex={15}>
+    <PoiMarker key={poi.id} coordinate={poi.position} zIndex={15} opacity={isHighlighted ? 1 : 0.3}>
       <Image source={imageSource} style={labelStyles.poiIconImage} />
     </PoiMarker>
   );
 }
 
 // Helper to render polygon-based POI
-function renderPolygonPoi(poi: IndoorPOI, onPoiPress?: (poi: IndoorPOI) => void): React.ReactNode {
+function renderPolygonPoi(
+  poi: IndoorPOI,
+  isHighlighted: boolean,
+  isColorBlind: boolean = false,
+  onPoiPress?: (poi: IndoorPOI) => void,
+): React.ReactNode {
   if (!poi.polygon || poi.polygon.length <= 2 || !poi.centroid) return null;
 
-  const poiColor = getPoiStrokeColor(poi.amenity);
-  const poiFillColor = getPoiFillColor(poi.amenity);
+  const poiColor = getPoiStrokeColor(poi.amenity, isHighlighted, isColorBlind);
+  const poiFillColor = getPoiFillColor(poi.amenity, isHighlighted, isColorBlind);
   const imagePath = getImagePathForAmenity(poi.amenity, poi.male, poi.female);
   const imageSource = getPoiImageSource(imagePath);
 
@@ -165,7 +191,7 @@ function renderPolygonPoi(poi: IndoorPOI, onPoiPress?: (poi: IndoorPOI) => void)
         onPress={onPoiPress ? () => onPoiPress(poi) : undefined}
       />
       {imageSource && (
-        <PoiMarker coordinate={poi.centroid} zIndex={12}>
+        <PoiMarker coordinate={poi.centroid} zIndex={12} opacity={isHighlighted ? 1 : 0.3}>
           <Image source={imageSource} style={labelStyles.poiIconImage} />
         </PoiMarker>
       )}
@@ -174,14 +200,19 @@ function renderPolygonPoi(poi: IndoorPOI, onPoiPress?: (poi: IndoorPOI) => void)
 }
 
 // Helper to render POI feature (delegates to point or polygon rendering)
-function renderPoiFeature(poi: IndoorPOI, onPoiPress?: (poi: IndoorPOI) => void): React.ReactNode {
+function renderPoiFeature(
+  poi: IndoorPOI,
+  isHighlighted: boolean,
+  isColorBlind: boolean = false,
+  onPoiPress?: (poi: IndoorPOI) => void,
+): React.ReactNode {
   // Point-based POIs (water fountains, etc.)
   if (poi.position && !poi.polygon) {
-    return renderPointPoi(poi);
+    return renderPointPoi(poi, isHighlighted, isColorBlind);
   }
   // Polygon-based POIs (bathrooms, etc.)
   if (poi.polygon && poi.polygon.length > 2) {
-    return renderPolygonPoi(poi, onPoiPress);
+    return renderPolygonPoi(poi, isHighlighted, isColorBlind, onPoiPress);
   }
   return null;
 }
@@ -200,12 +231,12 @@ function RoomLabelMarker({
   shortLabel: string;
   onPress?: () => void;
 }>) {
-  const [tracked, setTracked] = useState(Platform.OS === 'android');
+  const [tracked, setTracked] = useState(true);
 
   const handleLayout = useCallback(
     (_e: LayoutChangeEvent) => {
-      if (Platform.OS === 'android' && tracked) {
-        setTimeout(() => setTracked(false), 100);
+      if (tracked) {
+        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
       }
     },
     [tracked],
@@ -233,18 +264,20 @@ function IconMarker({
   children,
   zIndex = 10,
   onPress,
+  opacity,
 }: Readonly<{
   coordinate: { latitude: number; longitude: number };
   children: React.ReactNode;
   zIndex?: number;
   onPress?: () => void;
+  opacity?: number;
 }>) {
-  const [tracked, setTracked] = useState(Platform.OS === 'android');
+  const [tracked, setTracked] = useState(true);
 
   const handleLayout = useCallback(
     (_e: LayoutChangeEvent) => {
-      if (Platform.OS === 'android' && tracked) {
-        setTimeout(() => setTracked(false), 100);
+      if (tracked) {
+        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
       }
     },
     [tracked],
@@ -257,6 +290,7 @@ function IconMarker({
       tracksViewChanges={tracked}
       zIndex={zIndex}
       onPress={onPress}
+      opacity={opacity}
     >
       <View collapsable={false} onLayout={handleLayout} style={labelStyles.iconContainer}>
         {children}
@@ -270,17 +304,19 @@ function PoiMarker({
   coordinate,
   children,
   zIndex = 10,
+  opacity,
 }: Readonly<{
   coordinate: { latitude: number; longitude: number };
   children: React.ReactNode;
   zIndex?: number;
+  opacity?: number;
 }>) {
-  const [tracked, setTracked] = useState(Platform.OS === 'android');
+  const [tracked, setTracked] = useState(true);
 
   const handleLayout = useCallback(
     (_e: LayoutChangeEvent) => {
-      if (Platform.OS === 'android' && tracked) {
-        setTimeout(() => setTracked(false), 100);
+      if (tracked) {
+        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
       }
     },
     [tracked],
@@ -292,6 +328,7 @@ function PoiMarker({
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracked}
       zIndex={zIndex}
+      opacity={opacity}
     >
       <View collapsable={false} onLayout={handleLayout} style={labelStyles.poiMarkerContainer}>
         {children}
@@ -329,6 +366,8 @@ interface IndoorMapOverlayProps {
   visiblePoiAmenities?: string[];
   /** Currently selected category filter ('washrooms', 'elevators', 'water_fountains', or null). */
   categoryFilter?: string | null;
+  /** Is color blind mode active? Used to adjust indoor feature colors. */
+  isColorBlind?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +385,7 @@ export default function IndoorMapOverlay({
   routeColor = '#1a73e8',
   visiblePoiAmenities,
   categoryFilter,
+  isColorBlind = false,
 }: Readonly<IndoorMapOverlayProps>) {
   // ---- Categorise features --------------------------------------------------
   const { outlines, areas, rooms, stairs, escalators, elevators, pois } = useMemo(() => {
@@ -396,12 +436,6 @@ export default function IndoorMapOverlay({
     };
   }, [activeLevelFeatures]);
 
-  // ---- Filter POIs by visible amenities -----
-  const filteredPois = useMemo(() => {
-    if (!visiblePoiAmenities) return pois; // Show all if not specified
-    return pois.filter((poi) => visiblePoiAmenities.includes(poi.amenity));
-  }, [pois, visiblePoiAmenities]);
-
   // ---- Route polyline filtered to this level --------------------------------
   const routeSegmentsOnLevel = useMemo(() => {
     if (!route) return [];
@@ -416,6 +450,45 @@ export default function IndoorMapOverlay({
       .flatMap((s) => s.path);
   }, [route, activeLevel]);
 
+  // Calculate floor centroid to filter out duplicated off-screen multi-level features (e.g. elevators)
+  // when handling side-by-side / misaligned map imports.
+  const levelCentroid = useMemo(() => {
+    let lat = 0,
+      lng = 0,
+      count = 0;
+    for (const r of rooms) {
+      // Ignore extreme outliers (e.g. a duplicated room 500m away) to ensure true central weight
+      lat += r.centroid.latitude;
+      lng += r.centroid.longitude;
+      count++;
+    }
+    return count > 0 ? { latitude: lat / count, longitude: lng / count } : null;
+  }, [rooms]);
+
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((room) => {
+      if (!room.ref || !levelCentroid) return true;
+      // If this room has multiple identical copies in the `rooms` list (meaning it was parsed multiple times due to `level: x;y`),
+      // we only keep the one closest to the current floor's visual centroid.
+      if (/elevator/i.test(room.ref)) {
+        const siblings = rooms.filter((r) => r.ref === room.ref);
+        if (siblings.length > 1) {
+          const bestSibling = siblings.reduce((best, curr) => {
+            const dBest =
+              Math.pow(best.centroid.latitude - levelCentroid.latitude, 2) +
+              Math.pow(best.centroid.longitude - levelCentroid.longitude, 2);
+            const dCurr =
+              Math.pow(curr.centroid.latitude - levelCentroid.latitude, 2) +
+              Math.pow(curr.centroid.longitude - levelCentroid.longitude, 2);
+            return dCurr < dBest ? curr : best;
+          }, siblings[0]);
+          return room.id === bestSibling.id;
+        }
+      }
+      return true;
+    });
+  }, [rooms, levelCentroid]);
+
   // Nothing to draw?
   if (activeLevelFeatures.length === 0) return null;
 
@@ -424,6 +497,7 @@ export default function IndoorMapOverlay({
   // works around a react-native-maps bug where only a subset of Polygons
   // renders on the initial draw.
   const batchKey = `indoor-${activeLevel}-${activeLevelFeatures.length}`;
+  const colors = getColors(isColorBlind);
 
   return (
     <React.Fragment key={batchKey}>
@@ -433,8 +507,8 @@ export default function IndoorMapOverlay({
           <Polygon
             key={f.id}
             coordinates={f.polygon}
-            fillColor={COLORS.outlineFill}
-            strokeColor={COLORS.outlineStroke}
+            fillColor={colors.outlineFill}
+            strokeColor={colors.outlineStroke}
             strokeWidth={1}
             zIndex={1}
             tappable={false}
@@ -448,8 +522,8 @@ export default function IndoorMapOverlay({
           <Polygon
             key={f.id}
             coordinates={f.polygon}
-            fillColor={COLORS.areaFill}
-            strokeColor={COLORS.outlineStroke}
+            fillColor={colors.areaFill}
+            strokeColor={colors.outlineStroke}
             strokeWidth={0.5}
             zIndex={2}
             tappable={false}
@@ -458,66 +532,76 @@ export default function IndoorMapOverlay({
       )}
 
       {/* 3. Rooms — tappable when onRoomPress is provided */}
-      {rooms.map((room) => {
-        if (room.polygon.length < 3) return null;
-        const isSelected = selectedRoom?.featureId === room.id;
-        return (
-          <Polygon
-            key={room.id}
-            coordinates={room.polygon}
-            fillColor={isSelected ? COLORS.roomSelectedFill : COLORS.roomFill}
-            strokeColor={isSelected ? COLORS.roomSelectedStroke : COLORS.roomStroke}
-            strokeWidth={isSelected ? 2 : 1}
-            zIndex={3}
-            tappable={!!onRoomPress && !!room.ref}
-            onPress={
-              onRoomPress && room.ref
-                ? () =>
-                    onRoomPress({
-                      featureId: room.id,
-                      ref: room.ref!,
-                      level: room.levels[0] ?? '0',
-                      position: room.centroid,
-                      polygon: room.polygon,
-                    })
-                : undefined
-            }
-          />
-        );
-      })}
+      {(() => {
+        return filteredRooms.map((room) => {
+          if (room.polygon.length < 3) return null;
+          const isSelected = selectedRoom?.featureId === room.id;
+          return (
+            <Polygon
+              key={room.id}
+              coordinates={room.polygon}
+              holes={room.holes}
+              fillColor={isSelected ? colors.roomSelectedFill : colors.roomFill}
+              strokeColor={isSelected ? colors.roomSelectedStroke : colors.roomStroke}
+              strokeWidth={isSelected ? 2 : 1}
+              zIndex={3}
+              tappable={!!onRoomPress && !!room.ref}
+              onPress={
+                onRoomPress && room.ref
+                  ? () =>
+                      onRoomPress({
+                        featureId: room.id,
+                        ref: room.ref!,
+                        level: activeLevel,
+                        position: room.centroid,
+                        polygon: room.polygon,
+                      })
+                  : undefined
+              }
+            />
+          );
+        });
+      })()}
 
       {/* 3b. Room number labels — placed at each room's centroid */}
-      {rooms.map((room) => {
-        if (!room.ref || room.polygon.length < 3) return null;
-        // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
-        let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
-        // Abbreviate facility names so they fit Android's marker bitmap limit
-        if (/^elevator/i.test(shortLabel)) return null;
-        else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
-        else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
-        else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
-        else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
-        else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
-        return (
-          <RoomLabelMarker
-            key={`label-${room.id}`}
-            room={room}
-            shortLabel={shortLabel}
-            onPress={
-              onRoomPress && room.ref
-                ? () =>
-                    onRoomPress({
-                      featureId: room.id,
-                      ref: room.ref!,
-                      level: room.levels[0] ?? '0',
-                      position: room.centroid,
-                      polygon: room.polygon,
-                    })
-                : undefined
-            }
-          />
-        );
-      })}
+      {(() => {
+        const renderedRefs = new Set<string>();
+        return rooms.map((room) => {
+          if (!room.ref || room.polygon.length < 3) return null;
+          // Prevent duplicate labels if a room has multiple polygons with the same ref
+          if (renderedRefs.has(room.ref)) return null;
+          renderedRefs.add(room.ref);
+
+          // Strip building-code prefix for a shorter label (e.g. "H-840" → "840")
+          let shortLabel = room.ref.replace(/^[A-Z]{1,3}-/i, '');
+          // Abbreviate facility names so they fit Android's marker bitmap limit
+          if (/^elevator/i.test(shortLabel)) return null;
+          else if (/^bath-W/i.test(shortLabel)) shortLabel = 'WC ♀';
+          else if (/^bath-M/i.test(shortLabel)) shortLabel = 'WC ♂';
+          else if (/^bath/i.test(shortLabel)) shortLabel = 'WC';
+          else if (/^stair/i.test(shortLabel)) shortLabel = 'Stairs';
+          else if (/^escalator/i.test(shortLabel)) shortLabel = 'Esc.';
+          return (
+            <RoomLabelMarker
+              key={`label-${room.ref}`}
+              room={room}
+              shortLabel={shortLabel}
+              onPress={
+                onRoomPress && room.ref
+                  ? () =>
+                      onRoomPress({
+                        featureId: room.id,
+                        ref: room.ref!,
+                        level: activeLevel,
+                        position: room.centroid,
+                        polygon: room.polygon,
+                      })
+                  : undefined
+              }
+            />
+          );
+        });
+      })()}
 
       {/* 4. Corridors — intentionally not rendered; rooms + outlines give
            sufficient context and the walkway lines add visual clutter. */}
@@ -529,7 +613,7 @@ export default function IndoorMapOverlay({
             <Polygon
               coordinates={s.polygon}
               fillColor="rgba(180, 120, 40, 0.2)"
-              strokeColor={COLORS.stairs}
+              strokeColor={colors.stairs}
               strokeWidth={1.5}
               zIndex={5}
               tappable={false}
@@ -561,64 +645,124 @@ export default function IndoorMapOverlay({
       )}
 
       {/* 6. Escalators — area polygons + label */}
-      {(categoryFilter === 'elevators' || categoryFilter === null) &&
-        escalators.map((e) =>
-          e.polygon.length > 2 ? (
-            <React.Fragment key={e.id}>
-              <Polygon
-                coordinates={e.polygon}
-                fillColor="rgba(140, 100, 180, 0.2)"
-                strokeColor={COLORS.escalator}
-                strokeWidth={1.5}
-                zIndex={5}
-                tappable={false}
-              />
-              <IconMarker
-                coordinate={(() => {
-                  const sum = e.polygon.reduce(
-                    (a, p) => ({
-                      latitude: a.latitude + p.latitude,
-                      longitude: a.longitude + p.longitude,
-                    }),
-                    { latitude: 0, longitude: 0 },
-                  );
-                  return {
-                    latitude: sum.latitude / e.polygon.length,
-                    longitude: sum.longitude / e.polygon.length,
-                  };
-                })()}
-                zIndex={10}
-                onPress={onPoiPress ? () => onPoiPress({ ...e, type: 'escalator' }) : undefined}
-              >
-                {/* Ramp/escalator icon — plain symbol, no background */}
-                <Image
-                  source={require('../../assets/images/escalator.png')}
-                  style={labelStyles.iconImage}
-                />
-              </IconMarker>
-            </React.Fragment>
-          ) : null,
-        )}
-
-      {/* 6b. Elevators — accessibility point markers with elevator icon */}
-      {(categoryFilter === 'elevators' || categoryFilter === null) &&
-        elevators.map((ev) => (
-          <IconMarker
-            key={ev.id}
-            coordinate={ev.position}
-            zIndex={15}
-            onPress={onPoiPress ? () => onPoiPress({ ...ev, type: 'elevator' }) : undefined}
-          >
-            {/* Elevator icon — plain symbol, no background */}
-            <Image
-              source={require('../../assets/images/elevator.png')}
-              style={labelStyles.iconImage}
+      {escalators.map((e) => {
+        const isHighlighted = categoryFilter === 'elevators' || categoryFilter === null;
+        return e.polygon.length > 2 ? (
+          <React.Fragment key={e.id}>
+            <Polygon
+              coordinates={e.polygon}
+              fillColor={isHighlighted ? 'rgba(140, 100, 180, 0.2)' : 'rgba(140, 100, 180, 0.05)'}
+              strokeColor={isHighlighted ? colors.escalator : 'rgba(140, 100, 180, 0.2)'}
+              strokeWidth={1.5}
+              zIndex={5}
+              tappable={false}
             />
-          </IconMarker>
-        ))}
+            <IconMarker
+              coordinate={(() => {
+                const sum = e.polygon.reduce(
+                  (a, p) => ({
+                    latitude: a.latitude + p.latitude,
+                    longitude: a.longitude + p.longitude,
+                  }),
+                  { latitude: 0, longitude: 0 },
+                );
+                return {
+                  latitude: sum.latitude / e.polygon.length,
+                  longitude: sum.longitude / e.polygon.length,
+                };
+              })()}
+              zIndex={10}
+              onPress={onPoiPress ? () => onPoiPress({ ...e, type: 'escalator' }) : undefined}
+              opacity={isHighlighted ? 1 : 0.3}
+            >
+              {/* Ramp/escalator icon — plain symbol, no background */}
+              <Image
+                source={require('../../assets/images/escalator.png')}
+                style={labelStyles.iconImage}
+              />
+            </IconMarker>
+          </React.Fragment>
+        ) : null;
+      })}
+
+      {/* 6b. Elevators — one icon per unique shaft */}
+      {(() => {
+        // Group elevators by ref or physical proximity (for duplicate nodes added due to map misalignment)
+        const groupedElevators: IndoorElevator[][] = [];
+
+        for (const ev of elevators) {
+          let foundGroup = false;
+          for (const group of groupedElevators) {
+            const leader = group[0];
+            const sameRef = ev.ref && leader.ref && ev.ref === leader.ref;
+            const sameLevels = ev.levels.join(',') === leader.levels.join(',');
+            // Distance in degrees (approx 15-20 meters threshold)
+            const dSq =
+              Math.pow(ev.position.latitude - leader.position.latitude, 2) +
+              Math.pow(ev.position.longitude - leader.position.longitude, 2);
+            const isClose = dSq < 0.0000005; // ~7 meters
+
+            if (sameRef || (sameLevels && isClose)) {
+              group.push(ev);
+              foundGroup = true;
+              break;
+            }
+          }
+          if (!foundGroup) {
+            groupedElevators.push([ev]);
+          }
+        }
+
+        const isHall =
+          elevators.some((e) => e.ref?.startsWith('H-')) ||
+          rooms.some((r) => r.ref?.startsWith('H-'));
+        const bestElevators = isHall
+          ? elevators
+          : groupedElevators.map((group) => {
+              if (group.length === 1 || !levelCentroid) return group[0];
+              // If multiple points exist for the same shaft, pick the one closest to the active floor's true centroid
+              return group.reduce((best, curr) => {
+                const dBest =
+                  Math.pow(best.position.latitude - levelCentroid.latitude, 2) +
+                  Math.pow(best.position.longitude - levelCentroid.longitude, 2);
+                const dCurr =
+                  Math.pow(curr.position.latitude - levelCentroid.latitude, 2) +
+                  Math.pow(curr.position.longitude - levelCentroid.longitude, 2);
+                return dCurr < dBest ? curr : best;
+              }, group[0]);
+            });
+
+        // Only display the elevator icon if it is contained within an elevator shaft polygon
+        const elevatorPolygons = filteredRooms.filter((r) => /elevator/i.test(r.ref || ''));
+        const displayedElevators = bestElevators.filter((ev) => {
+          if (elevatorPolygons.length === 0) return true; // If no shaft polygons exist on this map, default to show
+          return elevatorPolygons.some((r) => pointInPolygon(ev.position, r.polygon));
+        });
+
+        return displayedElevators.map((ev) => {
+          const isHighlighted = categoryFilter === 'elevators' || categoryFilter === null;
+          return (
+            <IconMarker
+              key={ev.id}
+              coordinate={ev.position}
+              zIndex={15}
+              onPress={onPoiPress ? () => onPoiPress({ ...ev, type: 'elevator' }) : undefined}
+              opacity={isHighlighted ? 1 : 0.3}
+            >
+              <Image
+                source={require('../../assets/images/elevator.png')}
+                style={labelStyles.iconImage}
+              />
+            </IconMarker>
+          );
+        });
+      })()}
 
       {/* 6c. POIs (bathrooms, water fountains, etc.) */}
-      {filteredPois.map((poi) => renderPoiFeature(poi, onPoiPress))}
+      {pois.map((poi) => {
+        const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
+        return renderPoiFeature(poi, isHighlighted, isColorBlind, onPoiPress);
+      })}
 
       {/* 7. Indoor route polyline — Google Maps style with border + fill */}
       {routeSegmentsOnLevel.length > 1 && (

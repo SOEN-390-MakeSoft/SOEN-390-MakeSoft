@@ -37,6 +37,54 @@ export const INDOOR_BUILDINGS: IndoorBuildingMeta[] = [
     },
     overlayBearing: 304,
   },
+  {
+    code: 'CC',
+    name: 'Central Building',
+    levels: ['1'],
+    entrances: [{ latitude: 45.45822974014, longitude: -73.64033090497 }],
+    geojsonAsset: 'CC_Building',
+    defaultLevel: '1',
+    imageBounds: {
+      sw: { latitude: 45.45800672352, longitude: -73.64079433034 },
+      ne: { latitude: 45.45845275676, longitude: -73.6398674796 },
+    },
+  },
+  {
+    code: 'MB',
+    name: 'John Molson School of Business',
+    levels: ['-2', '1'],
+    entrances: [{ latitude: 45.49524429911, longitude: -73.57901589372 }],
+    geojsonAsset: 'JMSB_Building',
+    defaultLevel: '1',
+    imageBounds: {
+      sw: { latitude: 45.49494819911, longitude: -73.57956749372 },
+      ne: { latitude: 45.49554039911, longitude: -73.57846429372 },
+    },
+  },
+  {
+    code: 'LB',
+    name: 'J. W. McConnell Building',
+    levels: ['1', '2', '3', '4', '5'],
+    entrances: [{ latitude: 45.4967527, longitude: -73.577925838695 }],
+    geojsonAsset: 'LB_Building',
+    defaultLevel: '1',
+    imageBounds: {
+      sw: { latitude: 45.4962438, longitude: -73.5785731 },
+      ne: { latitude: 45.4972616, longitude: -73.57727857739 },
+    },
+  },
+  {
+    code: 'VL',
+    name: 'Vanier Library Building',
+    levels: ['1', '2', '3'],
+    entrances: [{ latitude: 45.4589523, longitude: -73.63844234999999 }],
+    geojsonAsset: 'VL+VE_Building',
+    defaultLevel: '1',
+    imageBounds: {
+      sw: { latitude: 45.4585996, longitude: -73.6390318 },
+      ne: { latitude: 45.459305, longitude: -73.6378529 },
+    },
+  },
   // -----------------------------------------------------------------------
   // To add a new building:
   // 1. Place <Building>.geojson in assets/geo/
@@ -71,6 +119,16 @@ const ASSET_LOADERS: Record<string, () => GeoJSONFeatureCollection> = {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   Hall_Building: () =>
     require('../../assets/geo/Hall_Building.geojson') as GeoJSONFeatureCollection,
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  CC_Building: () => require('../../assets/geo/CC_Building.geojson') as GeoJSONFeatureCollection,
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  JMSB_Building: () =>
+    require('../../assets/geo/JMSB_Building.geojson') as GeoJSONFeatureCollection,
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  LB_Building: () => require('../../assets/geo/LB_Building.geojson') as GeoJSONFeatureCollection,
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  'VL+VE_Building': () =>
+    require('../../assets/geo/VL+VE_Building.geojson') as GeoJSONFeatureCollection,
 };
 
 // ---------------------------------------------------------------------------
