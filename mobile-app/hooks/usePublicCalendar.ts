@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import ICAL from 'ical.js';
@@ -9,6 +9,7 @@ import ICAL from 'ical.js';
 const STORE_KEY = 'calendar_connection';
 const LEGACY_KEY = 'public_calendar_id';
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+const E2E_CALENDAR_URL = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE ?? '';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -307,6 +308,8 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState<StoredConnection | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const didAttemptEnvConnect = useRef(false);
 
   // --------------------------------------------------
   // Fetch events using the Google REST API (public)
@@ -428,10 +431,13 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
 
     (async () => {
       const conn = await loadConnection();
-      if (cancelled || !conn) return;
-      setConnection(conn);
-      setCalendarId(conn.type === 'public' ? conn.calendarId : conn.icalUrl);
-      await fetchForConnection(conn);
+      if (cancelled) return;
+      if (conn) {
+        setConnection(conn);
+        setCalendarId(conn.type === 'public' ? conn.calendarId : conn.icalUrl);
+        await fetchForConnection(conn);
+      }
+      setIsHydrated(true);
     })();
 
     return () => {
@@ -439,6 +445,16 @@ export function usePublicCalendar(): UsePublicCalendarReturn {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isHydrated || connection || didAttemptEnvConnect.current) return;
+    if (!E2E_CALENDAR_URL) return;
+
+    didAttemptEnvConnect.current = true;
+    connectCalendar(E2E_CALENDAR_URL).catch(() => {
+      // Swallow errors to avoid blocking app startup in e2e mode.
+    });
+  }, [connection, connectCalendar, isHydrated]);
 
   return {
     connectCalendar,

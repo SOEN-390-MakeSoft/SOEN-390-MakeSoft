@@ -249,6 +249,8 @@ function RoomLabelMarker({
       tracksViewChanges={tracked}
       zIndex={10}
       onPress={onPress}
+      testID={`room-label-${String(room.ref).replace(/[^A-Za-z0-9_-]/g, '_')}`}
+      accessibilityLabel={`Room ${room.ref}`}
     >
       <View collapsable={false} onLayout={handleLayout} style={labelStyles.labelContainer}>
         <Text style={labelStyles.labelText} allowFontScaling={false}>

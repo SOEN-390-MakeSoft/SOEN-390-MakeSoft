@@ -53,27 +53,12 @@ File: `e2e/map.campus-switch.e2e.js`
 
 Expected: Map loads within 10 seconds and campus switch recenters the map.
 
-## Recording (GIF/Video)
+## Test steps (ES-4 / US-4.1)
 
-In two terminals:
+File: `e2e/indoor-room.e2e.js`
 
-Terminal A:
-
-```
-export ANDROID_SDK_ROOT=/Users/admin/Library/Android/sdk
-export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-adb shell screenrecord /sdcard/detox_map.mp4
-```
-
-Terminal B:
-
-```
-npm run detox:test:android
-```
-
-Stop recording with Ctrl+C, then pull:
-
-```
-adb pull /sdcard/detox_map.mp4 ../Artifacts/detox_map.mp4
-adb shell rm /sdcard/detox_map.mp4
-```
+1. Launch app
+2. Tap **Get Started** to open the map
+3. Search for room **H-843** and select it
+4. Verify indoor view is active and room info is shown
+5. Tap **Navigate here** and verify navigation UI opens
