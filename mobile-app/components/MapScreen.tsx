@@ -30,6 +30,7 @@ import RoomInfoBubble from './indoor/RoomInfoBubble';
 import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
 import {
+  INDOOR_BUILDINGS,
   findBuildingAtCoordinate,
   detectIndoorDestination,
   loadBuilding,
@@ -498,35 +499,48 @@ export default function MapScreen() {
     const q = debouncedQuery.trim();
     if (!q) return [];
 
-    // If indoor mode is already active, use the hook's fast search.
-    if (indoor.isIndoorActive) {
-      return indoor.searchRooms(q, 6).map((room) => ({
-        id: `room-${room.featureId}`,
-        name: room.ref,
-        address: `${indoor.buildingMeta?.name ?? ''} \u00B7 Floor ${room.level}`,
-        code: indoor.activeBuildingCode,
-        _room: room,
-        _buildingCode: indoor.activeBuildingCode,
-      }));
+    let results: any[] = [];
+    let buildingsToSearch =
+      indoor.isIndoorActive && indoor.activeBuildingCode
+        ? [
+            indoor.activeBuildingCode,
+            ...INDOOR_BUILDINGS.map((b) => b.code).filter((c) => c !== indoor.activeBuildingCode),
+          ]
+        : INDOOR_BUILDINGS.map((b) => b.code);
+
+    // If query looks like a specific building room (e.g. H-840), prioritize that building
+    const detected = detectIndoorDestination(q);
+    if (detected) {
+      buildingsToSearch = [
+        detected.buildingCode,
+        ...buildingsToSearch.filter((code) => code !== detected.buildingCode),
+      ];
     }
 
-    // Otherwise try to detect if the query targets an indoor room and
-    // load the building data on-the-fly to search its room index.
-    const detected = detectIndoorDestination(q);
-    if (!detected) return [];
+    for (const code of buildingsToSearch) {
+      // Lazily load each building's data (will hit cache if already loaded)
+      const data = loadBuilding(code);
+      if (!data) continue;
 
-    const data = loadBuilding(detected.buildingCode);
-    if (!data) return [];
+      const meta = getBuildingMeta(code);
+      const matches = searchIndoorRooms(q, data.roomIndex, code, 6);
 
-    const meta = getBuildingMeta(detected.buildingCode);
-    return searchIndoorRooms(q, data.roomIndex, detected.buildingCode, 6).map((room) => ({
-      id: `room-${room.featureId}`,
-      name: room.ref,
-      address: `${meta?.name ?? detected.buildingCode} \u00B7 Floor ${room.level}`,
-      code: detected.buildingCode,
-      _room: room,
-      _buildingCode: detected.buildingCode,
-    }));
+      for (const room of matches) {
+        if (results.length >= 6) break;
+        results.push({
+          id: `room-${code}-${room.featureId}`,
+          name: room.ref,
+          address: `${meta?.name ?? code} \u00B7 Floor ${room.level}`,
+          code: code,
+          _room: room,
+          _buildingCode: code,
+        });
+      }
+
+      if (results.length >= 6) break;
+    }
+
+    return results;
   }, [indoor, searchQuery]);
 
   type RoomSearchResult = (typeof roomSearchResults)[number];
