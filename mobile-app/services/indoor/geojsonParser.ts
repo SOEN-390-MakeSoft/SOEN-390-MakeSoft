@@ -128,10 +128,10 @@ function classify(props: Record<string, string | undefined>): IndoorFeatureType 
   // Ref-based fallback — catch features named like escalators / stairs
   if (isEscalatorByRef(props.ref)) return 'escalator';
   if (isStairsByRef(props.ref)) return 'stairs';
-  // Explicit indoor room (check before amenity to ensure bathrooms/cafes render as rooms)
-  if (props.indoor === 'room') return 'room';
-  // Amenity-tagged POI
+  // Amenity-tagged POI (check before indoor room so bathrooms/cafes get their icons properly)
   if (props.amenity) return 'poi';
+  // Explicit indoor room
+  if (props.indoor === 'room') return 'room';
   // Building-level outline
   if (props.indoor === 'level') return 'level_outline';
   // Open area
@@ -309,6 +309,8 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
             position: toLatLng(geom.coordinates),
             amenity: props.amenity ?? 'unknown',
             name: props.name ?? null,
+            male: props.male === 'yes',
+            female: props.female === 'yes',
           } satisfies IndoorPOI);
         } else if (geom.type === 'Polygon') {
           // Handle polygon-based POIs like bathrooms

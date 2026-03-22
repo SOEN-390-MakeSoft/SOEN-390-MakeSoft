@@ -27,6 +27,7 @@ import ClassesCalendarRequired from './ClassesCalendarRequired';
 import IndoorMapOverlay from './indoor/IndoorMapOverlay';
 import FloorSelector from './indoor/FloorSelector';
 import RoomInfoBubble from './indoor/RoomInfoBubble';
+import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
 import {
   findBuildingAtCoordinate,
@@ -1662,24 +1663,14 @@ export default function MapScreen() {
 
       {/* POI info bubble — appears when a POI polygon is tapped */}
       {indoor.isIndoorActive && selectedPoi && (
-        <View
-          style={[
-            styles.poiInfoBubble,
-            { bottom: isQuickPickOpen ? 320 : 160, backgroundColor: 'white' },
-          ]}
-        >
-          <View style={styles.poiInfoContent}>
-            <Text style={[styles.poiInfoTitle, { color: brandRed }]} numberOfLines={1}>
-              {getPoiTitle(selectedPoi)}
-            </Text>
-            {selectedPoi.level && (
-              <Text style={styles.poiInfoLevel}>Level {selectedPoi.level}</Text>
-            )}
-          </View>
-          <TouchableOpacity onPress={() => setSelectedPoi(null)} style={styles.poiInfoCloseButton}>
-            <Text style={styles.poiInfoCloseButtonText}>✕</Text>
-          </TouchableOpacity>
-        </View>
+        <PoiInfoBubble
+          poiTitle={getPoiTitle(selectedPoi)}
+          level={indoor.activeLevel}
+          buildingName={indoor.buildingMeta?.name}
+          onClose={() => setSelectedPoi(null)}
+          accentColor={brandRed}
+          bottomOffset={isQuickPickOpen ? 320 : 160}
+        />
       )}
 
       {/* Top Controls: Search, Menu, Brand Badge */}
