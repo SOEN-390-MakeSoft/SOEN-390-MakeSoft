@@ -10,6 +10,7 @@ type SearchEntry = {
 interface UseIndoorRoomPickerArgs {
   indoor: UseIndoorNavigationReturn;
   isIndoorOnlyRoute: boolean;
+  isAccessibleRouteEnabled: boolean;
 }
 
 /**
@@ -19,7 +20,11 @@ interface UseIndoorRoomPickerArgs {
  *
  * Extracted from MapScreen to keep indoor room-picker logic isolated.
  */
-export function useIndoorRoomPicker({ indoor, isIndoorOnlyRoute }: UseIndoorRoomPickerArgs) {
+export function useIndoorRoomPicker({
+  indoor,
+  isIndoorOnlyRoute,
+  isAccessibleRouteEnabled,
+}: UseIndoorRoomPickerArgs) {
   const MAX_ROOM_SEARCH_RESULTS = 500;
 
   const indoorRoomOptions = useMemo<SearchEntry[] | undefined>(() => {
@@ -42,18 +47,29 @@ export function useIndoorRoomPicker({ indoor, isIndoorOnlyRoute }: UseIndoorRoom
     (field: 'start' | 'destination', name: string): boolean => {
       if (!isIndoorOnlyRoute) return false;
 
+      const routeOptions = isAccessibleRouteEnabled
+        ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
+        : {};
+
       const rooms = indoor.searchRooms(name, 1);
       const room = rooms[0];
       if (!room) return false;
 
       if (field === 'destination') {
-        indoor.navigateToRoom(room.ref);
+        indoor.navigateToRoomAccessible(room.ref, routeOptions);
+        return true;
       } else if (field === 'start' && indoor.destinationRoom) {
-        indoor.navigateToRoom(indoor.destinationRoom.ref, room.position, room.level);
+        indoor.navigateToRoomAccessible(
+          indoor.destinationRoom.ref,
+          routeOptions,
+          room.position,
+          room.level,
+        );
+        return true;
       }
-      return true;
+      return false;
     },
-    [isIndoorOnlyRoute, indoor],
+    [isIndoorOnlyRoute, isAccessibleRouteEnabled, indoor],
   );
 
   return { indoorRoomOptions, handleIndoorRoomSelect };
