@@ -38,21 +38,21 @@ import type { ResolvedRoom } from '../../services/indoor/roomResolver';
 // Colour palette for indoor features
 // ---------------------------------------------------------------------------
 
-const COLORS = {
+const getColors = (isColorBlind: boolean) => ({
   outlineFill: 'rgba(230, 230, 230, 0.65)',
   outlineStroke: 'rgba(180, 180, 180, 0.8)',
-  areaFill: 'rgba(215, 225, 235, 0.5)',
-  roomFill: 'rgba(200, 210, 225, 0.6)',
-  roomStroke: 'rgba(120, 140, 170, 0.8)',
-  roomSelectedFill: 'rgba(26, 115, 232, 0.35)',
-  roomSelectedStroke: 'rgba(26, 115, 232, 0.9)',
+  areaFill: isColorBlind ? 'rgba(235, 225, 215, 0.5)' : 'rgba(215, 225, 235, 0.5)',
+  roomFill: isColorBlind ? 'rgba(235, 210, 200, 0.6)' : 'rgba(200, 210, 225, 0.6)',
+  roomStroke: isColorBlind ? 'rgba(170, 140, 120, 0.8)' : 'rgba(120, 140, 170, 0.8)',
+  roomSelectedFill: isColorBlind ? 'rgba(178, 27, 44, 0.35)' : 'rgba(26, 115, 232, 0.35)', // Use Red for selection in colorblind mode to contrast with blue route
+  roomSelectedStroke: isColorBlind ? 'rgba(178, 27, 44, 0.9)' : 'rgba(26, 115, 232, 0.9)',
   stairs: 'rgba(180, 120, 40, 0.75)',
   escalator: 'rgba(140, 100, 180, 0.75)',
-  bathroomFill: 'rgba(100, 150, 255, 0.15)',
-  bathroomStroke: 'rgba(100, 150, 255, 0.6)',
-  waterFountainFill: 'rgba(100, 200, 255, 0.15)',
-  waterFountainStroke: 'rgba(100, 200, 255, 0.6)',
-};
+  bathroomFill: isColorBlind ? 'rgba(255, 150, 100, 0.15)' : 'rgba(100, 150, 255, 0.15)',
+  bathroomStroke: isColorBlind ? 'rgba(255, 150, 100, 0.6)' : 'rgba(100, 150, 255, 0.6)',
+  waterFountainFill: isColorBlind ? 'rgba(255, 200, 100, 0.15)' : 'rgba(100, 200, 255, 0.15)',
+  waterFountainStroke: isColorBlind ? 'rgba(255, 200, 100, 0.6)' : 'rgba(100, 200, 255, 0.6)',
+});
 
 // ---------------------------------------------------------------------------
 // Helper to map POI image paths to require() calls
@@ -106,33 +106,51 @@ function getImagePathForAmenity(
 }
 
 // Helper to get POI fill color based on amenity type
-function getPoiFillColor(amenity: string, isHighlighted: boolean = true): string {
+function getPoiFillColor(
+  amenity: string,
+  isHighlighted: boolean = true,
+  isColorBlind: boolean = false,
+): string {
   const alpha = isHighlighted ? '0.15' : '0.05';
+  const c = isColorBlind ? '255, 150, 100' : '100, 150, 255';
+  const cw = isColorBlind ? '255, 200, 100' : '100, 200, 255';
+
   switch (amenity) {
     case 'toilets':
-      return `rgba(100, 150, 255, ${alpha})`;
+      return `rgba(${c}, ${alpha})`;
     case 'drinking_water':
-      return `rgba(100, 200, 255, ${alpha})`;
+      return `rgba(${cw}, ${alpha})`;
     default:
-      return `rgba(100, 150, 255, ${alpha})`;
+      return `rgba(${c}, ${alpha})`;
   }
 }
 
 // Helper to get POI stroke color based on amenity type
-function getPoiStrokeColor(amenity: string, isHighlighted: boolean = true): string {
+function getPoiStrokeColor(
+  amenity: string,
+  isHighlighted: boolean = true,
+  isColorBlind: boolean = false,
+): string {
   const alpha = isHighlighted ? '0.6' : '0.2';
+  const c = isColorBlind ? '255, 150, 100' : '100, 150, 255';
+  const cw = isColorBlind ? '255, 200, 100' : '100, 200, 255';
+
   switch (amenity) {
     case 'toilets':
-      return `rgba(100, 150, 255, ${alpha})`;
+      return `rgba(${c}, ${alpha})`;
     case 'drinking_water':
-      return `rgba(100, 200, 255, ${alpha})`;
+      return `rgba(${cw}, ${alpha})`;
     default:
-      return `rgba(100, 150, 255, ${alpha})`;
+      return `rgba(${c}, ${alpha})`;
   }
 }
 
 // Helper to render point-based POI
-function renderPointPoi(poi: IndoorPOI, isHighlighted: boolean): React.ReactNode {
+function renderPointPoi(
+  poi: IndoorPOI,
+  isHighlighted: boolean,
+  isColorBlind: boolean = false,
+): React.ReactNode {
   if (!poi.position) return null;
 
   const imagePath = getImagePathForAmenity(poi.amenity, poi.male, poi.female);
@@ -156,12 +174,13 @@ function renderPointPoi(poi: IndoorPOI, isHighlighted: boolean): React.ReactNode
 function renderPolygonPoi(
   poi: IndoorPOI,
   isHighlighted: boolean,
+  isColorBlind: boolean = false,
   onPoiPress?: (poi: IndoorPOI) => void,
 ): React.ReactNode {
   if (!poi.polygon || poi.polygon.length <= 2 || !poi.centroid) return null;
 
-  const poiColor = getPoiStrokeColor(poi.amenity, isHighlighted);
-  const poiFillColor = getPoiFillColor(poi.amenity, isHighlighted);
+  const poiColor = getPoiStrokeColor(poi.amenity, isHighlighted, isColorBlind);
+  const poiFillColor = getPoiFillColor(poi.amenity, isHighlighted, isColorBlind);
   const imagePath = getImagePathForAmenity(poi.amenity, poi.male, poi.female);
   const imageSource = getPoiImageSource(imagePath);
 
@@ -189,15 +208,16 @@ function renderPolygonPoi(
 function renderPoiFeature(
   poi: IndoorPOI,
   isHighlighted: boolean,
+  isColorBlind: boolean = false,
   onPoiPress?: (poi: IndoorPOI) => void,
 ): React.ReactNode {
   // Point-based POIs (water fountains, etc.)
   if (poi.position && !poi.polygon) {
-    return renderPointPoi(poi, isHighlighted);
+    return renderPointPoi(poi, isHighlighted, isColorBlind);
   }
   // Polygon-based POIs (bathrooms, etc.)
   if (poi.polygon && poi.polygon.length > 2) {
-    return renderPolygonPoi(poi, isHighlighted, onPoiPress);
+    return renderPolygonPoi(poi, isHighlighted, isColorBlind, onPoiPress);
   }
   return null;
 }
@@ -351,6 +371,8 @@ interface IndoorMapOverlayProps {
   visiblePoiAmenities?: string[];
   /** Currently selected category filter ('washrooms', 'elevators', 'water_fountains', or null). */
   categoryFilter?: string | null;
+  /** Is color blind mode active? Used to adjust indoor feature colors. */
+  isColorBlind?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +390,7 @@ export default function IndoorMapOverlay({
   routeColor = '#1a73e8',
   visiblePoiAmenities,
   categoryFilter,
+  isColorBlind = false,
 }: Readonly<IndoorMapOverlayProps>) {
   // ---- Categorise features --------------------------------------------------
   const { outlines, areas, rooms, stairs, escalators, elevators, pois } = useMemo(() => {
@@ -479,6 +502,7 @@ export default function IndoorMapOverlay({
   // works around a react-native-maps bug where only a subset of Polygons
   // renders on the initial draw.
   const batchKey = `indoor-${activeLevel}-${activeLevelFeatures.length}`;
+  const colors = getColors(isColorBlind);
 
   return (
     <React.Fragment key={batchKey}>
@@ -488,8 +512,8 @@ export default function IndoorMapOverlay({
           <Polygon
             key={f.id}
             coordinates={f.polygon}
-            fillColor={COLORS.outlineFill}
-            strokeColor={COLORS.outlineStroke}
+            fillColor={colors.outlineFill}
+            strokeColor={colors.outlineStroke}
             strokeWidth={1}
             zIndex={1}
             tappable={false}
@@ -503,8 +527,8 @@ export default function IndoorMapOverlay({
           <Polygon
             key={f.id}
             coordinates={f.polygon}
-            fillColor={COLORS.areaFill}
-            strokeColor={COLORS.outlineStroke}
+            fillColor={colors.areaFill}
+            strokeColor={colors.outlineStroke}
             strokeWidth={0.5}
             zIndex={2}
             tappable={false}
@@ -522,8 +546,8 @@ export default function IndoorMapOverlay({
               key={room.id}
               coordinates={room.polygon}
               holes={room.holes}
-              fillColor={isSelected ? COLORS.roomSelectedFill : COLORS.roomFill}
-              strokeColor={isSelected ? COLORS.roomSelectedStroke : COLORS.roomStroke}
+              fillColor={isSelected ? colors.roomSelectedFill : colors.roomFill}
+              strokeColor={isSelected ? colors.roomSelectedStroke : colors.roomStroke}
               strokeWidth={isSelected ? 2 : 1}
               zIndex={3}
               tappable={!!onRoomPress && !!room.ref}
@@ -594,7 +618,7 @@ export default function IndoorMapOverlay({
             <Polygon
               coordinates={s.polygon}
               fillColor="rgba(180, 120, 40, 0.2)"
-              strokeColor={COLORS.stairs}
+              strokeColor={colors.stairs}
               strokeWidth={1.5}
               zIndex={5}
               tappable={false}
@@ -633,7 +657,7 @@ export default function IndoorMapOverlay({
             <Polygon
               coordinates={e.polygon}
               fillColor={isHighlighted ? 'rgba(140, 100, 180, 0.2)' : 'rgba(140, 100, 180, 0.05)'}
-              strokeColor={isHighlighted ? COLORS.escalator : 'rgba(140, 100, 180, 0.2)'}
+              strokeColor={isHighlighted ? colors.escalator : 'rgba(140, 100, 180, 0.2)'}
               strokeWidth={1.5}
               zIndex={5}
               tappable={false}
@@ -742,7 +766,7 @@ export default function IndoorMapOverlay({
       {/* 6c. POIs (bathrooms, water fountains, etc.) */}
       {pois.map((poi) => {
         const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
-        return renderPoiFeature(poi, isHighlighted, onPoiPress);
+        return renderPoiFeature(poi, isHighlighted, isColorBlind, onPoiPress);
       })}
 
       {/* 7. Indoor route polyline — Google Maps style with border + fill */}

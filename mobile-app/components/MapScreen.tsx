@@ -1575,6 +1575,7 @@ export default function MapScreen() {
             routeColor={routeColor}
             visiblePoiAmenities={visiblePoiAmenities}
             categoryFilter={indoorCategoryFilter}
+            isColorBlind={isColorBlind}
           />
         )}
       </MapView>
