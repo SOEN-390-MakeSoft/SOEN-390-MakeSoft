@@ -8,6 +8,7 @@ import type {
   WalkingRouteVariant,
 } from '../hooks/useNavigationBetweenBuildings';
 import NavigationMenu, { type SearchEntry } from './NavigationMenu';
+import AccessibleRouteToggle from './AccessibleRouteToggle';
 import { useSettings } from '../context/settings';
 
 export type DirectionsErrorType = 'same_origin_destination' | 'missing_coordinates' | null;
@@ -50,6 +51,10 @@ interface NavigationScreenProps {
   shuttleInfo?: ShuttleInfo | null;
   /** Whether today is a weekend (shuttle not available) */
   isWeekend?: boolean;
+  /** Whether accessible routing is enabled for indoor navigation */
+  isAccessibleRouteEnabled?: boolean;
+  /** Toggle accessible routing for indoor navigation */
+  onAccessibleRouteChange?: (enabled: boolean) => void;
   onOpenPreview?: () => void;
   onOpenDirections?: () => void;
   /** Formatted indoor travel time text, e.g. "~2 min indoor walk". */
@@ -556,6 +561,8 @@ export default function NavigationScreen({
   isShuttleLoading = false,
   shuttleInfo = null,
   isWeekend = false,
+  isAccessibleRouteEnabled = false,
+  onAccessibleRouteChange,
   onOpenPreview,
   onOpenDirections,
   indoorTravelTimeText,
@@ -715,6 +722,13 @@ export default function NavigationScreen({
                 })}
               </>
             )}
+
+            <AccessibleRouteToggle
+              enabled={isAccessibleRouteEnabled}
+              chipColor={themeColors.chipColor}
+              chipMutedColor={themeColors.chipMutedColor}
+              onToggle={onAccessibleRouteChange}
+            />
           </View>
           <Pressable
             onPress={onClose}
@@ -802,7 +816,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 8,
-    flexWrap: 'nowrap',
+    rowGap: 8,
+    flexWrap: 'wrap',
     paddingRight: 40,
   },
   modeChip: {

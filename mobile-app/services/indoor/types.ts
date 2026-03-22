@@ -81,6 +81,7 @@ export interface IndoorElevator extends IndoorFeatureBase {
 /** Escalator (conveying stairs). */
 export interface IndoorEscalator extends IndoorFeatureBase {
   type: 'escalator';
+  isElevator?: boolean;
   polygon: LatLng[];
   path: LatLng[];
   oneway: 'up' | 'down' | null;

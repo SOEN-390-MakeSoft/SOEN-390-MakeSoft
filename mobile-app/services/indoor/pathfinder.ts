@@ -5,8 +5,9 @@
  * overestimates) so A* is guaranteed to find the optimal path.
  *
  * Supports optional preferences:
- * - Prefer elevators over stairs (accessibility mode)
+ * - Prefer elevators over other vertical transitions
  * - Avoid stairs entirely
+ * - Avoid escalators entirely
  */
 
 import { IndoorGraph } from './IndoorGraph';
@@ -21,6 +22,8 @@ export interface PathfinderOptions {
   preferElevator?: boolean;
   /** If true, exclude stair edges entirely (wheelchair mode). */
   avoidStairs?: boolean;
+  /** If true, exclude escalator edges entirely (wheelchair mode). */
+  avoidEscalators?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +151,12 @@ export function findPath(
       // Apply preference penalties
       let edgeWeight = edge.weight;
       if (options.avoidStairs && edge.edgeType === 'stairs') continue;
-      if (options.preferElevator && edge.edgeType === 'stairs' && edge.isLevelChange) {
+      if (options.avoidEscalators && edge.edgeType === 'escalator') continue;
+      if (
+        options.preferElevator &&
+        edge.isLevelChange &&
+        (edge.edgeType === 'stairs' || edge.edgeType === 'escalator')
+      ) {
         edgeWeight *= 3; // Heavy penalty to discourage stairs when elevator preferred
       }
 

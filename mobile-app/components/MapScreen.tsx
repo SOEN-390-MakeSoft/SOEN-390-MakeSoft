@@ -30,6 +30,7 @@ import RoomInfoBubble from './indoor/RoomInfoBubble';
 import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
 import {
+  INDOOR_BUILDINGS,
   findBuildingAtCoordinate,
   detectIndoorDestination,
   loadBuilding,
@@ -286,6 +287,7 @@ const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
 const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 // When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
 const INDOOR_ZOOM_THRESHOLD = 0.002;
+const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
 // Google Maps style that hides POI labels/icons (used when indoor overlay is active)
 const HIDE_POIS_MAP_STYLE = [
@@ -328,6 +330,8 @@ export default function MapScreen() {
   const [pendingDestinationRef, setPendingDestinationRef] = useState<string | null>(null);
   const [nextClassPreview, setNextClassPreview] = useState<NextClassPreview | null>(null);
   const [arriveByClassEnd, setArriveByClassEnd] = useState<Date | null>(null);
+  const [isAccessibleRouteEnabled, setIsAccessibleRouteEnabled] = useState(false);
+
   const [visiblePoiAmenities, setVisiblePoiAmenities] = useState<string[]>([
     'toilets',
     'drinking_water',
@@ -424,10 +428,74 @@ export default function MapScreen() {
   } = useMapUI();
   // Indoor navigation
   const indoor = useIndoorNavigation();
+  // Track the last map region for zoom-based indoor auto-show
+  const lastIndoorAutoRef = useRef<string | null>(null);
+
+  // Indoor room picker (lets navigation inputs accept rooms like "H-840")
   const { indoorRoomOptions, handleIndoorRoomSelect } = useIndoorRoomPicker({
     indoor,
     isIndoorOnlyRoute,
+    isAccessibleRouteEnabled,
   });
+
+  // Accessible indoor routing support
+  const [accessibleNavAttempt, setAccessibleNavAttempt] = useState(0);
+  const lastAlertedAccessibleAttemptRef = useRef(0);
+  const markAccessibleRouteAttempt = useCallback(() => {
+    if (!isAccessibleRouteEnabled) return;
+    setAccessibleNavAttempt((prev) => prev + 1);
+  }, [isAccessibleRouteEnabled]);
+
+  useEffect(() => {
+    if (!isAccessibleRouteEnabled) {
+      lastAlertedAccessibleAttemptRef.current = 0;
+      return;
+    }
+
+    if (accessibleNavAttempt === 0) return;
+    if (indoor.error !== INDOOR_NO_PATH_ERROR) return;
+    if (lastAlertedAccessibleAttemptRef.current === accessibleNavAttempt) return;
+
+    lastAlertedAccessibleAttemptRef.current = accessibleNavAttempt;
+    Alert.alert(
+      'No wheelchair-accessible route available',
+      'We could not find a wheelchair-accessible path to that destination. Try a different room or contact building services for assistance.',
+    );
+  }, [accessibleNavAttempt, indoor.error, isAccessibleRouteEnabled]);
+
+  const navigateToIndoorRoom = useCallback(
+    (roomRef: string) => {
+      const routeOptions = isAccessibleRouteEnabled
+        ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
+        : {};
+
+      markAccessibleRouteAttempt();
+      indoor.navigateToRoomAccessible(roomRef, routeOptions);
+    },
+    [indoor, isAccessibleRouteEnabled, markAccessibleRouteAttempt],
+  );
+
+  const previousAccessibleRouteEnabledRef = useRef(isAccessibleRouteEnabled);
+
+  useEffect(() => {
+    if (previousAccessibleRouteEnabledRef.current === isAccessibleRouteEnabled) return;
+    previousAccessibleRouteEnabledRef.current = isAccessibleRouteEnabled;
+
+    if (!indoor.destinationRoom) return;
+
+    const routeOptions = isAccessibleRouteEnabled
+      ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
+      : {};
+
+    markAccessibleRouteAttempt();
+
+    indoor.rerouteCurrent(routeOptions);
+  }, [
+    indoor.destinationRoom,
+    indoor.rerouteCurrent,
+    isAccessibleRouteEnabled,
+    markAccessibleRouteAttempt,
+  ]);
 
   // -----------------------------------------------------------------------
   // Room autocomplete: search rooms on-the-fly (even before indoor is active)
@@ -438,35 +506,48 @@ export default function MapScreen() {
     const q = debouncedQuery.trim();
     if (!q) return [];
 
-    // If indoor mode is already active, use the hook's fast search.
-    if (indoor.isIndoorActive) {
-      return indoor.searchRooms(q, 6).map((room) => ({
-        id: `room-${room.featureId}`,
-        name: room.ref,
-        address: `${indoor.buildingMeta?.name ?? ''} \u00B7 Floor ${room.level}`,
-        code: indoor.activeBuildingCode,
-        _room: room,
-        _buildingCode: indoor.activeBuildingCode,
-      }));
+    let results: any[] = [];
+    let buildingsToSearch =
+      indoor.isIndoorActive && indoor.activeBuildingCode
+        ? [
+            indoor.activeBuildingCode,
+            ...INDOOR_BUILDINGS.map((b) => b.code).filter((c) => c !== indoor.activeBuildingCode),
+          ]
+        : INDOOR_BUILDINGS.map((b) => b.code);
+
+    // If query looks like a specific building room (e.g. H-840), prioritize that building
+    const detected = detectIndoorDestination(q);
+    if (detected) {
+      buildingsToSearch = [
+        detected.buildingCode,
+        ...buildingsToSearch.filter((code) => code !== detected.buildingCode),
+      ];
     }
 
-    // Otherwise try to detect if the query targets an indoor room and
-    // load the building data on-the-fly to search its room index.
-    const detected = detectIndoorDestination(q);
-    if (!detected) return [];
+    for (const code of buildingsToSearch) {
+      // Lazily load each building's data (will hit cache if already loaded)
+      const data = loadBuilding(code);
+      if (!data) continue;
 
-    const data = loadBuilding(detected.buildingCode);
-    if (!data) return [];
+      const meta = getBuildingMeta(code);
+      const matches = searchIndoorRooms(q, data.roomIndex, code, 6);
 
-    const meta = getBuildingMeta(detected.buildingCode);
-    return searchIndoorRooms(q, data.roomIndex, detected.buildingCode, 6).map((room) => ({
-      id: `room-${room.featureId}`,
-      name: room.ref,
-      address: `${meta?.name ?? detected.buildingCode} \u00B7 Floor ${room.level}`,
-      code: detected.buildingCode,
-      _room: room,
-      _buildingCode: detected.buildingCode,
-    }));
+      for (const room of matches) {
+        if (results.length >= 6) break;
+        results.push({
+          id: `room-${code}-${room.featureId}`,
+          name: room.ref,
+          address: `${meta?.name ?? code} \u00B7 Floor ${room.level}`,
+          code: code,
+          _room: room,
+          _buildingCode: code,
+        });
+      }
+
+      if (results.length >= 6) break;
+    }
+
+    return results;
   }, [indoor, searchQuery]);
 
   type RoomSearchResult = (typeof roomSearchResults)[number];
@@ -532,7 +613,13 @@ export default function MapScreen() {
    *  if the user is far away → combined outdoor+indoor. */
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
+      // 1. Compute the indoor route (accessible if enabled)
+      navigateToIndoorRoom(room.ref);
+
+      // Close the bubble
       indoor.selectRoom(null);
+
+      // Mark as user-triggered so zoom-out won’t deactivate indoor mode
       lastIndoorAutoRef.current = null;
       handleCloseCard();
 
@@ -545,8 +632,6 @@ export default function MapScreen() {
         openIndoorOnlyNavigation(room.ref, 'Your location');
         return;
       }
-
-      indoor.navigateToRoom(room.ref);
 
       const outdoorBuilding = buildings.find(
         (b) => b.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase(),
@@ -566,6 +651,7 @@ export default function MapScreen() {
       handleSelectBuilding,
       openNavigationForBuilding,
       openIndoorOnlyNavigation,
+      navigateToIndoorRoom,
     ],
   );
 
@@ -614,9 +700,6 @@ export default function MapScreen() {
     },
     [indoorCategoryFilter],
   );
-
-  // Track the last map region for zoom-based indoor auto-show
-  const lastIndoorAutoRef = useRef<string | null>(null);
 
   /**
    * When the user zooms in close enough over a building that has an indoor map,
@@ -799,7 +882,7 @@ export default function MapScreen() {
 
       // 1. Activate indoor map + compute indoor route
       indoor.activateBuilding(detected.buildingCode);
-      indoor.navigateToRoom(detected.roomRef);
+      navigateToIndoorRoom(detected.roomRef);
 
       // Mark as NOT auto-activated so zoom-out won't dismiss it
       lastIndoorAutoRef.current = null;
@@ -835,7 +918,7 @@ export default function MapScreen() {
       }
       return true;
     },
-    [indoor, buildings, handleSelectBuilding, openNavigationForBuilding],
+    [indoor, buildings, handleSelectBuilding, openNavigationForBuilding, navigateToIndoorRoom],
   );
 
   const handleQuickPick = (pick: QuickPick) => {
@@ -958,7 +1041,10 @@ export default function MapScreen() {
 
   const handleNavigationBuildingSelect = useCallback(
     (field: 'start' | 'destination', name: string, code: string | null) => {
-      if (handleIndoorRoomSelect(field, name)) return;
+      if (handleIndoorRoomSelect(field, name)) {
+        markAccessibleRouteAttempt();
+        return;
+      }
 
       const normalizedName = normalizeLabel(name);
       const isCurrentLocationStart =
@@ -980,6 +1066,7 @@ export default function MapScreen() {
       handleSearchSelect,
       resolveDirectionsStartFromCoordinate,
       handleIndoorRoomSelect,
+      markAccessibleRouteAttempt,
     ],
   );
 
@@ -1405,6 +1492,9 @@ export default function MapScreen() {
 
       const proceedWithStart = (startRef: string, startPos: LatLng, isHallway: boolean) => {
         const destRef = indoor.destinationRoom?.ref || pendingDestinationRef;
+        const routeOptions = isAccessibleRouteEnabled
+          ? { avoidStairs: true, avoidEscalators: true, preferElevator: true }
+          : {};
 
         if (
           buildingCode &&
@@ -1415,12 +1505,14 @@ export default function MapScreen() {
 
         // If we are navigating indoor with an active indoor destination
         if (isIndoorOnlyRoute && destRef) {
-          indoor.navigateToRoom(destRef, startPos, floor);
+          markAccessibleRouteAttempt();
+          indoor.navigateToRoomAccessible(destRef, routeOptions, startPos, floor);
           const startLabel = isHallway ? 'Hallway' : startRef;
           setStartToCurrentLocationBuilding(startLabel, buildingCode ?? '', startPos);
         } else {
           // Normal outdoor start, but user is indoors
-          indoor.navigateToRoom('__EXIT__', startPos, floor);
+          markAccessibleRouteAttempt();
+          indoor.navigateToRoomAccessible('__EXIT__', routeOptions, startPos, floor);
           const bMeta = buildingCode ? getBuildingMeta(buildingCode) : null;
           const exitCoord = bMeta?.entrances?.[0] || startPos;
           setDirectionsStartToBuilding(indoorStartBuildingPending, exitCoord);
@@ -1462,7 +1554,9 @@ export default function MapScreen() {
       indoorStartCoordPending,
       indoorStartBuildingPending,
       isIndoorOnlyRoute,
+      isAccessibleRouteEnabled,
       indoor,
+      markAccessibleRouteAttempt,
       setStartToCurrentLocationBuilding,
       setDirectionsStartToBuilding,
     ],
@@ -1791,6 +1885,8 @@ export default function MapScreen() {
         isShuttleLoading={isShuttleLoading}
         shuttleInfo={shuttleInfo}
         isWeekend={isWeekend}
+        isAccessibleRouteEnabled={isAccessibleRouteEnabled}
+        onAccessibleRouteChange={setIsAccessibleRouteEnabled}
         onOpenPreview={handleOpenRoutePreview}
         onOpenDirections={handleOpenDirectionsMode}
         indoorTravelTimeText={indoorTravelTimeText}

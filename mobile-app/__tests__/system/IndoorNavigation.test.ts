@@ -34,6 +34,8 @@ import sgwTunnelNetwork from '../../assets/geo/SGW_Tunnel_Network.geojson';
 // ---------------------------------------------------------------------------
 
 const hallGeoJSON: GeoJSONFeatureCollection =
+  // Jest uses a custom .geojson transform for test assets.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('../../assets/geo/Hall_Building.geojson') as GeoJSONFeatureCollection;
 
 describe('Indoor Navigation System Tests — Hall Building', () => {
@@ -375,12 +377,17 @@ describe('Indoor Navigation System Tests — Hall Building', () => {
 
       const route = findPath(building!.graph, startNode!.id, destNode!.id, {
         avoidStairs: true,
+        avoidEscalators: true,
         preferElevator: true,
       });
 
       expect(route).not.toBeNull();
       const hasStairs = route!.steps.some((s) => s.edgeType === 'stairs');
+      const hasEscalators = route!.steps.some((s) => s.edgeType === 'escalator');
+      const hasElevator = route!.steps.some((s) => s.edgeType === 'elevator');
       expect(hasStairs).toBe(false);
+      expect(hasEscalators).toBe(false);
+      expect(hasElevator).toBe(true);
       expect(route!.totalDistanceMeters).toBeGreaterThan(0);
     });
   });

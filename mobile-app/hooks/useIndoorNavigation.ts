@@ -87,6 +87,8 @@ export interface UseIndoorNavigationReturn {
     fromPosition?: LatLng,
     fromLevel?: string,
   ) => void;
+  /** Recompute the current route using the last navigation request. */
+  rerouteCurrent: (options: PathfinderOptions) => void;
   /** Search for rooms matching a partial query (autocomplete). */
   searchRooms: (query: string, limit?: number) => ResolvedRoom[];
   /** Find the nearest POI of a category. */
@@ -130,6 +132,11 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
   const pendingNavRef = useRef<{
     roomQuery: string;
     options: PathfinderOptions;
+    fromPosition?: LatLng;
+    fromLevel?: string;
+  } | null>(null);
+  const lastRouteRequestRef = useRef<{
+    roomQuery: string;
     fromPosition?: LatLng;
     fromLevel?: string;
   } | null>(null);
@@ -317,6 +324,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     setSelectedRoom(null);
     setError(null);
     pendingNavRef.current = null;
+    lastRouteRequestRef.current = null;
   }, []);
 
   const navigateToRoom = useCallback(
@@ -329,6 +337,8 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
 
   const navigateToRoomAccessible = useCallback(
     (roomQuery: string, options: PathfinderOptions, fromPosition?: LatLng, fromLevel?: string) => {
+      lastRouteRequestRef.current = { roomQuery, fromPosition, fromLevel };
+
       if (!buildingData || !activeBuildingCode) {
         // Building data not yet available (React state hasn't settled).
         // Store a pending request and auto-detect + activate the building.
@@ -347,6 +357,23 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       computeRoute(buildingData, activeBuildingCode, roomQuery, options, fromPosition, fromLevel);
     },
     [buildingData, activeBuildingCode, activateBuilding, computeRoute],
+  );
+
+  const rerouteCurrent = useCallback(
+    (options: PathfinderOptions) => {
+      const lastRouteRequest = lastRouteRequestRef.current;
+      if (!lastRouteRequest || !buildingData || !activeBuildingCode) return;
+
+      computeRoute(
+        buildingData,
+        activeBuildingCode,
+        lastRouteRequest.roomQuery,
+        options,
+        lastRouteRequest.fromPosition,
+        lastRouteRequest.fromLevel,
+      );
+    },
+    [buildingData, activeBuildingCode, computeRoute],
   );
 
   // -------------------------------------------------------------------
@@ -444,6 +471,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     overlayBearing: buildingMeta?.overlayBearing ?? 0,
     navigateToRoom,
     navigateToRoomAccessible,
+    rerouteCurrent,
     searchRooms: searchRoomsCallback,
     findNearest,
     activateBuilding,

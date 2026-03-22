@@ -215,6 +215,58 @@ describe('NavigationScreen', () => {
     });
   });
 
+  describe('accessible route toggle', () => {
+    it('should render disabled state when accessible routing is off', () => {
+      render(<NavigationScreen {...defaultProps} isAccessibleRouteEnabled={false} />);
+
+      const toggle = screen.getByTestId('accessible-route-toggle');
+
+      expect(toggle.props.accessibilityRole).toBe('switch');
+      expect(toggle.props.accessibilityState).toEqual({ checked: false });
+    });
+
+    it('should render enabled state when accessible routing is on', () => {
+      render(<NavigationScreen {...defaultProps} isAccessibleRouteEnabled={true} />);
+
+      const toggle = screen.getByTestId('accessible-route-toggle');
+
+      expect(toggle.props.accessibilityRole).toBe('switch');
+      expect(toggle.props.accessibilityState).toEqual({ checked: true });
+    });
+
+    it('should call onAccessibleRouteChange with true when pressed from disabled state', () => {
+      const onAccessibleRouteChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isAccessibleRouteEnabled={false}
+          onAccessibleRouteChange={onAccessibleRouteChange}
+        />,
+      );
+
+      fireEvent.press(screen.getByTestId('accessible-route-toggle'));
+
+      expect(onAccessibleRouteChange).toHaveBeenCalledWith(true);
+    });
+
+    it('should call onAccessibleRouteChange with false when pressed from enabled state', () => {
+      const onAccessibleRouteChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isAccessibleRouteEnabled={true}
+          onAccessibleRouteChange={onAccessibleRouteChange}
+        />,
+      );
+
+      fireEvent.press(screen.getByTestId('accessible-route-toggle'));
+
+      expect(onAccessibleRouteChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   describe('trip summary and ETA', () => {
     const tripSummary = {
       arrivalText: '6:52 PM',

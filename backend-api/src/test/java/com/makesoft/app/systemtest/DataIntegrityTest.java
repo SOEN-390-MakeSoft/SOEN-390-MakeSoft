@@ -1,18 +1,24 @@
 package com.makesoft.app.systemtest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.makesoft.app.api.dto.BuildingResponseDTO;
 import com.makesoft.app.infrastructure.persistence.entity.BuildingEntity;
@@ -26,15 +32,19 @@ import com.makesoft.app.infrastructure.persistence.springdata.BuildingJpaReposit
  * of the data returned by the API endpoint, ensuring that it matches the expected values based on the 
  * database entries.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 public class DataIntegrityTest {
     
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
 
     @Autowired
     private BuildingJpaRepository buildingJpaRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockitoSpyBean
     private JdbcTemplate jdbcTemplate;
@@ -65,7 +75,7 @@ public class DataIntegrityTest {
      * perfectly while ensuring that the data integrity is kept.
     */ 
     @Test
-    void testGetBuildingInfo_ReturnsCorrectRecord() {
+    void testGetBuildingInfo_ReturnsCorrectRecord() throws Exception {
         // Retrieve the building to get the generated ID, as IDENTITY strategy typically doesn't reset on deleteAll()
         BuildingEntity savedBuilding = buildingJpaRepository.findAll().get(0);
         Long id = savedBuilding.getBuildingId();
@@ -78,12 +88,14 @@ public class DataIntegrityTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a BuildingResponseDTO.
          */ 
-        ResponseEntity<BuildingResponseDTO> response = restTemplate.getForEntity("/api/buildings/" + id, BuildingResponseDTO.class);
+        MvcResult result = mockMvc.perform(get("/api/buildings/" + id))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Verify request was successful
-        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-
-        BuildingResponseDTO responseBody = response.getBody();
+        BuildingResponseDTO responseBody = objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                BuildingResponseDTO.class
+        );
 
         // What the "Truth" should look like based on Database/Requirements
         BuildingResponseDTO expectedData = new BuildingResponseDTO(
@@ -108,7 +120,7 @@ public class DataIntegrityTest {
      * It also verifies that the health check endpoint is correctly implemented and returns the expected JSON body.
      */
     @Test
-    void testHealthEndpoint_ReturnsCorrectJsonInfo() {
+    void testHealthEndpoint_ReturnsCorrectJsonInfo() throws Exception {
 
         /* System test: 
          * Send a real HTTP request to the black box setup by SpringBootTest and store the status response forcibly as a Java String
@@ -117,12 +129,10 @@ public class DataIntegrityTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a String.
          */ 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/health", String.class);
-
-        // Asserting the software requirement that the health endpoint returns a JSON body containing "status": "UP" and "database": "Connected"
-        assertThat(response.getBody())
-            .contains("\"status\":\"UP\"")
-            .contains("\"database\":\"Connected\"");
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("\"status\":\"UP\"")))
+                .andExpect(content().string(containsString("\"database\":\"Connected\"")));
     }
 
     /*
@@ -131,7 +141,7 @@ public class DataIntegrityTest {
      * which is crucial for monitoring and alerting in production environments.
     */
     @Test
-    void testHealthEndpoint_ReturnsDownWhenDatabaseFails() {
+    void testHealthEndpoint_ReturnsDownWhenDatabaseFails() throws Exception {
 
         // Simulate database connection failure by shutting down the in-memory database or by providing incorrect credentials
         // For this test, we can use Mockito to mock the JdbcTemplate and force it to throw an exception when a query is executed, 
@@ -146,11 +156,9 @@ public class DataIntegrityTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a String.
          */ 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/health", String.class);
-
-        // Asserting the software requirement that the health endpoint returns a JSON body containing "status": "DOWN" and "reason": "Database connection failed"
-        assertThat(response.getBody())
-            .contains("\"status\":\"DOWN\"")
-            .contains("\"reason\":\"Database connection failed\"");
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().string(containsString("\"status\":\"DOWN\"")))
+                .andExpect(content().string(containsString("\"reason\":\"Database connection failed\"")));
     }
 }
