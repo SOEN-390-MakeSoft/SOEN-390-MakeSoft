@@ -53,6 +53,20 @@ File: `e2e/map.campus-switch.e2e.js`
 
 Expected: Map loads within 10 seconds and campus switch recenters the map.
 
+### US-4.6 End-to-end navigation
+
+File: `e2e/indoor-end-to-end.e2e.js`
+
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Search for **MB-S2.210** and select the result
+4. Tap **Navigate here**
+5. Select floor **8** and confirm **Yes** if prompted
+6. Select **Walking** mode if available
+7. Tap **Preview** and step through all preview steps
+
+Expected: Preview opens and all steps are navigated.
+
 ## Recording (GIF/Video)
 
 In two terminals:
