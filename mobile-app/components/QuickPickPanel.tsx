@@ -62,6 +62,12 @@ export default function QuickPickPanel({
   showNextClassInfo,
   onNextClassInfoPress,
 }: Readonly<QuickPickPanelProps>) {
+  const isQuickPickOpenRef = useRef(isQuickPickOpen);
+  const onToggleOpenRef = useRef(onToggleOpen);
+
+  isQuickPickOpenRef.current = isQuickPickOpen;
+  onToggleOpenRef.current = onToggleOpen;
+
   // Swipe gesture: down to collapse, up to expand
   const panResponder = useRef(
     PanResponder.create({
@@ -74,12 +80,12 @@ export default function QuickPickPanel({
       },
       onPanResponderRelease: (_evt, gestureState) => {
         const SWIPE_THRESHOLD = 30;
-        if (gestureState.dy > SWIPE_THRESHOLD && isQuickPickOpen) {
+        if (gestureState.dy > SWIPE_THRESHOLD && isQuickPickOpenRef.current) {
           // Swipe down → collapse
-          onToggleOpen();
-        } else if (gestureState.dy < -SWIPE_THRESHOLD && !isQuickPickOpen) {
+          onToggleOpenRef.current();
+        } else if (gestureState.dy < -SWIPE_THRESHOLD && !isQuickPickOpenRef.current) {
           // Swipe up → expand
-          onToggleOpen();
+          onToggleOpenRef.current();
         }
       },
     }),
