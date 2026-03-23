@@ -43,37 +43,14 @@ npm run detox:build:android
 npm run detox:test:android
 ```
 
-## Test steps (ES-1 / US-1.1)
+## Test steps (US-4.3)
 
-File: `e2e/map.campus-switch.e2e.js`
+File: `e2e/indoor-accessible.e2e.js`
 
-1. Launch app
-2. Verify map screen and label show **SGW**
-3. Tap **Loyola** and verify label updates to **LOYOLA**
+1. Launch app and open map
+2. Set location near Webster Library (LB building)
+3. Search for room **H-838** and open indoor navigation
+4. Scroll navigation steps
+5. Tap **Accessible Route**
 
-Expected: Map loads within 10 seconds and campus switch recenters the map.
-
-## Recording (GIF/Video)
-
-In two terminals:
-
-Terminal A:
-
-```
-export ANDROID_SDK_ROOT=/Users/admin/Library/Android/sdk
-export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-adb shell screenrecord /sdcard/detox_map.mp4
-```
-
-Terminal B:
-
-```
-npm run detox:test:android
-```
-
-Stop recording with Ctrl+C, then pull:
-
-```
-adb pull /sdcard/detox_map.mp4 ../Artifacts/detox_map.mp4
-adb shell rm /sdcard/detox_map.mp4
-```
+Expected: Accessible route toggle is visible and can be enabled for indoor navigation.

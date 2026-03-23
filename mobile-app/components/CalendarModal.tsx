@@ -187,6 +187,8 @@ export default function CalendarModal({
                   </Text>
                   <TextInput
                     style={styles.input}
+                    testID="calendar-link-input"
+                    accessibilityLabel="Calendar link input"
                     placeholder="https://calendar.google.com/calendar/..."
                     placeholderTextColor="#999"
                     value={link}
@@ -202,6 +204,7 @@ export default function CalendarModal({
                     style={[styles.connectButton, !link.trim() && styles.connectButtonDisabled]}
                     onPress={handleConnect}
                     disabled={!link.trim() || loading}
+                    testID="calendar-connect-button"
                   >
                     {loading ? (
                       <ActivityIndicator size="small" color="#fff" />

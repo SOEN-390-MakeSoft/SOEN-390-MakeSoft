@@ -61,6 +61,8 @@ export default function SearchBar({
           <MaterialIcons name="search" size={19} color="#8c8c8c" />
           <TextInput
             ref={inputRef}
+            testID="map-search-input"
+            accessibilityLabel="Map search input"
             value={searchQuery}
             onChangeText={onChangeText}
             placeholder="Search"
@@ -96,10 +98,12 @@ export default function SearchBar({
       </View>
 
       {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
-        <View style={styles.mapSearchResults}>
+        <View style={styles.mapSearchResults} testID="map-search-results">
           {searchResults.map((result, index) => (
             <Pressable
               key={`${result.id}-${result.name}`}
+              testID={`search-result-${index}`}
+              accessibilityLabel={`Search result ${result.code ?? result.name}`}
               style={[
                 styles.mapSearchResultItem,
                 index < searchResults.length - 1 && styles.mapSearchResultDivider,
