@@ -581,7 +581,7 @@ describe('useIndoorNavigation — estimateTimeToRoom', () => {
   });
 });
 
-describe('useIndoorNavigation � exit routing', () => {
+describe('useIndoorNavigation - exit routing', () => {
   it('correctly sets destination when __EXIT__ is passed', async () => {
     const { result } = renderHook(() => useIndoorNavigation());
 
