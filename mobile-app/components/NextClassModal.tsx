@@ -79,27 +79,29 @@ export default function NextClassModal({
               return (
                 <>
                   <Text style={styles.modalTitle}>Next Class</Text>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Course:</Text>
-                    <Text style={styles.value}>{courseName}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Building:</Text>
-                    <Text style={styles.value}>{building}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Room:</Text>
-                    <Text style={styles.value}>{room}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Time:</Text>
-                    <Text style={styles.value}>{timeUntil}</Text>
-                  </View>
-                  <View style={styles.summaryBox}>
-                    <Text style={styles.summaryText}>
-                      {courseName} — {building} {room !== 'Unknown' ? `Rm ${room}` : ''} —{' '}
-                      {timeUntil}
-                    </Text>
+                  <View testID="next-class-sensitive">
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>Course:</Text>
+                      <Text style={styles.value}>{courseName}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>Building:</Text>
+                      <Text style={styles.value}>{building}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>Room:</Text>
+                      <Text style={styles.value}>{room}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>Time:</Text>
+                      <Text style={styles.value}>{timeUntil}</Text>
+                    </View>
+                    <View style={styles.summaryBox}>
+                      <Text style={styles.summaryText}>
+                        {courseName} — {building} {room !== 'Unknown' ? `Rm ${room}` : ''} —{' '}
+                        {timeUntil}
+                      </Text>
+                    </View>
                   </View>
                   <Pressable
                     style={styles.closeButton}

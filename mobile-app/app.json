@@ -28,6 +28,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       "expo-secure-store",
       [
         "expo-splash-screen",
@@ -45,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "PC_IP": {},
+      "router": {},
+      "eas": {
+        "projectId": "da8519b7-5d4a-4196-b682-8b3c43080ff0"
+      }
     }
   }
 }

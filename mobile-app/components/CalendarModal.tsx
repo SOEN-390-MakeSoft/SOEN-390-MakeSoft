@@ -136,6 +136,7 @@ export default function CalendarModal({
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
+          testID="calendar-events-list"
           // TODO: Display event description (item.description) and allow tapping
           // to view full event details. Currently only titles are rendered as placeholders.
           renderItem={({ item }) => <CalendarEventRow event={item} />}

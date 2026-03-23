@@ -22,7 +22,11 @@ jest.mock('expo-router', () => {
   );
   Tabs.Screen = ({ name }: any) => <Text testID={`tab-${name}`}>{name}</Text>;
 
-  return { Stack, Tabs };
+  return {
+    Stack,
+    Tabs,
+    usePathname: () => '/',
+  };
 });
 
 jest.mock('tamagui', () => {
@@ -42,6 +46,11 @@ jest.mock('tamagui', () => {
 });
 
 jest.mock('../tamagui.config', () => ({}));
+
+jest.mock('../services/clarity', () => ({
+  initializeClarity: jest.fn(),
+  trackClarityScreen: jest.fn(),
+}));
 
 jest.mock('@/components/MapScreen', () => {
   const { View } = require('react-native');

@@ -5,9 +5,12 @@
   "scripts": {
     "start": "expo start",
     "start:lan": "expo start --host lan",
+    "start:dev-client": "expo start --dev-client",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
+    "android:dev": "expo run:android",
     "ios": "expo start --ios",
+    "ios:dev": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
@@ -26,6 +29,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@microsoft/react-native-clarity": "^4.5.3",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
@@ -35,6 +39,7 @@
     "expo-auth-session": "~7.0.10",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
+    "expo-dev-client": "~6.0.20",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
