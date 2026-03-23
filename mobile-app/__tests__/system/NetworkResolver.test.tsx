@@ -14,7 +14,7 @@ describe('Testing Network Configuration Logic', () => {
   /*
    * System Scenario 1: Android Emulator (On PC)
    */
-  it('should configure for the anroid emulator host address, i.e. 10.0.2.2:8081', () => {
+  it('should configure for the android emulator host address, i.e. 10.0.2.2:8081', () => {
     // Build Mocks
     jest.doMock('react-native', () => ({ Platform: { OS: 'android' } }));
     jest.doMock('expo-constants', () => ({

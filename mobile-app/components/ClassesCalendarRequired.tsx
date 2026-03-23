@@ -10,6 +10,8 @@ import { CALENDAR_INSTRUCTIONS_VIDEO_URL } from '../constants/calendar';
 export interface ClassesCalendarRequiredProps {
   /** Called when the user taps "Connect calendar" to open the calendar modal */
   onConnectCalendar: () => void;
+  /** Called when the user wants to continue without connecting a calendar */
+  onContinueAsGuest: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -22,6 +24,7 @@ export interface ClassesCalendarRequiredProps {
  */
 export default function ClassesCalendarRequired({
   onConnectCalendar,
+  onContinueAsGuest,
 }: Readonly<ClassesCalendarRequiredProps>) {
   const router = useRouter();
 
@@ -94,9 +97,19 @@ export default function ClassesCalendarRequired({
           style={styles.connectButton}
           onPress={onConnectCalendar}
           accessibilityLabel="Connect calendar"
+          testID="calendar-required-connect"
         >
           <MaterialIcons name="link" size={20} color="#fff" />
           <Text style={styles.connectButtonText}>Connect calendar</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.guestButton}
+          onPress={onContinueAsGuest}
+          accessibilityLabel="Continue as guest"
+        >
+          <MaterialIcons name="close" size={18} color="#666" />
+          <Text style={styles.guestButtonText}>Continue as guest</Text>
         </Pressable>
       </View>
     </View>
@@ -202,5 +215,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  guestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+  },
+  guestButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

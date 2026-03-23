@@ -215,6 +215,58 @@ describe('NavigationScreen', () => {
     });
   });
 
+  describe('accessible route toggle', () => {
+    it('should render disabled state when accessible routing is off', () => {
+      render(<NavigationScreen {...defaultProps} isAccessibleRouteEnabled={false} />);
+
+      const toggle = screen.getByTestId('accessible-route-toggle');
+
+      expect(toggle.props.accessibilityRole).toBe('switch');
+      expect(toggle.props.accessibilityState).toEqual({ checked: false });
+    });
+
+    it('should render enabled state when accessible routing is on', () => {
+      render(<NavigationScreen {...defaultProps} isAccessibleRouteEnabled={true} />);
+
+      const toggle = screen.getByTestId('accessible-route-toggle');
+
+      expect(toggle.props.accessibilityRole).toBe('switch');
+      expect(toggle.props.accessibilityState).toEqual({ checked: true });
+    });
+
+    it('should call onAccessibleRouteChange with true when pressed from disabled state', () => {
+      const onAccessibleRouteChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isAccessibleRouteEnabled={false}
+          onAccessibleRouteChange={onAccessibleRouteChange}
+        />,
+      );
+
+      fireEvent.press(screen.getByTestId('accessible-route-toggle'));
+
+      expect(onAccessibleRouteChange).toHaveBeenCalledWith(true);
+    });
+
+    it('should call onAccessibleRouteChange with false when pressed from enabled state', () => {
+      const onAccessibleRouteChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          isAccessibleRouteEnabled={true}
+          onAccessibleRouteChange={onAccessibleRouteChange}
+        />,
+      );
+
+      fireEvent.press(screen.getByTestId('accessible-route-toggle'));
+
+      expect(onAccessibleRouteChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   describe('trip summary and ETA', () => {
     const tripSummary = {
       arrivalText: '6:52 PM',
@@ -432,6 +484,81 @@ describe('NavigationScreen', () => {
       ];
       render(<NavigationScreen {...defaultProps} navigationSteps={stepsNoDuration} />);
       expect(screen.getByText('10 m')).toBeTruthy();
+    });
+  });
+
+  describe('walking route comparison', () => {
+    it('should display tunnel and outdoor walking options and switch to the selected variant', () => {
+      const onTransportModeChange = jest.fn();
+      const onWalkingRouteVariantChange = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="driving"
+          onTransportModeChange={onTransportModeChange}
+          onWalkingRouteVariantChange={onWalkingRouteVariantChange}
+          walkingRouteComparison={{
+            originLabel: 'Hall',
+            destinationLabel: 'EV',
+            activeVariant: 'tunnel',
+            fastestVariant: 'tunnel',
+            tunnel: { durationText: '4 min', distanceText: '320 m' },
+            outdoor: { durationText: '6 min', distanceText: '480 m' },
+          }}
+        />,
+      );
+
+      expect(screen.getByTestId('walking-route-comparison')).toBeTruthy();
+      expect(
+        screen.getByText('Hall -> EV: 4 min underground / 6 min walking outside'),
+      ).toBeTruthy();
+      expect(screen.getByText('Fastest')).toBeTruthy();
+      expect(screen.getByText('320 m')).toBeTruthy();
+      expect(screen.getByText('480 m')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('walking-option-outdoor'));
+
+      expect(onTransportModeChange).toHaveBeenCalledWith('walking');
+      expect(onWalkingRouteVariantChange).toHaveBeenCalledWith('outdoor');
+    });
+
+    it('should expose walking options as accessible buttons and disable them when walking is unavailable', () => {
+      const onTransportModeChange = jest.fn();
+      const onWalkingRouteVariantChange = jest.fn();
+      const onDisabledTransportModePress = jest.fn();
+
+      render(
+        <NavigationScreen
+          {...defaultProps}
+          selectedTransportMode="driving"
+          onTransportModeChange={onTransportModeChange}
+          onWalkingRouteVariantChange={onWalkingRouteVariantChange}
+          onDisabledTransportModePress={onDisabledTransportModePress}
+          disabledTransportModes={['walking']}
+          walkingRouteComparison={{
+            originLabel: 'Hall',
+            destinationLabel: 'EV',
+            activeVariant: 'tunnel',
+            fastestVariant: 'tunnel',
+            tunnel: { durationText: '4 min', distanceText: '320 m' },
+            outdoor: { durationText: '6 min', distanceText: '480 m' },
+          }}
+        />,
+      );
+
+      const tunnelOption = screen.getByTestId('walking-option-tunnel');
+      const outdoorOption = screen.getByTestId('walking-option-outdoor');
+
+      expect(tunnelOption.props.accessibilityRole).toBe('button');
+      expect(tunnelOption.props.accessibilityState).toEqual({ disabled: true, selected: true });
+      expect(outdoorOption.props.accessibilityState).toEqual({ disabled: true, selected: false });
+
+      fireEvent.press(outdoorOption);
+
+      expect(onTransportModeChange).not.toHaveBeenCalled();
+      expect(onWalkingRouteVariantChange).not.toHaveBeenCalled();
+      expect(onDisabledTransportModePress).not.toHaveBeenCalled();
     });
   });
 });

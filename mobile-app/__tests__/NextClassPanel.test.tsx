@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Pressable, Text } from 'react-native';
+import Entypo from '@expo/vector-icons/Entypo';
 import NextClassPanel from '../components/NextClassPanel';
 import type { CalendarEvent } from '../hooks/usePublicCalendar';
 
@@ -50,10 +51,17 @@ describe('NextClassPanel', () => {
         onOpenCalendarConnect={jest.fn()}
         {...props}
       >
-        {(openPanel) => (
-          <Pressable testID="open-next-class-panel" onPress={openPanel}>
-            <Text>Open panel</Text>
-          </Pressable>
+        {(openPanel, showNextClassInfo) => (
+          <>
+            <Pressable testID="open-next-class-panel" onPress={openPanel}>
+              <Text>Open panel</Text>
+            </Pressable>
+            {showNextClassInfo && (
+              <Pressable testID="next-class-info-button" onPress={openPanel}>
+                <Entypo name="info-with-circle" color="#c41230" size={24} />
+              </Pressable>
+            )}
+          </>
         )}
       </NextClassPanel>,
     );

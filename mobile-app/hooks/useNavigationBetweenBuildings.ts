@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 import { getNextShuttles } from '../services/api';
+import { findPath, getBuildingMeta, loadTunnelGraph } from '../services/indoor';
 import {
   coordsEqual,
+  distanceMeters,
   findBuildingAtOrNearCoordinate,
   polygonCentroid,
   type LatLng,
@@ -96,6 +98,190 @@ function formatHoursMinutes(totalMinutes: number): string {
   return `${minutes} min`;
 }
 
+const WALK_SPEED_MPS = 1.4;
+const TUNNEL_ROUTE_VIA_TEXT = 'Underground tunnel network';
+const TUNNEL_GRAPH_SNAP_MAX_METERS = 25;
+
+type TunnelAccessPoint = {
+  code: string;
+  level: string;
+  position: LatLng;
+  label: string;
+};
+
+const SGW_TUNNEL_ACCESS: Record<string, TunnelAccessPoint> = {
+  H: {
+    code: 'H',
+    level: '-1',
+    position: { latitude: 45.49684, longitude: -73.57881 },
+    label: 'Hall basement tunnel entrance',
+  },
+  EV: {
+    code: 'EV',
+    level: '-1',
+    position: { latitude: 45.49593, longitude: -73.57845 },
+    label: 'EV metro tunnel entrance',
+  },
+  GM: {
+    code: 'GM',
+    level: '-1',
+    position: { latitude: 45.49608, longitude: -73.57872 },
+    label: 'GM metro tunnel entrance',
+  },
+  LB: {
+    code: 'LB',
+    level: '-1',
+    position: { latitude: 45.4969, longitude: -73.57839 },
+    label: 'LB basement tunnel entrance',
+  },
+  MB: {
+    code: 'MB',
+    level: '-2',
+    position: { latitude: 45.49523, longitude: -73.57852 },
+    label: 'MB lower tunnel entrance',
+  },
+};
+
+function formatMinutesLabel(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} min`;
+}
+
+function formatDistanceLabel(distance: number): string {
+  if (distance >= 1000) return `${(distance / 1000).toFixed(1)} km`;
+  return `${Math.max(1, Math.round(distance))} m`;
+}
+
+function dedupePolyline(points: LatLng[]): LatLng[] {
+  const deduped: LatLng[] = [];
+  for (const point of points) {
+    const last = deduped[deduped.length - 1];
+    if (!last || distanceMeters(last, point) >= 1) {
+      deduped.push(point);
+    }
+  }
+  return deduped;
+}
+
+function resolveTunnelBuilding(
+  point: LatLng,
+  buildings: readonly Building[],
+): { building: Building; access: TunnelAccessPoint } | null {
+  const building = findBuildingAtOrNearCoordinate(point, buildings, 150);
+  if (!building) return null;
+
+  const buildingCode = (building.code ?? extractCodeFromName(building.name) ?? '').toUpperCase();
+  const access = SGW_TUNNEL_ACCESS[buildingCode];
+  if (!access) return null;
+
+  return { building, access };
+}
+
+function buildTunnelModeRoute(
+  origin: LatLng,
+  destination: LatLng,
+  buildings: readonly Building[],
+): ModeRoute | null {
+  const originTunnel = resolveTunnelBuilding(origin, buildings);
+  const destinationTunnel = resolveTunnelBuilding(destination, buildings);
+  if (!originTunnel || !destinationTunnel) return null;
+  if (originTunnel.access.code === destinationTunnel.access.code) return null;
+
+  const tunnelGraph = loadTunnelGraph('SGW');
+  if (!tunnelGraph) return null;
+
+  const startNode = tunnelGraph.findClosestNode(
+    originTunnel.access.position,
+    originTunnel.access.level,
+  );
+  const endNode = tunnelGraph.findClosestNode(
+    destinationTunnel.access.position,
+    destinationTunnel.access.level,
+  );
+  if (!startNode || !endNode) return null;
+
+  if (
+    distanceMeters(startNode.position, originTunnel.access.position) >
+      TUNNEL_GRAPH_SNAP_MAX_METERS ||
+    distanceMeters(endNode.position, destinationTunnel.access.position) >
+      TUNNEL_GRAPH_SNAP_MAX_METERS
+  ) {
+    return null;
+  }
+
+  const tunnelRoute = findPath(tunnelGraph, startNode.id, endNode.id);
+  if (!tunnelRoute) return null;
+
+  const walkToTunnelDistance = distanceMeters(origin, originTunnel.access.position);
+  const walkFromTunnelDistance = distanceMeters(destinationTunnel.access.position, destination);
+  const walkToTunnelSeconds = walkToTunnelDistance / WALK_SPEED_MPS;
+  const walkFromTunnelSeconds = walkFromTunnelDistance / WALK_SPEED_MPS;
+  const totalDistanceMeters =
+    walkToTunnelDistance + tunnelRoute.totalDistanceMeters + walkFromTunnelDistance;
+  const totalDurationSeconds =
+    walkToTunnelSeconds + tunnelRoute.totalEstimatedSeconds + walkFromTunnelSeconds;
+
+  const steps: NavigationStep[] = [];
+
+  if (walkToTunnelDistance >= 5) {
+    steps.push({
+      instruction: `Go to the tunnel entrance in ${originTunnel.building.name}`,
+      distanceText: formatDistanceLabel(walkToTunnelDistance),
+      durationText: formatMinutesLabel(walkToTunnelSeconds),
+      focusCoordinate: originTunnel.access.position,
+    });
+  }
+
+  steps.push({
+    instruction: `Enter the tunnel at ${originTunnel.access.label} on level ${originTunnel.access.level}`,
+    distanceText: '',
+    durationText: '',
+    focusCoordinate: originTunnel.access.position,
+  });
+
+  for (const step of tunnelRoute.steps) {
+    steps.push({
+      instruction: step.instruction,
+      distanceText: formatDistanceLabel(step.distanceMeters),
+      durationText: formatMinutesLabel(step.estimatedSeconds),
+      focusCoordinate: midpointOrFallback(step.path, step.path[step.path.length - 1]),
+      focusRegion: step.path.length > 1 ? boundsToRegion(calculateBounds(step.path)) : undefined,
+      maneuver: step.edgeType,
+    });
+  }
+
+  steps.push({
+    instruction: `Exit the tunnel toward ${destinationTunnel.building.name}`,
+    distanceText: '',
+    durationText: '',
+    focusCoordinate: destinationTunnel.access.position,
+  });
+
+  if (walkFromTunnelDistance >= 5) {
+    steps.push({
+      instruction: `Walk to ${destinationTunnel.building.name}`,
+      distanceText: formatDistanceLabel(walkFromTunnelDistance),
+      durationText: formatMinutesLabel(walkFromTunnelSeconds),
+      focusCoordinate: destination,
+    });
+  }
+
+  return {
+    durationText: formatMinutesLabel(totalDurationSeconds),
+    durationSec: Math.round(totalDurationSeconds),
+    distanceText: formatDistanceLabel(totalDistanceMeters),
+    viaText: TUNNEL_ROUTE_VIA_TEXT,
+    polyline: dedupePolyline([
+      origin,
+      originTunnel.access.position,
+      ...tunnelRoute.polyline,
+      destinationTunnel.access.position,
+      destination,
+    ]),
+    steps,
+  };
+}
+
 type Building = {
   id: string;
   name: string;
@@ -123,6 +309,7 @@ type ModeDurations = {
 };
 
 type TransportMode = 'driving' | 'walking' | 'shuttle';
+export type WalkingRouteVariant = 'outdoor' | 'tunnel';
 
 export type NavigationStep = {
   instruction: string;
@@ -147,9 +334,29 @@ type ModeRoute = {
   steps: NavigationStep[];
 };
 
+type WalkingModeRoutes = {
+  outdoor?: ModeRoute | null;
+  tunnel?: ModeRoute | null;
+};
+
 type AllModeRoutes = {
   driving?: ModeRoute | null;
-  walking?: ModeRoute | null;
+  walking?: WalkingModeRoutes;
+};
+
+export type WalkingRouteComparison = {
+  originLabel: string;
+  destinationLabel: string;
+  activeVariant: WalkingRouteVariant;
+  fastestVariant: WalkingRouteVariant;
+  outdoor: {
+    durationText: string;
+    distanceText: string;
+  };
+  tunnel: {
+    durationText: string;
+    distanceText: string;
+  };
 };
 
 type MapRegion = {
@@ -369,6 +576,78 @@ function computeModeRouteDisplayState(
   };
 }
 
+function getFastestWalkingRouteVariant(
+  routes: WalkingModeRoutes | null | undefined,
+): WalkingRouteVariant | null {
+  const outdoor = routes?.outdoor;
+  const tunnel = routes?.tunnel;
+  if (outdoor && tunnel) {
+    return tunnel.durationSec <= outdoor.durationSec ? 'tunnel' : 'outdoor';
+  }
+  if (tunnel) return 'tunnel';
+  if (outdoor) return 'outdoor';
+  return null;
+}
+
+function getWalkingRoute(
+  routes: WalkingModeRoutes | null | undefined,
+  preferredVariant: WalkingRouteVariant | null | undefined,
+): ModeRoute | null | undefined {
+  if (!routes) return null;
+  if (preferredVariant === 'tunnel' && routes.tunnel) return routes.tunnel;
+  if (preferredVariant === 'outdoor' && routes.outdoor) return routes.outdoor;
+
+  const fastestVariant = getFastestWalkingRouteVariant(routes);
+  if (fastestVariant === 'tunnel') return routes.tunnel;
+  if (fastestVariant === 'outdoor') return routes.outdoor;
+  return null;
+}
+
+function buildWalkingRouteComparison(
+  originLabel: string,
+  destinationLabel: string,
+  routes: WalkingModeRoutes | null | undefined,
+  activeVariant: WalkingRouteVariant,
+): WalkingRouteComparison | null {
+  const outdoor = routes?.outdoor;
+  const tunnel = routes?.tunnel;
+  if (!outdoor || !tunnel) return null;
+
+  return {
+    originLabel,
+    destinationLabel,
+    activeVariant,
+    fastestVariant: getFastestWalkingRouteVariant(routes) ?? 'outdoor',
+    outdoor: {
+      durationText: outdoor.durationText,
+      distanceText: outdoor.distanceText,
+    },
+    tunnel: {
+      durationText: tunnel.durationText,
+      distanceText: tunnel.distanceText,
+    },
+  };
+}
+
+function selectActiveModeRoute(
+  selectedTransportMode: TransportMode,
+  routes: AllModeRoutes,
+  selectedWalkingRouteVariant: WalkingRouteVariant,
+): { route: ModeRoute | null | undefined; shouldAutoSelectWalking: boolean } {
+  const activeWalkingRoute = getWalkingRoute(routes.walking, selectedWalkingRouteVariant);
+  const shouldAutoSelectWalking = selectedTransportMode === 'driving' && !!routes.walking?.tunnel;
+
+  if (shouldAutoSelectWalking) {
+    return { route: activeWalkingRoute, shouldAutoSelectWalking: true };
+  }
+
+  if (selectedTransportMode === 'driving') {
+    return { route: routes.driving, shouldAutoSelectWalking: false };
+  }
+
+  return { route: activeWalkingRoute, shouldAutoSelectWalking: false };
+}
+
 /** Returns shuttle final arrival time in ms, or null if not computable. */
 function getShuttleFinalArrivalMs(shuttleInfo: ShuttleInfo | null, nowMs: number): number | null {
   if (!shuttleInfo) return null;
@@ -391,6 +670,7 @@ function computeLateTransportModes(
   arriveByMs: number,
   nowMs: number,
   allModeRoutes: AllModeRoutes,
+  selectedWalkingRouteVariant: WalkingRouteVariant,
   shuttleInfo: ShuttleInfo | null,
 ): TransportMode[] {
   const late: TransportMode[] = [];
@@ -398,8 +678,9 @@ function computeLateTransportModes(
     const drivingArrivalMs = nowMs + allModeRoutes.driving.durationSec * 1000;
     if (drivingArrivalMs > arriveByMs) late.push('driving');
   }
-  if (allModeRoutes.walking?.durationSec != null) {
-    const walkingArrivalMs = nowMs + allModeRoutes.walking.durationSec * 1000;
+  const activeWalkingRoute = getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
+  if (activeWalkingRoute?.durationSec != null) {
+    const walkingArrivalMs = nowMs + activeWalkingRoute.durationSec * 1000;
     if (walkingArrivalMs > arriveByMs) late.push('walking');
   }
   const shuttleFinalMs = getShuttleFinalArrivalMs(shuttleInfo, nowMs);
@@ -428,6 +709,7 @@ export function useNavigationBetweenBuildings({
   arriveBy = null,
 }: UseNavigationBetweenBuildingsParams) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isIndoorOnlyRoute, setIsIndoorOnlyRoute] = useState(false);
   const [navigationStart, setNavigationStart] = useState<string>('Your location');
   const [navigationDestination, setNavigationDestination] = useState<string>('');
   const [navigationOrigin, setNavigationOrigin] = useState<LatLng | null>(null);
@@ -443,14 +725,21 @@ export function useNavigationBetweenBuildings({
   const [tapMarkerCoordinate, setTapMarkerCoordinate] = useState<LatLng | null>(null);
   const [allModeRoutes, setAllModeRoutes] = useState<AllModeRoutes>({});
   const [selectedTransportMode, setSelectedTransportMode] = useState<TransportMode>('driving');
+  const [selectedWalkingRouteVariant, setSelectedWalkingRouteVariant] =
+    useState<WalkingRouteVariant>('outdoor');
   const [routePolyline, setRoutePolyline] = useState<LatLng[]>([]);
   const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
   const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
+  const selectedTransportModeRef = useRef<TransportMode>('driving');
 
   // --- Shuttle state ---
   const [isShuttleRoute, setIsShuttleRoute] = useState(false);
   const [shuttleInfo, setShuttleInfo] = useState<ShuttleInfo | null>(null);
   const [isShuttleLoading, setIsShuttleLoading] = useState(false);
+
+  useEffect(() => {
+    selectedTransportModeRef.current = selectedTransportMode;
+  }, [selectedTransportMode]);
 
   // Combined building list across both campuses for search/coordinate resolution
   const allBuildings = useMemo<Building[]>(() => {
@@ -521,16 +810,22 @@ export function useNavigationBetweenBuildings({
       return;
     }
 
+    let cancelled = false;
+    const baseNowMs = currentTime?.getTime() ?? Date.now();
+    const tunnelWalkingRoute = buildTunnelModeRoute(
+      navigationOrigin,
+      navigationDestinationCoord,
+      allBuildings,
+    );
     const key = getDirectionsKey();
-    if (!key) {
+    if (!key && !tunnelWalkingRoute) {
       setIsRouteLoading(false);
       return;
     }
 
-    let cancelled = false;
-    const baseNowMs = currentTime?.getTime() ?? Date.now();
-
     const fetchDirections = async (mode: 'driving' | 'walking'): Promise<ModeRoute | null> => {
+      if (!key) return null;
+
       const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
       const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
       const trafficParam =
@@ -598,25 +893,43 @@ export function useNavigationBetweenBuildings({
 
     const load = async () => {
       setIsRouteLoading(true);
-      setModeDurations({});
       try {
-        const [driving, walking] = await Promise.all([
+        const [driving, outdoorWalking] = await Promise.all([
           fetchDirections('driving'),
           fetchDirections('walking'),
         ]);
         if (cancelled) return;
 
-        setAllModeRoutes({ driving, walking });
+        const walkingRoutes: WalkingModeRoutes = {
+          outdoor: outdoorWalking,
+          tunnel: tunnelWalkingRoute,
+        };
+        const preferredWalkingVariant = getFastestWalkingRouteVariant(walkingRoutes) ?? 'outdoor';
+        setSelectedWalkingRouteVariant(preferredWalkingVariant);
+        setAllModeRoutes({ driving, walking: walkingRoutes });
+        setModeDurations({
+          driving: driving?.durationText,
+          walking: getWalkingRoute(walkingRoutes, preferredWalkingVariant)?.durationText,
+        });
 
         // Show polyline + steps for the currently selected mode
-        const active = selectedTransportMode === 'driving' ? driving : walking;
+        const { route: active, shouldAutoSelectWalking } = selectActiveModeRoute(
+          selectedTransportModeRef.current,
+          { driving, walking: walkingRoutes },
+          preferredWalkingVariant,
+        );
         if (active?.polyline && active.polyline.length > 0) {
           setRoutePolyline(active.polyline);
           setRouteRegion(boundsToRegion(calculateBounds(active.polyline)));
         }
         setNavigationSteps(active?.steps ?? []);
+        if (shouldAutoSelectWalking) {
+          setSelectedTransportMode('walking');
+        }
 
-        const primary = driving ?? walking;
+        const primary = shouldAutoSelectWalking
+          ? getWalkingRoute(walkingRoutes, preferredWalkingVariant)
+          : (driving ?? getWalkingRoute(walkingRoutes, preferredWalkingVariant));
         if (primary) {
           const arrival = new Date(baseNowMs + primary.durationSec * 1000);
           const arrivalText = arrival.toLocaleTimeString([], {
@@ -630,10 +943,6 @@ export function useNavigationBetweenBuildings({
             viaText: primary.viaText || 'Suggested route',
           });
         }
-        setModeDurations({
-          driving: driving?.durationText,
-          walking: walking?.durationText,
-        });
       } finally {
         if (!cancelled) setIsRouteLoading(false);
       }
@@ -651,6 +960,7 @@ export function useNavigationBetweenBuildings({
     sameOriginDestination,
     missingCoordinates,
     currentTime,
+    allBuildings,
   ]); // --- Shuttle route fetch ---
   // Runs whenever origin/destination change and it is a cross-campus route on a weekday.
   useEffect(() => {
@@ -782,7 +1092,9 @@ export function useNavigationBetweenBuildings({
       return;
     }
     const route =
-      selectedTransportMode === 'driving' ? allModeRoutes.driving : allModeRoutes.walking;
+      selectedTransportMode === 'driving'
+        ? allModeRoutes.driving
+        : getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
     if (route?.polyline && route.polyline.length > 0) {
       const { routeSummary: summary, navigationSteps: steps } = computeModeRouteDisplayState(
         route,
@@ -792,19 +1104,34 @@ export function useNavigationBetweenBuildings({
       setRouteRegion(boundsToRegion(calculateBounds(route.polyline)));
       setRouteSummary(summary);
       setNavigationSteps(steps);
-    } else if (allModeRoutes.driving || allModeRoutes.walking) {
+    } else if (
+      allModeRoutes.driving ||
+      allModeRoutes.walking?.outdoor ||
+      allModeRoutes.walking?.tunnel
+    ) {
       setRoutePolyline([]);
       setRouteRegion(null);
       setNavigationSteps([]);
     }
   }, [
     selectedTransportMode,
+    selectedWalkingRouteVariant,
     allModeRoutes,
     isNavigationOpen,
     currentTime,
     shuttleInfo,
     navigationDestinationCoord,
   ]);
+
+  useEffect(() => {
+    const activeWalkingRoute = getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant);
+    if (!allModeRoutes.driving && !activeWalkingRoute) return;
+
+    setModeDurations((current) => ({
+      driving: allModeRoutes.driving?.durationText ?? current.driving,
+      walking: activeWalkingRoute?.durationText ?? current.walking,
+    }));
+  }, [allModeRoutes, selectedWalkingRouteVariant]);
 
   /** Clear stale trip text and invalidate cached routes so the next fetch
    *  overwrites everything.  We set isRouteLoading immediately so the UI
@@ -818,6 +1145,7 @@ export function useNavigationBetweenBuildings({
     setShuttleInfo(null);
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
+    setSelectedWalkingRouteVariant('outdoor');
   }, []);
 
   /**
@@ -842,10 +1170,14 @@ export function useNavigationBetweenBuildings({
       const destinationName = remoteBuilding?.name ?? selectedBuilding?.name ?? 'Destination';
       const destinationCode = remoteBuilding?.code ?? selectedBuilding?.code ?? null;
       setIsDestinationLocked(false);
+      setIsIndoorOnlyRoute(false);
+      setNavigationStart('Your location');
+      setNavigationOrigin(null);
       setNavigationDestination(formatBuildingLabel(destinationName, destinationCode));
       setActiveMode('driving');
       if (selectedBuilding) {
-        const destCentroid = polygonCentroid(selectedBuilding.polygon);
+        const meta = selectedBuilding.code ? getBuildingMeta(selectedBuilding.code) : null;
+        const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(selectedBuilding.polygon);
         setNavigationDestinationCoord(destCentroid);
         setTapMarkerCoordinate(destCentroid);
       }
@@ -861,7 +1193,8 @@ export function useNavigationBetweenBuildings({
         destinationBuilding.name,
         destinationBuilding.code,
       );
-      const destCentroid = polygonCentroid(destinationBuilding.polygon);
+      const meta = destinationBuilding.code ? getBuildingMeta(destinationBuilding.code) : null;
+      const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(destinationBuilding.polygon);
       setNavigationStart('Your location');
       setNavigationOrigin(null);
       setNavigationDestination(destinationLabel);
@@ -874,6 +1207,22 @@ export function useNavigationBetweenBuildings({
       setIsNavigationOpen(true);
     },
     [formatBuildingLabel, resetRouteState],
+  );
+
+  const openIndoorOnlyNavigation = useCallback(
+    (destinationLabel: string, startLabel?: string) => {
+      setIsIndoorOnlyRoute(true);
+      setNavigationDestination(destinationLabel);
+      setNavigationStart(startLabel ?? 'Building entrance');
+      setNavigationOrigin(null);
+      setNavigationDestinationCoord(null);
+      setNavigationActiveFieldState(null);
+      setIsDestinationLocked(false);
+      setTapMarkerCoordinate(null);
+      resetRouteState();
+      setIsNavigationOpen(true);
+    },
+    [resetRouteState],
   );
 
   const handleMapBuildingPress = useCallback(
@@ -964,13 +1313,15 @@ export function useNavigationBetweenBuildings({
         if (name === 'Your location') {
           setNavigationOrigin(null);
         } else if (building) {
-          setNavigationOrigin(polygonCentroid(building.polygon));
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          setNavigationOrigin(meta?.entrances?.[0] ?? polygonCentroid(building.polygon));
         }
       } else {
         setIsDestinationLocked(false);
         setNavigationDestination(label);
         if (building) {
-          const destCentroid = polygonCentroid(building.polygon);
+          const meta = building.code ? getBuildingMeta(building.code) : null;
+          const destCentroid = meta?.entrances?.[0] ?? polygonCentroid(building.polygon);
           setNavigationDestinationCoord(destCentroid);
           setTapMarkerCoordinate(destCentroid);
         }
@@ -1001,6 +1352,11 @@ export function useNavigationBetweenBuildings({
 
   const closeNavigation = useCallback(() => {
     setIsNavigationOpen(false);
+    setIsIndoorOnlyRoute(false);
+    setNavigationStart('Your location');
+    setNavigationOrigin(null);
+    setNavigationDestination('');
+    setNavigationDestinationCoord(null);
     setNavigationActiveFieldState(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);
@@ -1014,6 +1370,7 @@ export function useNavigationBetweenBuildings({
     setIsShuttleLoading(false);
     setIsShuttleRoute(false);
     setIsDestinationLocked(false);
+    setSelectedWalkingRouteVariant('outdoor');
   }, []);
 
   const lateTransportModes = useMemo<TransportMode[]>(() => {
@@ -1021,8 +1378,28 @@ export function useNavigationBetweenBuildings({
     const arriveByMs = arriveBy.getTime();
     if (!Number.isFinite(arriveByMs)) return [];
     const nowMs = currentTime?.getTime() ?? Date.now();
-    return computeLateTransportModes(arriveByMs, nowMs, allModeRoutes, shuttleInfo);
-  }, [arriveBy, currentTime, allModeRoutes, shuttleInfo]);
+    return computeLateTransportModes(
+      arriveByMs,
+      nowMs,
+      allModeRoutes,
+      selectedWalkingRouteVariant,
+      shuttleInfo,
+    );
+  }, [arriveBy, currentTime, allModeRoutes, selectedWalkingRouteVariant, shuttleInfo]);
+
+  const walkingRouteComparison = useMemo(() => {
+    const activeVariant =
+      getWalkingRoute(allModeRoutes.walking, selectedWalkingRouteVariant) ===
+      allModeRoutes.walking?.tunnel
+        ? 'tunnel'
+        : 'outdoor';
+    return buildWalkingRouteComparison(
+      navigationStart,
+      navigationDestination,
+      allModeRoutes.walking,
+      activeVariant,
+    );
+  }, [allModeRoutes.walking, navigationDestination, navigationStart, selectedWalkingRouteVariant]);
 
   return {
     isNavigationOpen,
@@ -1039,6 +1416,8 @@ export function useNavigationBetweenBuildings({
     setActiveMode,
     openNavigationForBuilding,
     openNavigationForResolvedDestination,
+    openIndoorOnlyNavigation,
+    isIndoorOnlyRoute,
     handleMapBuildingPress,
     handleMapCoordinatePress,
     handleSearchSelect,
@@ -1050,6 +1429,9 @@ export function useNavigationBetweenBuildings({
     tapMarkerCoordinate,
     selectedTransportMode,
     setSelectedTransportMode,
+    selectedWalkingRouteVariant,
+    setSelectedWalkingRouteVariant,
+    walkingRouteComparison,
     routePolyline,
     routeRegion,
     navigationSteps,

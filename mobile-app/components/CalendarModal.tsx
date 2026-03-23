@@ -197,11 +197,14 @@ export default function CalendarModal({
                     returnKeyType="go"
                     onSubmitEditing={handleConnect}
                     multiline={false}
+                    testID="calendar-link-input"
+                    accessibilityLabel="Calendar link input"
                   />
                   <Pressable
                     style={[styles.connectButton, !link.trim() && styles.connectButtonDisabled]}
                     onPress={handleConnect}
                     disabled={!link.trim() || loading}
+                    testID="calendar-connect-button"
                   >
                     {loading ? (
                       <ActivityIndicator size="small" color="#fff" />

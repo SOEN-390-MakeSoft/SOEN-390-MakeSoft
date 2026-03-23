@@ -1,8 +1,14 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { NavigationStep, ShuttleInfo } from '../hooks/useNavigationBetweenBuildings';
-import NavigationMenu from './NavigationMenu';
+import type {
+  NavigationStep,
+  ShuttleInfo,
+  WalkingRouteComparison,
+  WalkingRouteVariant,
+} from '../hooks/useNavigationBetweenBuildings';
+import NavigationMenu, { type SearchEntry } from './NavigationMenu';
+import AccessibleRouteToggle from './AccessibleRouteToggle';
 import { useSettings } from '../context/settings';
 
 export type DirectionsErrorType = 'same_origin_destination' | 'missing_coordinates' | null;
@@ -21,6 +27,7 @@ interface NavigationScreenProps {
     driving?: string;
     walking?: string;
   };
+  walkingRouteComparison?: WalkingRouteComparison | null;
   tripSummary?: {
     arrivalText: string;
     distanceText: string;
@@ -32,6 +39,7 @@ interface NavigationScreenProps {
   isGetDirectionsDisabled?: boolean;
   selectedTransportMode?: TransportMode;
   onTransportModeChange?: (mode: TransportMode) => void;
+  onWalkingRouteVariantChange?: (variant: WalkingRouteVariant) => void;
   disabledTransportModes?: TransportMode[];
   onDisabledTransportModePress?: (mode: TransportMode) => void;
   navigationSteps?: NavigationStep[];
@@ -43,8 +51,18 @@ interface NavigationScreenProps {
   shuttleInfo?: ShuttleInfo | null;
   /** Whether today is a weekend (shuttle not available) */
   isWeekend?: boolean;
+  /** Whether accessible routing is enabled for indoor navigation */
+  isAccessibleRouteEnabled?: boolean;
+  /** Toggle accessible routing for indoor navigation */
+  onAccessibleRouteChange?: (enabled: boolean) => void;
   onOpenPreview?: () => void;
   onOpenDirections?: () => void;
+  /** Formatted indoor travel time text, e.g. "~2 min indoor walk". */
+  indoorTravelTimeText?: string;
+  /** True when navigating between rooms in the same building (no outdoor route). */
+  isIndoorOnlyRoute?: boolean;
+  /** Indoor room list for NavigationMenu dropdown in indoor-only mode. */
+  indoorRoomOptions?: SearchEntry[];
 }
 
 const DRAG_THRESHOLD = 40;
@@ -193,13 +211,19 @@ function getTripTitleText({
   selectedTransportMode,
   isShuttleRoute,
   isShuttleLoading,
+  isIndoorOnlyRoute,
 }: Readonly<{
   isLoading?: boolean;
   tripSummary?: NavigationScreenProps['tripSummary'];
   selectedTransportMode: TransportMode;
   isShuttleRoute: boolean;
   isShuttleLoading: boolean;
+  isIndoorOnlyRoute: boolean;
 }>): string {
+  if (isIndoorOnlyRoute && tripSummary) {
+    return 'Indoor directions';
+  }
+
   if (selectedTransportMode === 'shuttle' && isShuttleRoute) {
     return isShuttleLoading ? 'Loading shuttle times...' : 'Shuttle - next departures';
   }
@@ -228,6 +252,93 @@ function TripMeta({
     <Text style={styles.tripMeta} numberOfLines={1}>
       {tripSummary.distanceText} - {tripSummary.durationText}
     </Text>
+  );
+}
+
+function WalkingRouteComparisonPanel({
+  comparison,
+  isWalkingDisabled,
+  onTransportModeChange,
+  onWalkingRouteVariantChange,
+  onDisabledTransportModePress,
+}: Readonly<{
+  comparison: WalkingRouteComparison;
+  isWalkingDisabled: boolean;
+  onTransportModeChange?: (mode: TransportMode) => void;
+  onWalkingRouteVariantChange?: (variant: WalkingRouteVariant) => void;
+  onDisabledTransportModePress?: (mode: TransportMode) => void;
+}>) {
+  const handleSelect = (variant: WalkingRouteVariant) => {
+    if (isWalkingDisabled) {
+      onDisabledTransportModePress?.('walking');
+      return;
+    }
+    onTransportModeChange?.('walking');
+    onWalkingRouteVariantChange?.(variant);
+  };
+
+  const summaryText = `${comparison.originLabel} -> ${comparison.destinationLabel}: ${comparison.tunnel.durationText} underground / ${comparison.outdoor.durationText} walking outside`;
+
+  const renderOption = (
+    variant: WalkingRouteVariant,
+    title: string,
+    durationText: string,
+    distanceText: string,
+    testId: string,
+  ) => {
+    const isSelected = comparison.activeVariant === variant;
+    const isFastest = comparison.fastestVariant === variant;
+
+    return (
+      <Pressable
+        onPress={() => handleSelect(variant)}
+        accessibilityRole="button"
+        accessibilityLabel={`${title} walking route, ${durationText}, ${distanceText}`}
+        accessibilityHint={
+          isWalkingDisabled
+            ? 'Walking is currently unavailable for this trip.'
+            : 'Select this walking route option.'
+        }
+        accessibilityState={{ disabled: isWalkingDisabled, selected: isSelected }}
+        disabled={isWalkingDisabled}
+        testID={testId}
+        style={[
+          styles.walkingOptionCard,
+          isSelected && styles.walkingOptionCardSelected,
+          isWalkingDisabled && styles.walkingOptionCardDisabled,
+        ]}
+      >
+        <View style={styles.walkingOptionHeader}>
+          <Text style={styles.walkingOptionTitle}>{title}</Text>
+          {isFastest ? <Text style={styles.walkingOptionBadge}>Fastest</Text> : null}
+        </View>
+        <Text style={styles.walkingOptionMeta}>{durationText}</Text>
+        <Text style={styles.walkingOptionSubMeta}>{distanceText}</Text>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.walkingComparisonPanel} testID="walking-route-comparison">
+      <Text style={styles.walkingComparisonTitle}>Walking route options</Text>
+      <Text style={styles.walkingComparisonSummary}>{summaryText}</Text>
+      <View style={styles.walkingOptionsRow}>
+        {renderOption(
+          'tunnel',
+          'Underground',
+          comparison.tunnel.durationText,
+          comparison.tunnel.distanceText,
+          'walking-option-tunnel',
+        )}
+        {renderOption(
+          'outdoor',
+          'Outside',
+          comparison.outdoor.durationText,
+          comparison.outdoor.distanceText,
+          'walking-option-outdoor',
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -327,6 +438,17 @@ function DirectionsErrorNotice({
   );
 }
 
+function IndoorTimeBadge({ text }: Readonly<{ text?: string }>) {
+  if (!text) return null;
+
+  return (
+    <View style={styles.indoorTimeBadge} testID="indoor-time-badge">
+      <MaterialIcons name="directions-walk" size={14} color="#fff" />
+      <Text style={styles.indoorTimeBadgeText}>{text}</Text>
+    </View>
+  );
+}
+
 function formatStepMeta(step: NavigationStep): string {
   if (step.durationText) {
     return `${step.distanceText} \u00B7 ${step.durationText}`;
@@ -356,7 +478,12 @@ function PreviewAndSteps({
   const buttonTextColor = isPreviewButtonDisabled ? '#9b9b9b' : previewTextColor;
 
   return (
-    <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator nestedScrollEnabled>
+    <ScrollView
+      style={styles.scrollableContent}
+      testID="navigation-steps-scroll"
+      showsVerticalScrollIndicator
+      nestedScrollEnabled
+    >
       <View style={styles.actionButtonsRow}>
         <Pressable
           style={[
@@ -424,12 +551,14 @@ export default function NavigationScreen({
   onActiveFieldChange,
   onBuildingSelect,
   modeDurations,
+  walkingRouteComparison = null,
   tripSummary,
   isLoading,
   directionsError = null,
   isGetDirectionsDisabled = true,
   selectedTransportMode = 'driving',
   onTransportModeChange,
+  onWalkingRouteVariantChange,
   disabledTransportModes = [],
   onDisabledTransportModePress,
   navigationSteps = [],
@@ -437,15 +566,22 @@ export default function NavigationScreen({
   isShuttleLoading = false,
   shuttleInfo = null,
   isWeekend = false,
+  isAccessibleRouteEnabled = false,
+  onAccessibleRouteChange,
   onOpenPreview,
   onOpenDirections,
+  indoorTravelTimeText,
+  isIndoorOnlyRoute = false,
+  indoorRoomOptions,
 }: Readonly<NavigationScreenProps>) {
   const { colourBlindMode } = useSettings();
   const [isMinimized, setIsMinimized] = useState(false);
   const isMinimizedRef = React.useRef(false);
 
   const hasSteps = navigationSteps.length > 0;
-  const isPreviewButtonDisabled = isGetDirectionsDisabled || !hasSteps;
+  const isPreviewButtonDisabled = isIndoorOnlyRoute
+    ? !hasSteps
+    : isGetDirectionsDisabled || !hasSteps;
   const themeColors = getThemeColors(colourBlindMode);
   const tripTitleText = getTripTitleText({
     isLoading,
@@ -453,6 +589,7 @@ export default function NavigationScreen({
     selectedTransportMode,
     isShuttleRoute,
     isShuttleLoading,
+    isIndoorOnlyRoute,
   });
   const showShuttlePanel =
     selectedTransportMode === 'shuttle' && isShuttleRoute && !isShuttleLoading && !!shuttleInfo;
@@ -460,14 +597,6 @@ export default function NavigationScreen({
     selectedTransportMode === 'shuttle' && isWeekend && isShuttleRoute;
 
   const isModeDisabled = (mode: TransportMode) => disabledTransportModes.includes(mode);
-
-  useEffect(() => {
-    isMinimizedRef.current = isMinimized;
-  }, [isMinimized]);
-
-  const handleToggleMinimized = () => {
-    setIsMinimized((prev) => !prev);
-  };
 
   const handleOpenPreview = () => {
     if (isPreviewButtonDisabled) return;
@@ -481,21 +610,31 @@ export default function NavigationScreen({
     onOpenDirections?.();
   };
 
-  const handlePanRelease = (_: unknown, dy: number) => {
+  const handlePanRelease = (_: unknown, gestureState: { dy: number; dx: number }) => {
+    const { dy, dx } = gestureState;
     const currentlyMinimized = isMinimizedRef.current;
+
+    // Tap (very little movement) → toggle minimized state
+    if (Math.abs(dy) < 6 && Math.abs(dx) < 6) {
+      setIsMinimized(!currentlyMinimized);
+      return;
+    }
+
+    // Swipe: expand if swiped up past threshold; minimize if swiped down
     const nextMinimized = currentlyMinimized ? dy >= -DRAG_THRESHOLD : dy > DRAG_THRESHOLD;
     setIsMinimized(nextMinimized);
   };
 
   const handlePanResponder = React.useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      // Immediately claim the gesture so Pressable / ScrollView don't steal it
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderRelease: (_, gestureState) => {
-        handlePanRelease(_, gestureState.dy);
+        handlePanRelease(_, gestureState);
       },
       onPanResponderTerminate: (_, gestureState) => {
-        handlePanRelease(_, gestureState.dy);
+        handlePanRelease(_, gestureState);
       },
     }),
   ).current;
@@ -510,6 +649,7 @@ export default function NavigationScreen({
         destinationLocked={destinationLocked}
         onActiveFieldChange={onActiveFieldChange}
         onBuildingSelect={onBuildingSelect}
+        indoorRoomOptions={indoorRoomOptions}
       />
 
       <View
@@ -520,9 +660,9 @@ export default function NavigationScreen({
         ]}
       >
         <Pressable
-          onPress={handleToggleMinimized}
           style={styles.minimizeHandleTouch}
           {...handlePanResponder.panHandlers}
+          onPress={() => setIsMinimized((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={isMinimized ? 'Expand menu' : 'Minimize menu'}
           testID="menu-minimize-toggle"
@@ -531,48 +671,69 @@ export default function NavigationScreen({
         </Pressable>
         <View style={styles.bottomHeader}>
           <View style={styles.tripModeRow}>
-            <ModeChip
-              mode="driving"
-              icon="directions-car"
-              label={modeDurations?.driving ?? '--'}
-              isSelected={selectedTransportMode === 'driving'}
-              isDisabled={isModeDisabled('driving')}
+            {isIndoorOnlyRoute ? (
+              <ModeChip
+                mode="walking"
+                icon="directions-walk"
+                label={modeDurations?.walking ?? '--'}
+                isSelected
+                chipColor={themeColors.chipColor}
+                chipMutedColor={themeColors.chipMutedColor}
+                onPress={() => {}}
+              />
+            ) : (
+              <>
+                <ModeChip
+                  mode="driving"
+                  icon="directions-car"
+                  label={modeDurations?.driving ?? '--'}
+                  isSelected={selectedTransportMode === 'driving'}
+                  isDisabled={isModeDisabled('driving')}
+                  chipColor={themeColors.chipColor}
+                  chipMutedColor={themeColors.chipMutedColor}
+                  onPress={() => {
+                    if (isModeDisabled('driving')) {
+                      onDisabledTransportModePress?.('driving');
+                      return;
+                    }
+                    onTransportModeChange?.('driving');
+                  }}
+                />
+                <ModeChip
+                  mode="walking"
+                  icon="directions-walk"
+                  label={modeDurations?.walking ?? '--'}
+                  isSelected={selectedTransportMode === 'walking'}
+                  isDisabled={isModeDisabled('walking')}
+                  chipColor={themeColors.chipColor}
+                  chipMutedColor={themeColors.chipMutedColor}
+                  onPress={() => {
+                    if (isModeDisabled('walking')) {
+                      onDisabledTransportModePress?.('walking');
+                      return;
+                    }
+                    onTransportModeChange?.('walking');
+                  }}
+                />
+                {renderShuttleChip({
+                  isShuttleRoute,
+                  isWeekend,
+                  isDisabled: isModeDisabled('shuttle'),
+                  selectedTransportMode,
+                  chipColor: themeColors.chipColor,
+                  chipMutedColor: themeColors.chipMutedColor,
+                  onTransportModeChange,
+                  onDisabledTransportModePress,
+                })}
+              </>
+            )}
+
+            <AccessibleRouteToggle
+              enabled={isAccessibleRouteEnabled}
               chipColor={themeColors.chipColor}
               chipMutedColor={themeColors.chipMutedColor}
-              onPress={() => {
-                if (isModeDisabled('driving')) {
-                  onDisabledTransportModePress?.('driving');
-                  return;
-                }
-                onTransportModeChange?.('driving');
-              }}
+              onToggle={onAccessibleRouteChange}
             />
-            <ModeChip
-              mode="walking"
-              icon="directions-walk"
-              label={modeDurations?.walking ?? '--'}
-              isSelected={selectedTransportMode === 'walking'}
-              isDisabled={isModeDisabled('walking')}
-              chipColor={themeColors.chipColor}
-              chipMutedColor={themeColors.chipMutedColor}
-              onPress={() => {
-                if (isModeDisabled('walking')) {
-                  onDisabledTransportModePress?.('walking');
-                  return;
-                }
-                onTransportModeChange?.('walking');
-              }}
-            />
-            {renderShuttleChip({
-              isShuttleRoute,
-              isWeekend,
-              isDisabled: isModeDisabled('shuttle'),
-              selectedTransportMode,
-              chipColor: themeColors.chipColor,
-              chipMutedColor: themeColors.chipMutedColor,
-              onTransportModeChange,
-              onDisabledTransportModePress,
-            })}
           </View>
           <Pressable
             onPress={onClose}
@@ -581,22 +742,41 @@ export default function NavigationScreen({
             <MaterialIcons name="close" size={18} color={themeColors.closeIcon} />
           </Pressable>
         </View>
-        <Text style={styles.tripTitle} numberOfLines={2}>
-          {tripTitleText}
-        </Text>
-        <TripMeta tripSummary={tripSummary} selectedTransportMode={selectedTransportMode} />
-        <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
-        <ShuttleWeekendNotice show={showShuttleWeekendNotice} />
-        <DirectionsErrorNotice directionsError={directionsError} />
-        <PreviewAndSteps
-          hasSteps={hasSteps}
-          isPreviewButtonDisabled={isPreviewButtonDisabled}
-          previewBg={themeColors.previewBg}
-          previewTextColor={themeColors.previewTextColor}
-          onOpenPreview={handleOpenPreview}
-          onOpenDirections={handleOpenDirections}
-          navigationSteps={navigationSteps}
-        />
+        {!isMinimized && (
+          <>
+            <Text style={styles.tripTitle} numberOfLines={2}>
+              {tripTitleText}
+            </Text>
+            <TripMeta
+              tripSummary={tripSummary}
+              selectedTransportMode={isIndoorOnlyRoute ? 'walking' : selectedTransportMode}
+            />
+            {!isIndoorOnlyRoute && walkingRouteComparison ? (
+              <WalkingRouteComparisonPanel
+                comparison={walkingRouteComparison}
+                isWalkingDisabled={isModeDisabled('walking')}
+                onTransportModeChange={onTransportModeChange}
+                onWalkingRouteVariantChange={onWalkingRouteVariantChange}
+                onDisabledTransportModePress={onDisabledTransportModePress}
+              />
+            ) : null}
+            <IndoorTimeBadge text={isIndoorOnlyRoute ? undefined : indoorTravelTimeText} />
+            {!isIndoorOnlyRoute && (
+              <ShuttleDeparturesPanel show={showShuttlePanel} shuttleInfo={shuttleInfo} />
+            )}
+            {!isIndoorOnlyRoute && <ShuttleWeekendNotice show={showShuttleWeekendNotice} />}
+            <DirectionsErrorNotice directionsError={isIndoorOnlyRoute ? null : directionsError} />
+            <PreviewAndSteps
+              hasSteps={hasSteps}
+              isPreviewButtonDisabled={isPreviewButtonDisabled}
+              previewBg={themeColors.previewBg}
+              previewTextColor={themeColors.previewTextColor}
+              onOpenPreview={handleOpenPreview}
+              onOpenDirections={handleOpenDirections}
+              navigationSteps={navigationSteps}
+            />
+          </>
+        )}
       </View>
     </View>
   );
@@ -622,8 +802,9 @@ const styles = StyleSheet.create({
     maxHeight: 350,
   },
   minimizeHandleTouch: {
-    alignSelf: 'center',
-    paddingBottom: 8,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingVertical: 10,
   },
   minimizeHandleBar: {
     width: 44,
@@ -640,7 +821,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 8,
-    flexWrap: 'nowrap',
+    rowGap: 8,
+    flexWrap: 'wrap',
     paddingRight: 40,
   },
   modeChip: {
@@ -698,6 +880,75 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   tripMeta: { marginTop: 4, fontSize: 14, color: '#f3d7dc' },
+  walkingComparisonPanel: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  walkingComparisonTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  walkingComparisonSummary: {
+    marginTop: 4,
+    color: '#f7e7ea',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  walkingOptionsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    columnGap: 10,
+  },
+  walkingOptionCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  walkingOptionCardSelected: {
+    borderColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  walkingOptionCardDisabled: {
+    opacity: 0.55,
+  },
+  walkingOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: 8,
+  },
+  walkingOptionTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  walkingOptionBadge: {
+    color: '#7f1f2a',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: '#f6dce0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  walkingOptionMeta: {
+    marginTop: 8,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  walkingOptionSubMeta: {
+    marginTop: 2,
+    color: '#f3d7dc',
+    fontSize: 12,
+  },
   errorText: {
     marginTop: 8,
     fontSize: 14,
@@ -800,5 +1051,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  indoorTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    columnGap: 4,
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  indoorTimeBadgeText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
   },
 });

@@ -1,18 +1,19 @@
 package com.makesoft.app.systemtest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 
 import com.makesoft.app.infrastructure.persistence.entity.BuildingEntity;
 import com.makesoft.app.infrastructure.persistence.springdata.BuildingJpaRepository;
@@ -22,12 +23,13 @@ import com.makesoft.app.infrastructure.persistence.springdata.BuildingJpaReposit
  * in this project. This specifically tests the behaviour of the entry point, this IS NOT testing the code itself,
  * just checks if the entire backend system is behaving as expected.
 */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 public class StatusCodesTest {
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
 
     @Autowired
     private BuildingJpaRepository buildingJpaRepository;
@@ -55,7 +57,7 @@ public class StatusCodesTest {
 
     // Test to ensure that the backend is compliant with expected behaviour in response to a building info retrieval
     @Test
-    void testGetBuilding_Returns200() {
+    void testGetBuilding_Returns200() throws Exception {
         // Retrieve the building to get the generated ID, as IDENTITY strategy typically doesn't reset on deleteAll()
         BuildingEntity savedBuilding = buildingJpaRepository.findAll().get(0);
         Long id = savedBuilding.getBuildingId();
@@ -67,15 +69,13 @@ public class StatusCodesTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a String.
          */ 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/buildings/" + id, String.class);
-
-        // Asserting the software requirement that we should be able to fetch a valid building from the backend
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        mockMvc.perform(get("/api/buildings/" + id))
+                .andExpect(status().isOk());
     }
 
     // Test to check the system's ability to handle "Negative Scenarios" gracefully
     @Test
-    void testGetBuilding_Returns404() {
+    void testGetBuilding_Returns404() throws Exception {
 
         /* System test: 
          * Send a real HTTP request to the black box setup by SpringBootTest and store the status response forcibly as a Java String
@@ -84,15 +84,13 @@ public class StatusCodesTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a String.
          */ 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/buildings/9999", String.class);
-
-        // Asserting the software requirement that if we fetch an invalid building from the backend a 404 error is returned
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        mockMvc.perform(get("/api/buildings/9999"))
+                .andExpect(status().isNotFound());
     }
 
     // Test to check the backend-api's health endpoint is working as expected
     @Test
-    void testHealthEndpoint_Returns200() {
+    void testHealthEndpoint_Returns200() throws Exception {
 
         /* System test: 
          * Send a real HTTP request to the black box setup by SpringBootTest and store the status response forcibly as a Java String
@@ -101,15 +99,13 @@ public class StatusCodesTest {
          *      The Headers (e.g., Content-Type: application/json),
          *      The Body The actual data, stored as a String.
          */ 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/health", String.class);
-
-        // Asserting the software requirement that the health endpoint should be working and return a 200 OK status code
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk());
     }
 
     // Test to check the backend-api's health endpoint is working as expected when the database connection fails
     @Test
-    void testHealthEndpoint_Returns503() {
+    void testHealthEndpoint_Returns503() throws Exception {
         /* 
          * Simulate database connection failure using a Spy.
          * We mock the execute command to throw an exception, simulating a crash.
@@ -117,9 +113,7 @@ public class StatusCodesTest {
         doThrow(new RuntimeException("Simulated DB Connection Down"))
             .when(jdbcTemplate).execute(anyString());
 
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/health", String.class);
-
-        // Asserting the software requirement that if the database connection fails, the health endpoint should return a 503 Service Unavailable status code
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isServiceUnavailable());
     }
 }

@@ -1,8 +1,9 @@
-﻿import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useNavigationBetweenBuildings } from '../hooks/useNavigationBetweenBuildings';
 import { Platform } from 'react-native';
 import { getNextShuttles } from '../services/api';
 import * as Location from 'expo-location';
+import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 
 jest.mock('expo-location');
 
@@ -53,6 +54,26 @@ const SOUTH_BUILDING = createTestBuilding('B2', 'Beta Hall', {
 });
 
 const mockBuildings: Building[] = [NORTH_BUILDING, SOUTH_BUILDING];
+
+function getCampusBuildingByPrefix(codePrefix: string): Building {
+  const entry = Object.entries(BUILDING_POLYGONS).find(([, record]) =>
+    record.name.startsWith(`${codePrefix} - `),
+  );
+  if (!entry) {
+    throw new Error(`Missing campus building polygon for ${codePrefix}`);
+  }
+
+  const [id, record] = entry;
+  return {
+    id,
+    name: record.name,
+    code: codePrefix,
+    polygon: record.polygon,
+  };
+}
+
+const HALL_BUILDING = getCampusBuildingByPrefix('H');
+const EV_BUILDING = getCampusBuildingByPrefix('EV');
 type HookArgs = {
   buildings: Building[];
   onSelectBuilding: (id: string) => void;
@@ -420,6 +441,90 @@ describe('useNavigationBetweenBuildings', () => {
         'Turn left onto Blvd de Maisonneuve',
       );
       expect(result.current.navigationSteps[1].maneuver).toBe('turn-left');
+    });
+
+    it('should compare outdoor and tunnel walking routes for Hall to EV and default to the faster tunnel route', async () => {
+      const { mockFetch } = createDrivingWalkingFetch(makeMockDirectionsResponse('Driving route'), {
+        status: 'OK',
+        routes: [
+          {
+            summary: 'Outdoor walking route',
+            overview_polyline: { points: MOCK_POLYLINE },
+            legs: [
+              {
+                duration: { text: '6 mins', value: 360 },
+                distance: { text: '650 m', value: 650 },
+                steps: MOCK_STEPS,
+              },
+            ],
+          },
+        ],
+      });
+
+      const { result } = renderHook(() =>
+        useNavigationBetweenBuildings({
+          buildings: [HALL_BUILDING, EV_BUILDING],
+          onSelectBuilding: jest.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.openNavigationForBuilding(EV_BUILDING, null);
+      });
+      act(() => {
+        result.current.setNavigationActiveField('start');
+      });
+      act(() => {
+        result.current.handleMapBuildingPress(HALL_BUILDING.id);
+      });
+
+      await waitFor(() => {
+        expect(result.current.selectedTransportMode).toBe('walking');
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls.some((call: any[]) => call[0].includes('mode=driving'))).toBe(
+        true,
+      );
+      expect(mockFetch.mock.calls.some((call: any[]) => call[0].includes('mode=walking'))).toBe(
+        true,
+      );
+      expect(result.current.routeSummary?.viaText).toBe('Underground tunnel network');
+      expect(result.current.routePolyline.length).toBeGreaterThan(0);
+      expect(result.current.walkingRouteComparison).toMatchObject({
+        activeVariant: 'tunnel',
+        fastestVariant: 'tunnel',
+        outdoor: {
+          durationText: '6 mins',
+          distanceText: '650 m',
+        },
+      });
+      expect(result.current.walkingRouteComparison?.tunnel.durationText).toBe(
+        result.current.routeSummary?.durationText,
+      );
+      expect(result.current.walkingRouteComparison?.tunnel.distanceText).toBe(
+        result.current.routeSummary?.distanceText,
+      );
+      expect(
+        result.current.navigationSteps.some((step: { instruction: string }) =>
+          step.instruction.includes('Take the tunnel'),
+        ),
+      ).toBe(true);
+      expect(
+        result.current.navigationSteps.some((step: { instruction: string }) =>
+          step.instruction.includes('Enter the tunnel'),
+        ),
+      ).toBe(true);
+
+      act(() => {
+        result.current.setSelectedWalkingRouteVariant('outdoor');
+      });
+
+      await waitFor(() => {
+        expect(result.current.routeSummary?.viaText).toBe('Outdoor walking route');
+      });
+      expect(result.current.walkingRouteComparison?.activeVariant).toBe('outdoor');
+      expect(result.current.navigationSteps[0].instruction).toBe('Head north on Rue Guy');
     });
 
     it('should handle API returning non-OK status', async () => {
@@ -1898,6 +2003,69 @@ describe('useNavigationBetweenBuildings', () => {
         result.current.clearTapMarker();
       });
       expect(result.current.tapMarkerCoordinate).toBeNull();
+    });
+  });
+
+  // ── openIndoorOnlyNavigation / isIndoorOnlyRoute ─────────────────────────
+
+  describe('openIndoorOnlyNavigation / isIndoorOnlyRoute', () => {
+    it('isIndoorOnlyRoute starts as false', () => {
+      const { result } = renderNavHook();
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
+    });
+
+    it('sets state correctly when called', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+      expect(result.current.isNavigationOpen).toBe(true);
+      expect(result.current.navigationDestination).toBe('H-840');
+      expect(result.current.navigationStart).toBe('Hall Building');
+      expect(result.current.isDestinationLocked).toBe(false);
+    });
+
+    it('uses default start label when none provided', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840');
+      });
+
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+      expect(result.current.navigationStart).toBe('Building entrance');
+    });
+
+    it('closeNavigation resets isIndoorOnlyRoute to false', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+
+      act(() => {
+        result.current.closeNavigation();
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
+      expect(result.current.isNavigationOpen).toBe(false);
+    });
+
+    it('openNavigationForBuilding resets isIndoorOnlyRoute to false', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+
+      act(() => {
+        result.current.openNavigationForBuilding(mockBuildings[0], null);
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
     });
   });
 });
