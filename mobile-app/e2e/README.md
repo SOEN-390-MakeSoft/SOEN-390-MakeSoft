@@ -98,10 +98,11 @@ File: `e2e/tunnel-navigation.e2e.js`
 
 1. Launch app and open the map
 2. Ensure Classes calendar is connected (if prompted)
-3. Tap the **Pavillon EV** quick-pick card and open directions
-4. Select floor **8** and confirm **Yes** if prompted
-5. Select the **Underground** walking option
-6. Tap **Directions**
+3. Tap the **Pavillon EV** quick-pick card
+4. Open **Directions**
+5. Select floor **8** and confirm **Yes** if prompted
+6. Select the **Underground** walking option
+7. Tap **Directions**
 
 Expected: Directions is triggered from the walking options view.
 

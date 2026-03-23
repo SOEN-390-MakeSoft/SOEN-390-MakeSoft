@@ -2,6 +2,7 @@ describe('US-4.5 Tunnel navigation', () => {
   it('builds a tunnel route from Hall to EV', async () => {
     const e2eCalendarUrl = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
     const pause = (ms = 600) => new Promise((resolve) => setTimeout(resolve, ms));
+    const fastPause = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
     const step = (label) => {
       // Simple ASCII checkbox markers for terminal output.
       // eslint-disable-next-line no-console
@@ -19,12 +20,12 @@ describe('US-4.5 Tunnel navigation', () => {
         .withTimeout(15000);
       await element(by.id('get-started')).tap();
     } catch (error) {}
-    await pause();
+    await fastPause();
     await waitFor(element(by.id('map-screen')))
       .toBeVisible()
       .withTimeout(20000);
     doneLaunch();
-    await pause();
+    await fastPause();
 
     const doneCalendar = step('Ensure Classes calendar is connected');
     try {
@@ -35,29 +36,29 @@ describe('US-4.5 Tunnel navigation', () => {
         throw new Error('EXPO_PUBLIC_E2E_CALENDAR_MODE is not set for e2e calendar connect.');
       }
       await element(by.id('calendar-required-connect')).tap();
-      await pause();
+      await fastPause();
       await waitFor(element(by.id('calendar-link-input')))
         .toBeVisible()
         .withTimeout(10000);
       await element(by.id('calendar-link-input')).replaceText(e2eCalendarUrl);
-      await pause();
+      await fastPause();
       await element(by.id('calendar-connect-button')).tap();
-      await pause();
+      await fastPause();
       await waitFor(element(by.label('Close')))
         .toBeVisible()
         .withTimeout(10000);
       await element(by.label('Close')).tap();
-      await pause();
+      await fastPause();
     } catch (error) {}
     doneCalendar();
-    await pause();
+    await fastPause();
 
     const doneMapReady = step('Wait for map to be visible');
     await waitFor(element(by.id('campus-map')))
       .toBeVisible()
       .withTimeout(20000);
     doneMapReady();
-    await pause();
+    await fastPause();
 
     const doneQuickPick = step('Select EV pavilion');
     await waitFor(element(by.id('quick-pick-panel')))
@@ -69,14 +70,14 @@ describe('US-4.5 Tunnel navigation', () => {
         .withTimeout(4000);
     } catch (error) {
       await element(by.id('quick-pick-panel')).swipe('up', 'fast', 0.5);
-      await pause(600);
+      await fastPause(400);
     }
     await waitFor(element(by.id('quick-pick-EV')))
       .toBeVisible()
       .withTimeout(15000);
     await element(by.id('quick-pick-EV')).tap();
     doneQuickPick();
-    await pause();
+    await fastPause();
 
     const doneDirections = step('Open directions to EV');
     await waitFor(element(by.label('Get directions')))
@@ -84,7 +85,7 @@ describe('US-4.5 Tunnel navigation', () => {
       .withTimeout(15000);
     await element(by.label('Get directions')).tap();
     doneDirections();
-    await pause();
+    await fastPause();
 
     const doneFloor = step('Select floor 8 if prompted');
     try {
