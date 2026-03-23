@@ -171,6 +171,9 @@ export default function QuickPickPanel({
                   key={pick.label}
                   style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
                   onPress={() => onQuickPick(pick)}
+                  testID={`quick-pick-${pick.code}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Quick pick ${pick.label.replace(/\n/g, ' ')}`}
                 >
                   <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
                   <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>

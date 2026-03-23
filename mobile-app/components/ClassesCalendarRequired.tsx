@@ -97,6 +97,7 @@ export default function ClassesCalendarRequired({
           style={styles.connectButton}
           onPress={onConnectCalendar}
           accessibilityLabel="Connect calendar"
+          testID="calendar-required-connect"
         >
           <MaterialIcons name="link" size={20} color="#fff" />
           <Text style={styles.connectButtonText}>Connect calendar</Text>

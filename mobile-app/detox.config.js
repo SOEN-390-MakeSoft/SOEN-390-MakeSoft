@@ -1,7 +1,11 @@
 /** @type {import('detox').DetoxConfig} */
 module.exports = {
-  testRunner: 'jest',
-  runnerConfig: 'e2e/jest.config.js',
+  testRunner: {
+    args: {
+      $0: 'jest',
+      config: 'e2e/jest.config.js',
+    },
+  },
   apps: {
     'android.debug': {
       type: 'android.apk',
@@ -14,7 +18,7 @@ module.exports = {
     emulator: {
       type: 'android.emulator',
       device: {
-        avdName: process.env.DETOX_AVD_NAME || 'Pixel_3a_API_34',
+        avdName: process.env.DETOX_AVD_NAME || 'Medium_Phone_API_36.1',
       },
     },
   },

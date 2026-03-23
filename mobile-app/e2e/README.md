@@ -43,15 +43,68 @@ npm run detox:build:android
 npm run detox:test:android
 ```
 
-## Test steps (ES-1 / US-1.1)
+## Test steps (ES-4)
 
-File: `e2e/map.campus-switch.e2e.js`
+### US-4.1 Indoor rooms
 
-1. Launch app
-2. Verify map screen and label show **SGW**
-3. Tap **Loyola** and verify label updates to **LOYOLA**
+File: `e2e/indoor-room.e2e.js`
 
-Expected: Map loads within 10 seconds and campus switch recenters the map.
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Search for **H-822** and select the result
+4. Verify the room info bubble and **Navigate here** button
+
+Expected: Room is visible and navigation is available.
+
+### US-4.2 Indoor shortest path
+
+File: `e2e/indoor-path.e2e.js`
+
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Set location in **H-811**
+4. Search for **H-822** and open **Navigate here**
+5. Select floor **8** and confirm **Yes** if prompted
+
+Expected: Indoor navigation flow opens for the destination.
+
+### US-4.3 Accessible indoor routes
+
+File: `e2e/indoor-accessible.e2e.js`
+
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Set location near Webster Library
+4. Search for **H-838** and open **Navigate here**
+5. Scroll the navigation steps and enable **Accessible route**
+
+Expected: Accessible route toggle is available and can be enabled.
+
+### US-4.4 Indoor POIs
+
+File: `e2e/indoor-poi.e2e.js`
+
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Search for **H-822** to enter indoor mode
+4. Close the room info card
+5. Tap POI filter chips (washrooms, elevators, water fountains)
+
+Expected: POI filters are visible and respond to taps.
+
+### US-4.5 Tunnel navigation
+
+File: `e2e/tunnel-navigation.e2e.js`
+
+1. Launch app and open the map
+2. Ensure Classes calendar is connected (if prompted)
+3. Tap the **Pavillon EV** quick-pick card
+4. Open **Directions**
+5. Select floor **8** and confirm **Yes** if prompted
+6. Select the **Underground** walking option
+7. Tap **Directions**
+
+Expected: Directions is triggered from the walking options view.
 
 ## Recording (GIF/Video)
 
