@@ -59,25 +59,23 @@ describe('US-4.5 Tunnel navigation', () => {
     doneMapReady();
     await pause();
 
-    const doneLocation = step('Set location near Hall building');
-    await device.setLocation(45.497044, -73.578678);
-    await pause(1200);
-    doneLocation();
-    await pause();
-
-    const doneSearch = step('Search for EV building');
-    await element(by.id('map-search-input')).tap();
-    await pause();
-    await element(by.id('map-search-input')).replaceText('EV');
-    await pause();
-    await waitFor(element(by.id('map-search-results')))
+    const doneQuickPick = step('Select EV pavilion');
+    await waitFor(element(by.id('quick-pick-panel')))
       .toBeVisible()
       .withTimeout(15000);
-    await waitFor(element(by.id('search-result-0')))
+    try {
+      await waitFor(element(by.id('quick-pick-EV')))
+        .toBeVisible()
+        .withTimeout(4000);
+    } catch (error) {
+      await element(by.id('quick-pick-panel')).swipe('up', 'fast', 0.5);
+      await pause(600);
+    }
+    await waitFor(element(by.id('quick-pick-EV')))
       .toBeVisible()
       .withTimeout(15000);
-    await element(by.id('search-result-0')).tap();
-    doneSearch();
+    await element(by.id('quick-pick-EV')).tap();
+    doneQuickPick();
     await pause();
 
     const doneDirections = step('Open directions to EV');
@@ -93,14 +91,21 @@ describe('US-4.5 Tunnel navigation', () => {
       await waitFor(element(by.id('floor-select-modal')))
         .toBeVisible()
         .withTimeout(4000);
-      await element(by.id('floor-select-8')).tap();
+      try {
+        await element(by.id('floor-select-8')).tap();
+      } catch (error) {
+        await element(by.text('Floor 8')).tap();
+      }
       await pause(800);
     } catch (error) {}
     doneFloor();
     await pause();
 
-    const doneRoomDetected = step('Confirm start room if prompted');
+    const doneRoomDetected = step('Confirm class/room if prompted');
     try {
+      await waitFor(element(by.text('Room Detected')))
+        .toBeVisible()
+        .withTimeout(4000);
       await waitFor(element(by.text('Yes')))
         .toBeVisible()
         .withTimeout(4000);
@@ -110,17 +115,24 @@ describe('US-4.5 Tunnel navigation', () => {
     doneRoomDetected();
     await pause();
 
-    const doneSteps = step('Show tunnel directions');
-    await waitFor(element(by.id('navigation-steps-list')))
+    const doneRouteOption = step('Select underground route option');
+    await waitFor(element(by.id('walking-route-comparison')))
       .toBeVisible()
-      .withTimeout(25000);
-    await waitFor(element(by.id('nav-step-0')))
+      .withTimeout(15000);
+    await waitFor(element(by.id('walking-option-tunnel')))
       .toBeVisible()
-      .withTimeout(25000);
-    await element(by.id('navigation-steps-scroll')).scroll(300, 'down');
-    await pause(600);
-    doneSteps();
+      .withTimeout(15000);
+    await element(by.id('walking-option-tunnel')).tap();
+    await pause(800);
+    doneRouteOption();
+    await pause();
 
+    const doneDirectionsMode = step('Tap directions');
+    await waitFor(element(by.id('directions-mode-button')))
+      .toBeVisible()
+      .withTimeout(15000);
+    await element(by.id('directions-mode-button')).tap();
+    doneDirectionsMode();
     await pause(2000);
     await device.sendToHome();
   });
