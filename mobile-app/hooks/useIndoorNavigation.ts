@@ -79,13 +79,19 @@ export interface UseIndoorNavigationReturn {
   /** Bearing (clockwise degrees from north) for rotating the floor plan overlay. */
   overlayBearing: number;
   /** Compute a route to a room ref (e.g. "H-840"). */
-  navigateToRoom: (roomQuery: string, fromPosition?: LatLng, fromLevel?: string) => void;
+  navigateToRoom: (
+    roomQuery: string,
+    fromPosition?: LatLng,
+    fromLevel?: string,
+    targetBuildingCode?: string,
+  ) => void;
   /** Compute a route with accessibility preferences. */
   navigateToRoomAccessible: (
     roomQuery: string,
     options: PathfinderOptions,
     fromPosition?: LatLng,
     fromLevel?: string,
+    targetBuildingCode?: string,
   ) => void;
   /** Recompute the current route using the last navigation request. */
   rerouteCurrent: (options: PathfinderOptions) => void;
@@ -134,21 +140,25 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     options: PathfinderOptions;
     fromPosition?: LatLng;
     fromLevel?: string;
+    targetBuildingCode?: string;
   } | null>(null);
   const lastRouteRequestRef = useRef<{
     roomQuery: string;
     fromPosition?: LatLng;
     fromLevel?: string;
+    targetBuildingCode?: string;
   } | null>(null);
 
   // Cached building data (features, graph, roomIndex, levels)
   const [buildingData, setBuildingData] = useState<ReturnType<typeof loadBuilding> | null>(null);
+  const [loadedBuildingCode, setLoadedBuildingCode] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
 
     if (!activeBuildingCode) {
       setBuildingData(null);
+      setLoadedBuildingCode(null);
       return;
     }
 
@@ -157,6 +167,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       const data = loadBuilding(activeBuildingCode);
       if (!isCancelled) {
         setBuildingData(data);
+        setLoadedBuildingCode(activeBuildingCode);
       }
     } catch (e) {
       if (!isCancelled) {
@@ -310,6 +321,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       setIndoorRoute(null);
       setDestinationRoom(null);
       setSelectedRoom(null);
+      setLoadedBuildingCode(null);
       return true;
     } catch (e) {
       setError(String(e));
@@ -325,28 +337,55 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
     setError(null);
     pendingNavRef.current = null;
     lastRouteRequestRef.current = null;
+    setLoadedBuildingCode(null);
   }, []);
 
   const navigateToRoom = useCallback(
-    (roomQuery: string, fromPosition?: LatLng, fromLevel?: string) => {
-      navigateToRoomAccessible(roomQuery, {}, fromPosition, fromLevel);
+    (roomQuery: string, fromPosition?: LatLng, fromLevel?: string, targetBuildingCode?: string) => {
+      navigateToRoomAccessible(roomQuery, {}, fromPosition, fromLevel, targetBuildingCode);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [buildingData, activeBuildingCode],
   );
 
   const navigateToRoomAccessible = useCallback(
-    (roomQuery: string, options: PathfinderOptions, fromPosition?: LatLng, fromLevel?: string) => {
-      lastRouteRequestRef.current = { roomQuery, fromPosition, fromLevel };
+    (
+      roomQuery: string,
+      options: PathfinderOptions,
+      fromPosition?: LatLng,
+      fromLevel?: string,
+      targetBuildingCode?: string,
+    ) => {
+      const requestedBuildingCode =
+        targetBuildingCode?.toUpperCase() ??
+        detectIndoorDestination(roomQuery)?.buildingCode ??
+        null;
 
-      if (!buildingData || !activeBuildingCode) {
+      lastRouteRequestRef.current = {
+        roomQuery,
+        fromPosition,
+        fromLevel,
+        targetBuildingCode: requestedBuildingCode ?? undefined,
+      };
+
+      if (
+        !buildingData ||
+        !activeBuildingCode ||
+        loadedBuildingCode !== activeBuildingCode ||
+        (requestedBuildingCode !== null && activeBuildingCode !== requestedBuildingCode)
+      ) {
         // Building data not yet available (React state hasn't settled).
-        // Store a pending request and auto-detect + activate the building.
-        pendingNavRef.current = { roomQuery, options, fromPosition, fromLevel };
+        // Store a pending request and activate the requested building.
+        pendingNavRef.current = {
+          roomQuery,
+          options,
+          fromPosition,
+          fromLevel,
+          targetBuildingCode: requestedBuildingCode ?? undefined,
+        };
 
-        const detected = detectIndoorDestination(roomQuery);
-        if (detected) {
-          activateBuilding(detected.buildingCode);
+        if (requestedBuildingCode) {
+          activateBuilding(requestedBuildingCode);
         }
         // The useEffect below will retry once buildingData becomes available.
         return;
@@ -356,13 +395,35 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       pendingNavRef.current = null;
       computeRoute(buildingData, activeBuildingCode, roomQuery, options, fromPosition, fromLevel);
     },
-    [buildingData, activeBuildingCode, activateBuilding, computeRoute],
+    [buildingData, activeBuildingCode, activateBuilding, computeRoute, loadedBuildingCode],
   );
 
   const rerouteCurrent = useCallback(
     (options: PathfinderOptions) => {
       const lastRouteRequest = lastRouteRequestRef.current;
-      if (!lastRouteRequest || !buildingData || !activeBuildingCode) return;
+      if (
+        !lastRouteRequest ||
+        !buildingData ||
+        !activeBuildingCode ||
+        loadedBuildingCode !== activeBuildingCode
+      ) {
+        return;
+      }
+
+      if (
+        lastRouteRequest.targetBuildingCode &&
+        lastRouteRequest.targetBuildingCode !== activeBuildingCode
+      ) {
+        pendingNavRef.current = {
+          roomQuery: lastRouteRequest.roomQuery,
+          options,
+          fromPosition: lastRouteRequest.fromPosition,
+          fromLevel: lastRouteRequest.fromLevel,
+          targetBuildingCode: lastRouteRequest.targetBuildingCode,
+        };
+        activateBuilding(lastRouteRequest.targetBuildingCode);
+        return;
+      }
 
       computeRoute(
         buildingData,
@@ -373,7 +434,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
         lastRouteRequest.fromLevel,
       );
     },
-    [buildingData, activeBuildingCode, computeRoute],
+    [buildingData, activeBuildingCode, computeRoute, loadedBuildingCode],
   );
 
   // -------------------------------------------------------------------
@@ -385,7 +446,13 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
   // -------------------------------------------------------------------
   useEffect(() => {
     const pending = pendingNavRef.current;
-    if (!pending || !buildingData || !activeBuildingCode) return;
+    if (
+      !pending ||
+      !buildingData ||
+      !activeBuildingCode ||
+      loadedBuildingCode !== activeBuildingCode
+    )
+      return;
 
     // Clear the pending request before computing to avoid infinite loops
     pendingNavRef.current = null;
@@ -397,7 +464,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       pending.fromPosition,
       pending.fromLevel,
     );
-  }, [buildingData, activeBuildingCode, computeRoute]);
+  }, [buildingData, activeBuildingCode, computeRoute, loadedBuildingCode]);
 
   const searchRoomsCallback = useCallback(
     (query: string, limit?: number): ResolvedRoom[] => {

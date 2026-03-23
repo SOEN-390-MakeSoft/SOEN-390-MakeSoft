@@ -292,6 +292,48 @@ describe('useIndoorNavigation — pending navigation retry', () => {
     expect(result.current.indoorRoute!.startLevel).toBe('1');
     expect(result.current.indoorRoute!.endLevel).toBe('8');
   });
+
+  it('retries indoor navigation on the requested building when a different building is currently active', async () => {
+    const { result } = renderHook(() => useIndoorNavigation());
+
+    act(() => {
+      result.current.activateBuilding('H');
+    });
+
+    const startRoom = result.current.searchRooms('H-840')[0]!;
+    expect(startRoom).toBeDefined();
+
+    act(() => {
+      result.current.activateBuilding('LB');
+    });
+
+    await waitFor(() => {
+      expect(result.current.activeBuildingCode).toBe('LB');
+    });
+
+    act(() => {
+      result.current.activateBuilding('H');
+      result.current.navigateToRoomAccessible(
+        '__EXIT__',
+        {},
+        startRoom.position,
+        startRoom.level,
+        'H',
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.activeBuildingCode).toBe('H');
+    });
+
+    await waitFor(() => {
+      expect(result.current.destinationRoom?.ref).toBe('Exit');
+      expect(result.current.indoorRoute).not.toBeNull();
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.indoorRoute!.startLevel).toBe(startRoom.level);
+  });
 });
 
 // ---------------------------------------------------------------------------
