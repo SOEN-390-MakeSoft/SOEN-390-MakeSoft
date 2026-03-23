@@ -802,6 +802,7 @@ export default function MapScreen() {
     error: calendarError,
   } = usePublicCalendar();
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [hasDismissedCalendarRequired, setHasDismissedCalendarRequired] = useState(false);
   const nextClassEvent = getNextEvent(calendarEvents);
 
   const handleLogoPress = useCallback(() => {
@@ -1603,7 +1604,8 @@ export default function MapScreen() {
     }
   }, [isNavigationOpen, indoor, startIndoor]);
 
-  const showCalendarRequired = !isClassesCalendarValid(isCalendarConnected);
+  const showCalendarRequired =
+    !hasDismissedCalendarRequired && !isClassesCalendarValid(isCalendarConnected);
   const nextClassTime = nextClassPreview ? formatEventTimeRange(nextClassPreview.event) : '';
   const nextClassTitle = nextClassPreview?.event.summary ?? '';
   const nextClassLocationLabel =
@@ -1713,7 +1715,10 @@ export default function MapScreen() {
   return (
     <View style={styles.container} testID="map-screen">
       {showCalendarRequired ? (
-        <ClassesCalendarRequired onConnectCalendar={() => setCalendarModalVisible(true)} />
+        <ClassesCalendarRequired
+          onConnectCalendar={() => setCalendarModalVisible(true)}
+          onContinueAsGuest={() => setHasDismissedCalendarRequired(true)}
+        />
       ) : null}
       <MapView
         ref={mapRef}
