@@ -478,7 +478,12 @@ function PreviewAndSteps({
   const buttonTextColor = isPreviewButtonDisabled ? '#9b9b9b' : previewTextColor;
 
   return (
-    <ScrollView style={styles.scrollableContent} showsVerticalScrollIndicator nestedScrollEnabled>
+    <ScrollView
+      style={styles.scrollableContent}
+      testID="navigation-steps-scroll"
+      showsVerticalScrollIndicator
+      nestedScrollEnabled
+    >
       <View style={styles.actionButtonsRow}>
         <Pressable
           style={[
