@@ -34,6 +34,7 @@ import {
   findBuildingAtCoordinate,
   detectIndoorDestination,
   loadBuilding,
+  resolveRoom,
   searchRooms as searchIndoorRooms,
   getBuildingMeta,
   hasIndoorMap,
@@ -70,7 +71,12 @@ import {
   type LatLng,
 } from '../utils/mapUtils';
 import { resolveIndoorCategorySelection } from '../utils/indoorCategoryFilter';
-import { normalizeLabel, resolveEventLocation, type LocationConflict } from '../utils/stringUtils';
+import {
+  normalizeLabel,
+  parseLocationString,
+  resolveEventLocation,
+  type LocationConflict,
+} from '../utils/stringUtils';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
 function formatIndoorTime(seconds: number): string {
@@ -164,6 +170,7 @@ type NextClassPreview = {
   building: BuildingWithPolygon | null;
   campus: Campus | null;
   rawLocation: string;
+  indoorRoomRef: string | null;
   conflict: LocationConflict | null;
 };
 
@@ -819,6 +826,33 @@ export default function MapScreen() {
   const handleOpenCalendarFromCourseModal = useCallback(() => {
     setCalendarModalVisible(true);
   }, []);
+
+  const resolveNextClassIndoorRoomRef = useCallback(
+    (rawLocation: string, resolvedBuildingCode: string | null | undefined): string | null => {
+      const explicitIndoorDestination = detectIndoorDestination(rawLocation);
+      if (explicitIndoorDestination) {
+        return explicitIndoorDestination.roomRef;
+      }
+
+      if (!resolvedBuildingCode || !hasIndoorMap(resolvedBuildingCode)) return null;
+
+      const parsed = parseLocationString(rawLocation);
+      const cleanedRoomQuery = parsed.room?.trim().replace(/[),.;:]+$/g, '');
+      if (!cleanedRoomQuery) return null;
+
+      const buildingData = loadBuilding(resolvedBuildingCode);
+      if (!buildingData) return null;
+
+      const resolvedRoom = resolveRoom(
+        cleanedRoomQuery,
+        buildingData.roomIndex,
+        resolvedBuildingCode,
+      );
+      return resolvedRoom?.ref ?? null;
+    },
+    [],
+  );
+
   const handleDirectionsToNextClass = useCallback(() => {
     const effectiveNow = simulatedNow ?? new Date();
     const nextClassState = getNextClassForToday(calendarEvents, effectiveNow);
@@ -879,6 +913,11 @@ export default function MapScreen() {
       console.log('[handleDirectionsToNextClass] Building could not be resolved to a map polygon.');
     }
 
+    const indoorRoomRef = resolveNextClassIndoorRoomRef(rawLocation, resolvedBuilding?.code);
+    if (indoorRoomRef) {
+      console.log(`[handleDirectionsToNextClass] Resolved indoor room: ${indoorRoomRef}`);
+    }
+
     let campusKey: Campus | null = null;
     if (resolvedCampus === 'SGW') {
       campusKey = 'sgw';
@@ -891,9 +930,17 @@ export default function MapScreen() {
       building: resolvedBuilding ?? null,
       campus: campusKey,
       rawLocation,
+      indoorRoomRef,
       conflict: conflict ?? null,
     });
-  }, [calendarEvents, simulatedNow, nextClassPreview, loyolaBuildings, sgwBuildings]);
+  }, [
+    calendarEvents,
+    simulatedNow,
+    nextClassPreview,
+    loyolaBuildings,
+    sgwBuildings,
+    resolveNextClassIndoorRoomRef,
+  ]);
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
@@ -1212,6 +1259,21 @@ export default function MapScreen() {
       const classEndRaw = nextClassPreview.event.end.dateTime ?? nextClassPreview.event.end.date;
       const classEnd = classEndRaw ? new Date(classEndRaw) : null;
       setArriveByClassEnd(classEnd && Number.isFinite(classEnd.getTime()) ? classEnd : null);
+
+      const destinationBuildingCode = building.code?.toUpperCase() ?? null;
+      if (
+        nextClassPreview.indoorRoomRef &&
+        destinationBuildingCode &&
+        hasIndoorMap(destinationBuildingCode)
+      ) {
+        setPendingDestinationRef(nextClassPreview.indoorRoomRef);
+        setPendingDestinationBuildingCode(destinationBuildingCode);
+        navigateToIndoorRoom(nextClassPreview.indoorRoomRef);
+      } else {
+        setPendingDestinationRef(null);
+        setPendingDestinationBuildingCode(null);
+      }
+
       if (campus !== activeCampus) {
         handleSelectCampus(campus, mapRef);
       }
@@ -1227,7 +1289,13 @@ export default function MapScreen() {
       'Unable to open directions',
       `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
     );
-  }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+  }, [
+    activeCampus,
+    handleSelectCampus,
+    navigateToIndoorRoom,
+    nextClassPreview,
+    openNavigationForResolvedDestination,
+  ]);
 
   const handleTransportModeChange = useCallback(
     (mode: 'driving' | 'walking' | 'shuttle') => {
@@ -1609,7 +1677,11 @@ export default function MapScreen() {
   const nextClassTime = nextClassPreview ? formatEventTimeRange(nextClassPreview.event) : '';
   const nextClassTitle = nextClassPreview?.event.summary ?? '';
   const nextClassLocationLabel =
-    nextClassPreview?.building?.name ?? nextClassPreview?.event.location ?? 'Location unavailable';
+    nextClassPreview?.building && nextClassPreview.indoorRoomRef
+      ? `${nextClassPreview.building.name} - ${nextClassPreview.indoorRoomRef}`
+      : (nextClassPreview?.building?.name ??
+        nextClassPreview?.event.location ??
+        'Location unavailable');
 
   const handleFloorSelected = useCallback(
     (floor: string) => {
