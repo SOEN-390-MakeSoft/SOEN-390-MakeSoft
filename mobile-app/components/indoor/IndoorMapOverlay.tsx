@@ -150,6 +150,8 @@ function renderPointPoi(
   poi: IndoorPOI,
   isHighlighted: boolean,
   isColorBlind: boolean = false,
+  onPoiPress?: (poi: IndoorPOI) => void,
+  testID?: string,
 ): React.ReactNode {
   if (!poi.position) return null;
 
@@ -159,7 +161,15 @@ function renderPointPoi(
   if (!imageSource) return null;
 
   return (
-    <PoiMarker key={poi.id} coordinate={poi.position} zIndex={15} opacity={isHighlighted ? 1 : 0.3}>
+    <PoiMarker
+      key={poi.id}
+      coordinate={poi.position}
+      zIndex={15}
+      opacity={isHighlighted ? 1 : 0.3}
+      onPress={onPoiPress ? () => onPoiPress(poi) : undefined}
+      testID={testID}
+      accessibilityLabel={testID ? `POI ${poi.amenity}` : undefined}
+    >
       <Image source={imageSource} style={labelStyles.poiIconImage} />
     </PoiMarker>
   );
@@ -171,6 +181,7 @@ function renderPolygonPoi(
   isHighlighted: boolean,
   isColorBlind: boolean = false,
   onPoiPress?: (poi: IndoorPOI) => void,
+  testID?: string,
 ): React.ReactNode {
   if (!poi.polygon || poi.polygon.length <= 2 || !poi.centroid) return null;
 
@@ -191,7 +202,14 @@ function renderPolygonPoi(
         onPress={onPoiPress ? () => onPoiPress(poi) : undefined}
       />
       {imageSource && (
-        <PoiMarker coordinate={poi.centroid} zIndex={12} opacity={isHighlighted ? 1 : 0.3}>
+        <PoiMarker
+          coordinate={poi.centroid}
+          zIndex={12}
+          opacity={isHighlighted ? 1 : 0.3}
+          onPress={onPoiPress ? () => onPoiPress(poi) : undefined}
+          testID={testID}
+          accessibilityLabel={testID ? `POI ${poi.amenity}` : undefined}
+        >
           <Image source={imageSource} style={labelStyles.poiIconImage} />
         </PoiMarker>
       )}
@@ -205,14 +223,15 @@ function renderPoiFeature(
   isHighlighted: boolean,
   isColorBlind: boolean = false,
   onPoiPress?: (poi: IndoorPOI) => void,
+  testID?: string,
 ): React.ReactNode {
   // Point-based POIs (water fountains, etc.)
   if (poi.position && !poi.polygon) {
-    return renderPointPoi(poi, isHighlighted, isColorBlind);
+    return renderPointPoi(poi, isHighlighted, isColorBlind, onPoiPress, testID);
   }
   // Polygon-based POIs (bathrooms, etc.)
   if (poi.polygon && poi.polygon.length > 2) {
-    return renderPolygonPoi(poi, isHighlighted, isColorBlind, onPoiPress);
+    return renderPolygonPoi(poi, isHighlighted, isColorBlind, onPoiPress, testID);
   }
   return null;
 }
@@ -305,11 +324,17 @@ function PoiMarker({
   children,
   zIndex = 10,
   opacity,
+  onPress,
+  testID,
+  accessibilityLabel,
 }: Readonly<{
   coordinate: { latitude: number; longitude: number };
   children: React.ReactNode;
   zIndex?: number;
   opacity?: number;
+  onPress?: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
 }>) {
   const [tracked, setTracked] = useState(true);
 
@@ -329,6 +354,9 @@ function PoiMarker({
       tracksViewChanges={tracked}
       zIndex={zIndex}
       opacity={opacity}
+      onPress={onPress}
+      testID={testID}
+      accessibilityLabel={accessibilityLabel}
     >
       <View collapsable={false} onLayout={handleLayout} style={labelStyles.poiMarkerContainer}>
         {children}
@@ -759,10 +787,16 @@ export default function IndoorMapOverlay({
       })()}
 
       {/* 6c. POIs (bathrooms, water fountains, etc.) */}
-      {pois.map((poi) => {
-        const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
-        return renderPoiFeature(poi, isHighlighted, isColorBlind, onPoiPress);
-      })}
+      {(() => {
+        const amenityCounters = new Map<string, number>();
+        return pois.map((poi) => {
+          const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
+          const nextIndex = amenityCounters.get(poi.amenity) ?? 0;
+          amenityCounters.set(poi.amenity, nextIndex + 1);
+          const testID = `poi-${poi.amenity}-${nextIndex}`;
+          return renderPoiFeature(poi, isHighlighted, isColorBlind, onPoiPress, testID);
+        });
+      })()}
 
       {/* 7. Indoor route polyline — Google Maps style with border + fill */}
       {routeSegmentsOnLevel.length > 1 && (

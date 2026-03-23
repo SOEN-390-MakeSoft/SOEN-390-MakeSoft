@@ -53,6 +53,16 @@ File: `e2e/map.campus-switch.e2e.js`
 
 Expected: Map loads within 10 seconds and campus switch recenters the map.
 
+## Test steps (ES-4 / US-4.4)
+
+File: `e2e/indoor-poi.e2e.js`
+
+1. Launch app
+2. Tap **Get Started** to open the map
+3. Search for room **H-822** and select it (indoor mode)
+4. Tap **Washrooms** filter chip
+5. Tap a washroom POI and verify the POI info bubble appears
+
 ## Recording (GIF/Video)
 
 In two terminals:

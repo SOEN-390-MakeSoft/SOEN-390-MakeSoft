@@ -73,6 +73,8 @@ export default function SearchBar({
             onBlur={onBlur}
             editable={!isSearchDisabled}
             showSoftInputOnFocus={!isSearchDisabled}
+            testID="map-search-input"
+            accessibilityLabel="Map search input"
           />
           {!!searchQuery && (
             <Pressable
@@ -96,7 +98,7 @@ export default function SearchBar({
       </View>
 
       {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
-        <View style={styles.mapSearchResults}>
+        <View style={styles.mapSearchResults} testID="map-search-results">
           {searchResults.map((result, index) => (
             <Pressable
               key={`${result.id}-${result.name}`}
@@ -104,6 +106,9 @@ export default function SearchBar({
                 styles.mapSearchResultItem,
                 index < searchResults.length - 1 && styles.mapSearchResultDivider,
               ]}
+              testID={`search-result-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Search result ${result.name}`}
               onPress={() => onSelectResult(result)}
             >
               <Text style={styles.mapSearchResultTitle} numberOfLines={1}>
