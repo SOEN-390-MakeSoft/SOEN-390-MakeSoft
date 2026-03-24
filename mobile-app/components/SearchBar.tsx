@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   Text,
@@ -33,6 +34,8 @@ interface SearchBarProps {
   brandColor: string;
   logoSource: ImageSourcePropType;
   onLogoPress?: () => void;
+  blurOnSubmit?: boolean;
+  isLoading?: boolean;
 }
 
 export default function SearchBar({
@@ -50,6 +53,8 @@ export default function SearchBar({
   brandColor,
   logoSource,
   onLogoPress,
+  blurOnSubmit = true,
+  isLoading = false,
 }: Readonly<SearchBarProps>) {
   return (
     <>
@@ -69,6 +74,7 @@ export default function SearchBar({
             returnKeyType="search"
             inputAccessoryViewID="searchBar"
             onSubmitEditing={onSubmit}
+            blurOnSubmit={blurOnSubmit}
             onFocus={onFocus}
             onBlur={onBlur}
             editable={!isSearchDisabled}
@@ -97,8 +103,14 @@ export default function SearchBar({
         </Pressable>
       </View>
 
-      {!isSearchDisabled && isSearchFocused && searchResults.length > 0 && (
+      {!isSearchDisabled && isSearchFocused && (searchResults.length > 0 || isLoading) && (
         <View style={styles.mapSearchResults} testID="map-search-results">
+          {isLoading && searchResults.length === 0 && (
+            <View style={styles.mapSearchLoadingItem} testID="search-loading">
+              <ActivityIndicator size="small" color="#8c8c8c" />
+              <Text style={styles.mapSearchLoadingText}>Searching nearby places…</Text>
+            </View>
+          )}
           {searchResults.map((result, index) => (
             <Pressable
               key={`${result.id}-${result.name}`}
@@ -173,6 +185,14 @@ const styles = StyleSheet.create({
   },
   mapSearchResultTitle: { fontSize: 16, fontWeight: '600', color: '#2b2b2b' },
   mapSearchResultMeta: { fontSize: 14, color: '#6b6b6b', marginTop: 2 },
+  mapSearchLoadingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  mapSearchLoadingText: { fontSize: 14, color: '#8c8c8c' },
   mapBrandBadge: {
     width: 55,
     height: 55,
