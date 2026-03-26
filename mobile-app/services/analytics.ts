@@ -187,3 +187,15 @@ export function trackOutdoorPoiSelected(
 export function trackOutdoorPoiDirectionsTapped(poiName: string, category: string) {
   track('outdoor_poi_directions_tapped', { poi_name: poiName, category });
 }
+
+// ── Heatmaps: Screen / navigation tracking ──────────────────────────────
+
+export function trackScreenView(screenName: string) {
+  try {
+    // Smartlook uses navigation events to build heatmaps.
+    // Docs: Smartlook.instance.trackNavigationEvent("screen-name")
+    (Smartlook.instance as any)?.trackNavigationEvent?.(screenName);
+  } catch {
+    // ignore
+  }
+}

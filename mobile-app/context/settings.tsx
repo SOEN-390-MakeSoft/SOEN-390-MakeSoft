@@ -10,9 +10,14 @@ type SettingsContextValue = {
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
 
+function defaultSimulatedNow(): Date {
+  // Fixed default for testing: March 27, 2026 at 8:00 AM (local time)
+  return new Date(2026, 2, 27, 8, 0, 0, 0);
+}
+
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [colourBlindMode, setColourBlindMode] = useState(false);
-  const [simulatedNow, setSimulatedNow] = useState<Date | null>(null);
+  const [simulatedNow, setSimulatedNow] = useState<Date | null>(() => defaultSimulatedNow());
 
   const resetSimulatedNow = useCallback(() => setSimulatedNow(null), []);
 

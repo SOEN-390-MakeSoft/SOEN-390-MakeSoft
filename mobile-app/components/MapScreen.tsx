@@ -109,6 +109,7 @@ import {
   trackOutdoorPoiSelected,
   trackOutdoorPoiDirectionsTapped,
 } from '../services/analytics';
+import { trackScreenView } from '../services/analytics';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
 function formatIndoorTime(seconds: number): string {
@@ -1066,6 +1067,51 @@ export default function MapScreen() {
 
   // Get selected building for info card
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+
+  // -----------------------------------------------------------------------
+  // Heatmaps: treat major overlays as pseudo-screens.
+  // This helps Smartlook group heatmaps for UI states that are not separate routes.
+  // -----------------------------------------------------------------------
+  const prevHeatmapKeyRef = useRef<string>('');
+  useEffect(() => {
+    const overlay = isDirectionsModeOpen
+      ? 'DirectionsModeOverlay'
+      : isRoutePreviewOpen
+        ? 'RoutePreviewOverlay'
+        : isNavigationOpen
+          ? 'NavigationSheet'
+          : calendarModalVisible
+            ? 'CalendarModal'
+            : isMenuOpen
+              ? 'MapMenu'
+              : showFloorSelectModal
+                ? 'IndoorFloorPrompt'
+                : selectedOutdoorPOI
+                  ? 'OutdoorPOICard'
+                  : selectedBuilding && !isNavigationOpen
+                    ? 'BuildingInfoCard'
+                    : nextClassPreview
+                      ? 'NextClassCard'
+                      : indoor.isIndoorActive
+                        ? 'IndoorMap'
+                        : 'Map';
+
+    const key = `MapScreen/${overlay}`;
+    if (prevHeatmapKeyRef.current === key) return;
+    prevHeatmapKeyRef.current = key;
+    trackScreenView(key);
+  }, [
+    isDirectionsModeOpen,
+    isRoutePreviewOpen,
+    isNavigationOpen,
+    calendarModalVisible,
+    isMenuOpen,
+    showFloorSelectModal,
+    selectedOutdoorPOI,
+    selectedBuilding,
+    nextClassPreview,
+    indoor.isIndoorActive,
+  ]);
 
   // Auto-zoom camera to fit the route polyline
   useEffect(() => {
