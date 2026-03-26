@@ -49,7 +49,8 @@ export function useOutdoorPOI({
           accuracy: Location.Accuracy.Balanced,
         });
         return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      } catch {
+      } catch (error) {
+        console.warn('useOutdoorPOI: failed to get current position for POI search', error);
         return getCampusCenterForPOI(null, activeCampus);
       }
     };
@@ -85,7 +86,9 @@ export function useOutdoorPOI({
           if (!address) return;
           setSelectedOutdoorPOI((prev) => (prev?.id === basePOI.id ? { ...prev, address } : prev));
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.warn('useOutdoorPOI: reverse geocoding failed for selected POI', error);
+        });
     }
   }, []);
 

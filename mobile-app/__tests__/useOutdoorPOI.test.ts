@@ -24,6 +24,7 @@ jest.mock('expo-location', () => ({
 }));
 
 const SGW_CENTER = { latitude: 45.4973, longitude: -73.5789 };
+let warnSpy: jest.SpiedFunction<typeof console.warn>;
 
 const makePOI = (id: string, name: string) => ({
   id,
@@ -42,7 +43,12 @@ const makePOI = (id: string, name: string) => ({
 describe('useOutdoorPOI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockGetCampusCenterForPOI.mockReturnValue(SGW_CENTER);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
   });
 
   it('returns empty results when query is not a supported category', () => {
@@ -247,7 +253,8 @@ describe('useOutdoorPOI', () => {
 
   it('selectPOIFromMap keeps base POI if reverse geocoding fails', async () => {
     mockIsSupportedPOICategory.mockReturnValue(null);
-    mockReverseGeocodeAsync.mockRejectedValue(new Error('fail'));
+    const error = new Error('fail');
+    mockReverseGeocodeAsync.mockRejectedValue(error);
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
@@ -271,6 +278,12 @@ describe('useOutdoorPOI', () => {
 
     expect(result.current.selectedOutdoorPOI?.name).toBe('Another POI');
     expect(result.current.selectedOutdoorPOI?.address).toBe('');
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        'useOutdoorPOI: reverse geocoding failed for selected POI',
+        error,
+      );
+    });
   });
 
   it('uses cached user location as search center when available', async () => {
@@ -319,7 +332,8 @@ describe('useOutdoorPOI', () => {
   it('falls back to campus center when GPS also fails', async () => {
     mockIsSupportedPOICategory.mockReturnValue('cafe');
     mockFetchNearbyPOIs.mockResolvedValue([]);
-    mockGetCurrentPositionAsync.mockRejectedValue(new Error('GPS denied'));
+    const error = new Error('GPS denied');
+    mockGetCurrentPositionAsync.mockRejectedValue(error);
 
     renderHook(() =>
       useOutdoorPOI({
@@ -332,5 +346,9 @@ describe('useOutdoorPOI', () => {
     await waitFor(() => {
       expect(mockGetCampusCenterForPOI).toHaveBeenCalledWith(null, 'loyola');
     });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'useOutdoorPOI: failed to get current position for POI search',
+      error,
+    );
   });
 });
