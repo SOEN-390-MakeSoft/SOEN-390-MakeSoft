@@ -5,6 +5,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
 import { useSettings } from '../context/settings';
 import { useRouter } from 'expo-router';
+import { trackColorBlindToggled } from '../services/analytics';
 
 interface MapMenuProps {
   visible: boolean;
@@ -116,7 +117,10 @@ export default function MapMenu({
         </View>
         <Switch
           value={colourBlindMode}
-          onValueChange={setColourBlindMode}
+          onValueChange={(enabled) => {
+            trackColorBlindToggled(enabled, 'map_menu');
+            setColourBlindMode(enabled);
+          }}
           trackColor={{ false: '#ddd', true: '#f3b6bf' }}
           thumbColor={colourBlindMode ? brandRed : '#fff'}
         />

@@ -87,6 +87,10 @@ export function trackShuttleInfoViewed(departureCampus: string) {
   track('shuttle_info_viewed', { departure_campus: departureCampus });
 }
 
+export function trackLocateMeClicked() {
+  track('locate_me_clicked');
+}
+
 // ── Epic 3: Calendar ────────────────────────────────────────────────────
 
 export function trackCalendarModalOpened() {
@@ -109,6 +113,21 @@ export function trackNextClassGoTapped(building: string, room: string | null) {
   track('next_class_go_tapped', {
     building,
     room: room ?? '',
+  });
+}
+
+export function trackNextClassInfoClicked() {
+  track('next_class_info_clicked');
+}
+
+export function trackGetStartedClicked() {
+  track('get_started_clicked');
+}
+
+export function trackColorBlindToggled(enabled: boolean, source: 'map_menu' | 'menu_screen') {
+  track('color_blind_toggled', {
+    enabled: String(enabled),
+    source,
   });
 }
 

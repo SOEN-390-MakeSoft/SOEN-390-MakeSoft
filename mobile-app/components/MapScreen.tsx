@@ -90,10 +90,12 @@ import {
   trackTransportModeSelected,
   trackWalkingVariantSelected,
   trackCurrentLocationUsed,
+  trackLocateMeClicked,
   trackRoutePreviewOpened,
   trackDirectionsModeOpened,
   trackCalendarModalOpened,
   trackNextClassDirectionsTapped,
+  trackNextClassInfoClicked,
   trackNextClassGoTapped,
   trackIndoorMapActivated,
   trackIndoorRoomSearched,
@@ -1340,6 +1342,7 @@ export default function MapScreen() {
   ]);
 
   const handleLocationPress = useCallback(async () => {
+    trackLocateMeClicked();
     await goToUserLocation({
       animateToUser: false,
       onResolved: (coordinate) => {
@@ -2395,7 +2398,10 @@ export default function MapScreen() {
               onLocationPress={handleLocationPress}
               onDirectionsToNextClassPress={handleDirectionsToNextClass}
               showNextClassInfo={showNextClassInfo}
-              onNextClassInfoPress={openNextClassPanel}
+              onNextClassInfoPress={() => {
+                trackNextClassInfoClicked();
+                openNextClassPanel();
+              }}
             />
           ) : null
         }

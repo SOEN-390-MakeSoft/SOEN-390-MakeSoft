@@ -2,6 +2,7 @@ import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button, Text, YStack, Spacer } from 'tamagui';
 import React from 'react';
+import { trackGetStartedClicked } from '../services/analytics';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -44,7 +45,10 @@ export default function WelcomeScreen() {
             opacity: 0.7, // fades the button a bit on press
             scale: 0.95, // makes it slightly smaller
           }}
-          onPress={() => router.push('../(tabs)/Map')}
+          onPress={() => {
+            trackGetStartedClicked();
+            router.push('../(tabs)/Map');
+          }}
         >
           Get Started
         </Button>

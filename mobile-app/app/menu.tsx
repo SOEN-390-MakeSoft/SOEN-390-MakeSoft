@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Switch, Text, XStack, YStack, useTheme } from 'tamagui';
 import { useSettings } from '../context/settings';
+import { trackColorBlindToggled } from '../services/analytics';
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -48,7 +49,10 @@ export default function MenuScreen() {
           </XStack>
           <Switch
             checked={colourBlindMode}
-            onCheckedChange={setColourBlindMode}
+            onCheckedChange={(enabled) => {
+              trackColorBlindToggled(enabled, 'menu_screen');
+              setColourBlindMode(enabled);
+            }}
             backgroundColor={switchTrackColor}
             borderColor={switchTrackColor}
             width={64}
