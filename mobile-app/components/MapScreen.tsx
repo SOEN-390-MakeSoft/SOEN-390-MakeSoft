@@ -337,7 +337,9 @@ const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 const INDOOR_ZOOM_THRESHOLD = 0.002;
 const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
-const POI_MARKER_ICONS: Record<string, string> = {
+const FALLBACK_POI_ICON: keyof typeof MaterialIcons.glyphMap = 'place';
+
+const POI_MARKER_ICONS: Partial<Record<string, keyof typeof MaterialIcons.glyphMap>> = {
   restaurant: 'restaurant',
   cafe: 'local-cafe',
   pharmacy: 'local-pharmacy',
@@ -2092,7 +2094,7 @@ export default function MapScreen() {
           >
             <View style={styles.poiMarkerPin}>
               <MaterialIcons
-                name={POI_MARKER_ICONS[poi.category] ?? 'place'}
+                name={POI_MARKER_ICONS[poi.category] ?? FALLBACK_POI_ICON}
                 size={16}
                 color="#fff"
               />
