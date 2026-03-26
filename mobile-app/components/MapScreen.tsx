@@ -29,6 +29,7 @@ import FloorSelector from './indoor/FloorSelector';
 import RoomInfoBubble from './indoor/RoomInfoBubble';
 import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
+import POIMarker from './POIMarker';
 import {
   INDOOR_BUILDINGS,
   findBuildingAtCoordinate,
@@ -2019,11 +2020,14 @@ const handleSelectMergedResult = useCallback(
           />
         )}
         {outdoorPOIResults.map((poi) => (
-          <Marker
+          <POIMarker
             key={`outdoor-poi-${poi.id}`}
-            coordinate={poi.coordinate}
+            poi={poi}
             testID={`outdoor-poi-marker-${poi.id}`}
             zIndex={999}
+            iconName={
+              (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
+            }
             onPress={() => {
               poiPressedRef.current = true;
               requestAnimationFrame(() => {
@@ -2032,15 +2036,7 @@ const handleSelectMergedResult = useCallback(
               handleCloseCard();
               selectPOI(poi);
             }}
-          >
-            <View style={styles.poiMarkerPin}>
-              <MaterialIcons
-                name={POI_MARKER_ICONS[poi.category] ?? 'place'}
-                size={16}
-                color="#fff"
-              />
-            </View>
-          </Marker>
+          />
         ))}
       </MapView>
 
@@ -2559,20 +2555,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
-  },
-  poiMarkerPin: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#912338',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-    elevation: 5,
   },
 });
