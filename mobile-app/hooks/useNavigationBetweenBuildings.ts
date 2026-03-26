@@ -13,7 +13,7 @@ import {
 } from '../utils/mapUtils';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
 
-const MAX_TAP_DISTANCE_METERS = 80;
+const MAX_TAP_DISTANCE_METERS = 0;
 
 /** Decode a Google-encoded polyline string into an array of LatLng. */
 function decodePolyline(encoded: string): LatLng[] {
@@ -1225,6 +1225,22 @@ export function useNavigationBetweenBuildings({
     [resetRouteState],
   );
 
+  const openNavigationForCoordinate = useCallback(
+    (label: string, coordinate: LatLng) => {
+      setIsDestinationLocked(false);
+      setIsIndoorOnlyRoute(false);
+      setNavigationStart('Your location');
+      setNavigationOrigin(null);
+      setNavigationDestination(label);
+      setNavigationDestinationCoord(coordinate);
+      setTapMarkerCoordinate(coordinate);
+      setActiveMode('driving');
+      resetRouteState();
+      setIsNavigationOpen(true);
+    },
+    [resetRouteState],
+  );
+
   const handleMapBuildingPress = useCallback(
     (buildingId: string) => {
       const building = buildings.find((b) => b.id === buildingId);
@@ -1416,6 +1432,7 @@ export function useNavigationBetweenBuildings({
     setActiveMode,
     openNavigationForBuilding,
     openNavigationForResolvedDestination,
+    openNavigationForCoordinate,
     openIndoorOnlyNavigation,
     isIndoorOnlyRoute,
     handleMapBuildingPress,

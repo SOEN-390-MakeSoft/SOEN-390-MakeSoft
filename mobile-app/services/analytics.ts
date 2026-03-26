@@ -1,6 +1,6 @@
 import Smartlook, { Properties } from 'react-native-smartlook-analytics';
 
-function track(name: string, props?: Record<string, string>) {
+async function track(name: string, props?: Record<string, string>) {
   try {
     const p = new Properties();
     if (props) {
@@ -8,7 +8,7 @@ function track(name: string, props?: Record<string, string>) {
         p.putString(key, value);
       }
     }
-    Smartlook.instance.analytics.trackEvent(name, p);
+    await Smartlook.instance.analytics.trackEvent(name, p);
   } catch {
     // Smartlook may not be initialized (e.g. missing key, Expo Go)
   }
@@ -141,7 +141,7 @@ export function trackAccessibleRouteToggled(enabled: boolean) {
   track('accessible_route_toggled', { enabled: String(enabled) });
 }
 
-// ── Epic 4/5: Points of Interest ────────────────────────────────────────
+// ── Epic 4: Indoor Points of Interest ───────────────────────────────────
 
 export function trackIndoorPoiCategoryFiltered(category: string) {
   track('indoor_poi_category_filtered', { category });
@@ -149,4 +149,22 @@ export function trackIndoorPoiCategoryFiltered(category: string) {
 
 export function trackIndoorPoiTapped(poiType: string) {
   track('indoor_poi_tapped', { poi_type: poiType });
+}
+
+// ── Epic 5: Outdoor Points of Interest ──────────────────────────────────
+
+export function trackOutdoorPoiSearched(query: string, resultCount: number) {
+  track('outdoor_poi_searched', { query, result_count: String(resultCount) });
+}
+
+export function trackOutdoorPoiSelected(
+  poiName: string,
+  category: string,
+  method: 'search' | 'marker',
+) {
+  track('outdoor_poi_selected', { poi_name: poiName, category, method });
+}
+
+export function trackOutdoorPoiDirectionsTapped(poiName: string, category: string) {
+  track('outdoor_poi_directions_tapped', { poi_name: poiName, category });
 }

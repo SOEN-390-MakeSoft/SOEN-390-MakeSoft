@@ -10,15 +10,30 @@ LogBox.ignoreAllLogs();
 
 export default function RootLayout() {
   useEffect(() => {
-    const key = process.env.EXPO_PUBLIC_SMARTLOOK_PROJECT_KEY;
-    if (!key) return;
+    async function initSmartlook() {
+      const key = process.env.EXPO_PUBLIC_SMARTLOOK_PROJECT_KEY;
+      if (!key) {
+        console.warn('Smartlook disabled: EXPO_PUBLIC_SMARTLOOK_PROJECT_KEY is missing.');
+        return;
+      }
 
-    try {
-      Smartlook.instance.preferences.setProjectKey(key);
-      Smartlook.instance.start();
-    } catch (error) {
-      console.warn('Smartlook initialization failed:', error);
+      try {
+        if (__DEV__) {
+          await Smartlook.instance.enableLogs();
+        }
+        await Smartlook.instance.preferences.setProjectKey(key);
+        await Smartlook.instance.start();
+
+        if (__DEV__) {
+          const isRecording = await Smartlook.instance.state.isRecording();
+          console.log(`Smartlook started – recording: ${isRecording}`);
+        }
+      } catch (error) {
+        console.warn('Smartlook initialization failed:', error);
+      }
     }
+
+    initSmartlook();
   }, []);
 
   return (
