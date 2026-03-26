@@ -8,6 +8,7 @@ import { distanceToPolylineMeters, type LatLng } from '../utils/mapUtils';
 import { useSettings } from '../context/settings';
 import { navigationSharedStyles } from '../utils/navigationStyles';
 import StepInstructionPanel from './StepInstructionPanel';
+import { trackDirectionsModeCompleted } from '../services/analytics';
 
 /** How far (metres) the user must stray from the route to trigger a reroute. */
 const OFF_ROUTE_THRESHOLD_METERS = 30;
@@ -239,7 +240,10 @@ export default function DirectionsModeScreen({
           isLastStep={totalSteps > 0 && safeIndex === totalSteps - 1}
           actionBg={actionBg}
           actionTextColor={actionTextColor}
-          onDone={onClose}
+          onDone={() => {
+            trackDirectionsModeCompleted();
+            onClose();
+          }}
           doneAccessibilityLabel="Done directions"
           doneTestID="directions-mode-done"
         />

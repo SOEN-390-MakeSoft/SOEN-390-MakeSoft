@@ -6,6 +6,7 @@ import type { NavigationStep } from '../hooks/useNavigationBetweenBuildings';
 import { useSettings } from '../context/settings';
 import { navigationSharedStyles } from '../utils/navigationStyles';
 import StepInstructionPanel from './StepInstructionPanel';
+import { trackRoutePreviewCompleted } from '../services/analytics';
 
 interface RoutePreviewScreenProps {
   visible: boolean;
@@ -101,7 +102,10 @@ export default function RoutePreviewScreen({
           isLastStep={totalSteps > 0 && safeIndex === totalSteps - 1}
           actionBg={actionBg}
           actionTextColor={actionTextColor}
-          onDone={onClose}
+          onDone={() => {
+            trackRoutePreviewCompleted();
+            onClose();
+          }}
           doneAccessibilityLabel="Done preview"
           doneTestID="route-preview-done"
         />

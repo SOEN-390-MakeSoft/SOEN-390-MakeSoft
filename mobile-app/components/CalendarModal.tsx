@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { CalendarEvent } from '../hooks/usePublicCalendar';
+import { trackCalendarConnected, trackCalendarDisconnected } from '../services/analytics';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,11 +114,13 @@ export default function CalendarModal({
   const handleConnect = async () => {
     Keyboard.dismiss();
     await onConnect(link.trim());
+    trackCalendarConnected();
   };
 
   const handleDisconnect = async () => {
     setLink('');
     await onDisconnect();
+    trackCalendarDisconnected();
   };
 
   let connectedEventsContent: React.ReactNode = null;

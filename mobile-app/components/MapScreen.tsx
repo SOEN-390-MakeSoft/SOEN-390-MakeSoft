@@ -77,6 +77,29 @@ import {
   resolveEventLocation,
   type LocationConflict,
 } from '../utils/stringUtils';
+import {
+  trackCampusSwitched,
+  trackBuildingSelected,
+  trackBuildingInfoViewed,
+  trackBuildingDirectionsTapped,
+  trackNavigationOpened,
+  trackTransportModeSelected,
+  trackWalkingVariantSelected,
+  trackCurrentLocationUsed,
+  trackRoutePreviewOpened,
+  trackDirectionsModeOpened,
+  trackCalendarModalOpened,
+  trackNextClassDirectionsTapped,
+  trackNextClassGoTapped,
+  trackIndoorMapActivated,
+  trackIndoorRoomSearched,
+  trackIndoorRoomSelected,
+  trackIndoorNavigateTapped,
+  trackFloorChanged,
+  trackAccessibleRouteToggled,
+  trackIndoorPoiCategoryFiltered,
+  trackIndoorPoiTapped,
+} from '../services/analytics';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
 function formatIndoorTime(seconds: number): string {
@@ -603,8 +626,14 @@ export default function MapScreen() {
       const room = result._room;
       const buildingCode = (result as any)._buildingCode as string | undefined;
 
+      trackIndoorRoomSearched(room.ref);
+      if (buildingCode) {
+        trackIndoorRoomSelected(room.ref, buildingCode);
+      }
+
       // Auto-activate indoor mode if not already on the right building
       if (buildingCode && (!indoor.isIndoorActive || indoor.activeBuildingCode !== buildingCode)) {
+        trackIndoorMapActivated(buildingCode, 'search');
         indoor.activateBuilding(buildingCode);
         lastIndoorAutoRef.current = buildingCode;
       }
@@ -654,6 +683,7 @@ export default function MapScreen() {
    *  if the user is far away → combined outdoor+indoor. */
   const handleRoomNavigate = useCallback(
     (room: { ref: string; level: string }) => {
+      trackIndoorNavigateTapped(room.ref);
       // 1. Compute the indoor route (accessible if enabled)
       navigateToIndoorRoom(room.ref);
       setPendingDestinationRef(room.ref);
@@ -710,6 +740,9 @@ export default function MapScreen() {
       if (indoor.selectedRoom?.featureId === room.featureId) {
         indoor.selectRoom(null);
       } else {
+        if (room.ref && indoor.activeBuildingCode) {
+          trackIndoorRoomSelected(room.ref, indoor.activeBuildingCode);
+        }
         indoor.selectRoom(room);
       }
     },
@@ -719,10 +752,10 @@ export default function MapScreen() {
   /** POI polygon tapped on the indoor overlay → toggle selection. */
   const handlePoiPress = useCallback(
     (poi: any) => {
-      // If this POI is already selected, deselect it
       if (selectedPoi?.id === poi.id) {
         setSelectedPoi(null);
       } else {
+        trackIndoorPoiTapped(getPoiTitle(poi));
         setSelectedPoi(poi);
       }
     },
@@ -732,13 +765,14 @@ export default function MapScreen() {
   /** Category chip tapped → filter POIs and escalators/elevators. */
   const handleCategoryChipPress = useCallback(
     (category: string) => {
+      trackIndoorPoiCategoryFiltered(category);
       const { nextCategoryFilter, nextVisiblePoiAmenities } = resolveIndoorCategorySelection(
         indoorCategoryFilter,
         category,
       );
       setIndoorCategoryFilter(nextCategoryFilter);
       setVisiblePoiAmenities(nextVisiblePoiAmenities);
-      setSelectedPoi(null); // Clear any open POI bubble
+      setSelectedPoi(null);
     },
     [indoorCategoryFilter],
   );
@@ -780,6 +814,7 @@ export default function MapScreen() {
           !indoor.indoorRoute &&
           (!indoor.isIndoorActive || indoor.activeBuildingCode !== meta.code)
         ) {
+          trackIndoorMapActivated(meta.code, 'zoom');
           indoor.activateBuilding(meta.code);
           lastIndoorAutoRef.current = meta.code;
         }
@@ -813,6 +848,7 @@ export default function MapScreen() {
   const nextClassEvent = getNextEvent(calendarEvents);
 
   const handleLogoPress = useCallback(() => {
+    trackCalendarModalOpened();
     setCalendarModalVisible(true);
     if (isCalendarConnected) {
       refreshEvents();
@@ -854,6 +890,7 @@ export default function MapScreen() {
   );
 
   const handleDirectionsToNextClass = useCallback(() => {
+    trackNextClassDirectionsTapped();
     const effectiveNow = simulatedNow ?? new Date();
     const nextClassState = getNextClassForToday(calendarEvents, effectiveNow);
     if (nextClassState.status === 'no_classes_today') {
@@ -988,6 +1025,9 @@ export default function MapScreen() {
       const detected = indoor.detectIndoor(query);
       if (!detected) return false;
 
+      trackIndoorRoomSearched(query);
+      trackIndoorMapActivated(detected.buildingCode, 'search');
+
       // 1. Activate indoor map + compute indoor route
       indoor.activateBuilding(detected.buildingCode);
       navigateToIndoorRoom(detected.roomRef);
@@ -1037,6 +1077,7 @@ export default function MapScreen() {
       buildings.find((building) => hint && normalizeLabel(building.name).includes(hint)) ??
       buildings.find((building) => building.code?.toUpperCase() === pick.code);
     if (!match) return;
+    trackBuildingSelected(match.name, match.code, activeCampus, 'quick_pick');
     handleSelectBuilding(match.id);
     const centroid = polygonCentroid(match.polygon);
     mapRef.current?.animateToRegion(
@@ -1049,6 +1090,7 @@ export default function MapScreen() {
    * Handle campus selection - reset search and selection
    */
   const handleCampusChange = (campus: Campus) => {
+    trackCampusSwitched(activeCampus, campus);
     handleSelectCampus(campus, mapRef);
     setSearchQuery('');
     setIsSearchFocused(false);
@@ -1166,6 +1208,7 @@ export default function MapScreen() {
         return;
       }
 
+      trackCurrentLocationUsed();
       void goToUserLocation({
         animateToUser: false,
         onResolved: resolveDirectionsStartFromCoordinate,
@@ -1255,6 +1298,7 @@ export default function MapScreen() {
   const handleNextClassGo = useCallback(() => {
     if (!nextClassPreview) return;
     const { building, campus } = nextClassPreview;
+    trackNextClassGoTapped(building?.name ?? 'unknown', nextClassPreview.indoorRoomRef);
     if (building && campus) {
       const classEndRaw = nextClassPreview.event.end.dateTime ?? nextClassPreview.event.end.date;
       const classEnd = classEndRaw ? new Date(classEndRaw) : null;
@@ -1303,9 +1347,10 @@ export default function MapScreen() {
         Alert.alert('Route arrives too late', "You'll arrive after class ends");
         return;
       }
+      trackTransportModeSelected(mode, isShuttleRoute);
       setSelectedTransportMode(mode);
     },
-    [lateTransportModes, setSelectedTransportMode],
+    [lateTransportModes, setSelectedTransportMode, isShuttleRoute],
   );
 
   const handleDisabledTransportModePress = useCallback(() => {
@@ -1495,6 +1540,7 @@ export default function MapScreen() {
         ? startIndoor.activeBuildingCode
         : indoor.activeBuildingCode;
       if (focusedBuildingCode) {
+        trackFloorChanged(focusedBuildingCode, level);
         setFocusedIndoorBuildingCode(focusedBuildingCode);
         floorSelectorFocusLockRef.current = {
           buildingCode: focusedBuildingCode,
@@ -1594,6 +1640,7 @@ export default function MapScreen() {
 
   const handleOpenRoutePreview = useCallback(() => {
     if (combinedNavigationSteps.length === 0) return;
+    trackRoutePreviewOpened();
     setPreviewStepIndex(0);
     setIsRoutePreviewOpen(true);
     const firstStep = combinedNavigationSteps[0];
@@ -1608,6 +1655,7 @@ export default function MapScreen() {
 
   const handleOpenDirectionsMode = useCallback(() => {
     if (combinedNavigationSteps.length === 0) return;
+    trackDirectionsModeOpened();
     setIsDirectionsModeOpen(true);
   }, [combinedNavigationSteps]);
 
@@ -2092,6 +2140,8 @@ export default function MapScreen() {
         }}
         isColorBlind={isColorBlind}
         onDirections={() => {
+          trackBuildingDirectionsTapped(selectedBuilding?.name ?? '');
+          trackNavigationOpened(selectedBuilding?.name ?? '');
           setArriveByClassEnd(null);
           openNavigationForBuilding(selectedBuilding, remoteBuilding);
           handleCloseCard();
@@ -2113,7 +2163,10 @@ export default function MapScreen() {
         isGetDirectionsDisabled={isGetDirectionsDisabled}
         selectedTransportMode={selectedTransportMode}
         onTransportModeChange={handleTransportModeChange}
-        onWalkingRouteVariantChange={setSelectedWalkingRouteVariant}
+        onWalkingRouteVariantChange={(variant) => {
+          trackWalkingVariantSelected(variant);
+          setSelectedWalkingRouteVariant(variant);
+        }}
         disabledTransportModes={lateTransportModes}
         onDisabledTransportModePress={handleDisabledTransportModePress}
         navigationSteps={combinedNavigationSteps}
@@ -2122,7 +2175,10 @@ export default function MapScreen() {
         shuttleInfo={shuttleInfo}
         isWeekend={isWeekend}
         isAccessibleRouteEnabled={isAccessibleRouteEnabled}
-        onAccessibleRouteChange={setIsAccessibleRouteEnabled}
+        onAccessibleRouteChange={(enabled: boolean) => {
+          trackAccessibleRouteToggled(enabled);
+          setIsAccessibleRouteEnabled(enabled);
+        }}
         onOpenPreview={handleOpenRoutePreview}
         onOpenDirections={handleOpenDirectionsMode}
         indoorTravelTimeText={indoorTravelTimeText}
