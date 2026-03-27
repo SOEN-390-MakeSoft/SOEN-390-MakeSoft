@@ -110,6 +110,41 @@ if (commandId == null || args == null) {
 delegate.receiveCommand(view, commandId, args)
 ```
 
+### D) CMake/Ninja loop on Windows (`build.ninja` still dirty after 100 tries)
+
+Symptom:
+
+- Repeated CMake warnings about long object paths and then:
+  `ninja: error: manifest 'build.ninja' still dirty after 100 tries`
+
+Cause:
+
+- Building from a long OneDrive path can trigger unstable native build regeneration in some React Native modules (`react-native-worklets`, etc.).
+
+Fix (recommended):
+
+1. Copy the repo to a short local path (not under OneDrive), for example:
+   `C:\dev\SOEN-390-MakeSoft`
+2. In the copied project, clear stale Android build artifacts:
+
+```powershell
+cd C:\dev\SOEN-390-MakeSoft\mobile-app
+Remove-Item -Recurse -Force android\build -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force node_modules\react-native-worklets\android\.cxx -ErrorAction SilentlyContinue
+```
+
+3. Build again from the copied path:
+
+```bash
+cd C:\dev\SOEN-390-MakeSoft\mobile-app
+npx expo run:android
+```
+
+Notes:
+
+- This issue is environment/path related, not Smartlook key/config related.
+- If you move/copy the project, always clear `android/build` and module `.cxx` caches before rebuilding.
+
 ## 6) Team workflow recommendation
 
 - Keep `EXPO_PUBLIC_SMARTLOOK_PROJECT_KEY` in local `.env` only.
