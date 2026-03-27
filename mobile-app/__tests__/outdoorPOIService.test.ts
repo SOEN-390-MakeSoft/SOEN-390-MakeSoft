@@ -330,12 +330,10 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('returns empty address when API key is empty', async () => {
-    const original = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
-    const details = await fetchPlaceDetails('ChIJ123');
-    expect(details.address).toBe('');
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = original;
-  });
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
+  const details = await fetchPlaceDetails('ChIJ123');
+  expect(details.address).toBe('');
+});
 
   it('constructs the correct URL with place_id and fields', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
