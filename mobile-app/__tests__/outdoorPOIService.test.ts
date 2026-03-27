@@ -247,14 +247,11 @@ describe('fetchNearbyPOIs', () => {
     const pois = await fetchNearbyPOIs('restaurant', center, 5000);
     expect(pois).toEqual([]);
   });
-
-  it('returns empty array when API key is empty', async () => {
-    const original = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
-    const pois = await fetchNearbyPOIs('restaurant', center, 5000);
-    expect(pois).toEqual([]);
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = original;
-  });
+it('returns empty array when API key is empty', async () => {
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
+  const pois = await fetchNearbyPOIs('restaurant', center, 5000);
+  expect(pois).toEqual([]);
+});
 
   it('constructs the correct URL', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
