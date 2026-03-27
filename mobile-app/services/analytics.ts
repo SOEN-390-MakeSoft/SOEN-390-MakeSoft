@@ -190,11 +190,26 @@ export function trackOutdoorPoiDirectionsTapped(poiName: string, category: strin
 
 // ── Heatmaps: Screen / navigation tracking ──────────────────────────────
 
-export function trackScreenView(screenName: string) {
+let _currentScreen: string | null = null;
+
+export function trackScreenEnter(screenName: string) {
   try {
-    // Smartlook uses navigation events to build heatmaps.
-    // Docs: Smartlook.instance.trackNavigationEvent("screen-name")
-    (Smartlook.instance as any)?.trackNavigationEvent?.(screenName);
+    if (_currentScreen && _currentScreen !== screenName) {
+      Smartlook.instance.analytics.trackNavigationExit(_currentScreen);
+    }
+    _currentScreen = screenName;
+    Smartlook.instance.analytics.trackNavigationEnter(screenName);
+  } catch {
+    // Smartlook may not be initialized yet
+  }
+}
+
+export function trackScreenExit(screenName: string) {
+  try {
+    Smartlook.instance.analytics.trackNavigationExit(screenName);
+    if (_currentScreen === screenName) {
+      _currentScreen = null;
+    }
   } catch {
     // ignore
   }

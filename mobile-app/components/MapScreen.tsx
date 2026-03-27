@@ -109,7 +109,7 @@ import {
   trackOutdoorPoiSelected,
   trackOutdoorPoiDirectionsTapped,
 } from '../services/analytics';
-import { trackScreenView } from '../services/analytics';
+import { trackScreenEnter } from '../services/analytics';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
 function formatIndoorTime(seconds: number): string {
@@ -1069,8 +1069,8 @@ export default function MapScreen() {
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
 
   // -----------------------------------------------------------------------
-  // Heatmaps: treat major overlays as pseudo-screens.
-  // This helps Smartlook group heatmaps for UI states that are not separate routes.
+  // Heatmaps: treat major overlays as pseudo-screens so Smartlook
+  // generates a separate heatmap for each UI state.
   // -----------------------------------------------------------------------
   const prevHeatmapKeyRef = useRef<string>('');
   useEffect(() => {
@@ -1086,20 +1086,26 @@ export default function MapScreen() {
               ? 'MapMenu'
               : showFloorSelectModal
                 ? 'IndoorFloorPrompt'
-                : selectedOutdoorPOI
-                  ? 'OutdoorPOICard'
-                  : selectedBuilding && !isNavigationOpen
-                    ? 'BuildingInfoCard'
-                    : nextClassPreview
-                      ? 'NextClassCard'
-                      : indoor.isIndoorActive
-                        ? 'IndoorMap'
-                        : 'Map';
+                : isSearchFocused
+                  ? 'SearchResults'
+                  : selectedOutdoorPOI
+                    ? 'OutdoorPOICard'
+                    : selectedBuilding && !isNavigationOpen
+                      ? 'BuildingInfoCard'
+                      : nextClassPreview
+                        ? 'NextClassCard'
+                        : indoor.isIndoorActive && indoor.selectedRoom
+                          ? 'IndoorRoomInfo'
+                          : indoor.isIndoorActive && selectedPoi
+                            ? 'IndoorPoiInfo'
+                            : indoor.isIndoorActive
+                              ? 'IndoorMap'
+                              : 'Map';
 
     const key = `MapScreen/${overlay}`;
     if (prevHeatmapKeyRef.current === key) return;
     prevHeatmapKeyRef.current = key;
-    trackScreenView(key);
+    trackScreenEnter(key);
   }, [
     isDirectionsModeOpen,
     isRoutePreviewOpen,
@@ -1107,10 +1113,13 @@ export default function MapScreen() {
     calendarModalVisible,
     isMenuOpen,
     showFloorSelectModal,
+    isSearchFocused,
     selectedOutdoorPOI,
     selectedBuilding,
     nextClassPreview,
     indoor.isIndoorActive,
+    indoor.selectedRoom,
+    selectedPoi,
   ]);
 
   // Auto-zoom camera to fit the route polyline

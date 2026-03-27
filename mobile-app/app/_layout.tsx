@@ -5,7 +5,7 @@ import Smartlook from 'react-native-smartlook-analytics';
 import { TamaguiProvider, Theme } from 'tamagui';
 import config from '../tamagui.config';
 import { SettingsProvider } from '../context/settings';
-import { trackScreenView } from '../services/analytics';
+import { trackScreenEnter } from '../services/analytics';
 
 LogBox.ignoreAllLogs();
 
@@ -40,8 +40,6 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    // Manual screen naming for heatmaps (Expo Router routes).
-    // Keep names stable for consistent heatmap grouping.
     const screen =
       pathname === '/' || pathname === '/index'
         ? 'WelcomeScreen'
@@ -53,7 +51,7 @@ export default function RootLayout() {
               ? 'GoogleCalendarInstructions'
               : pathname;
 
-    trackScreenView(screen);
+    trackScreenEnter(screen);
   }, [pathname]);
 
   return (
