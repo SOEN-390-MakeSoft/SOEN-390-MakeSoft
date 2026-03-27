@@ -12,7 +12,8 @@ import {
   type LatLng,
 } from '../utils/mapUtils';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
-const MAX_TAP_DISTANCE_METERS = 5;
+
+const MAX_TAP_DISTANCE_METERS = 0;
 
 /** Decode a Google-encoded polyline string into an array of LatLng. */
 function decodePolyline(encoded: string): LatLng[] {
