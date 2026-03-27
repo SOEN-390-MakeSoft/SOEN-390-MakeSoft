@@ -12,14 +12,14 @@ type Props = {
   zIndex?: number;
   markerColor?: string;
 };
-const DEFAULT_MARKER_COLOR = '#912338';
+
 export default function POIMarker({
   poi,
   iconName = 'place',
   onPress,
   testID,
   zIndex,
-  markerColor = DEFAULT_MARKER_COLOR,
+  markerColor = '#912338',
 }: Props) {
   return (
     <Marker coordinate={poi.coordinate} testID={testID} zIndex={zIndex} onPress={onPress}>
