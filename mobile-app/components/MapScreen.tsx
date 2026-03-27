@@ -674,52 +674,54 @@ export default function MapScreen() {
 
   /** Handle selecting an autocomplete result — room, building, or outdoor POI. */
   const handleSelectMergedResult = useCallback(
-    (result: {
-      id: string;
-      name: string;
-      address: string | null;
-      code: string | null;
-      _room?: any;
-      _poi?: OutdoorPOI;
-    }) => {
-      if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
-        handleSelectRoomResult(result as RoomSearchResult);
-        return;
-      }
-      if (result.id.startsWith('poi-') && result._poi) {
-        const poi = result._poi;
-        handleCloseCard();
-        selectPOI(poi);
-        setSearchQuery(poi.name);
-        setIsSearchFocused(false);
-        searchInputRef.current?.blur();
-        mapRef.current?.animateToRegion(
-          {
-            ...poi.coordinate,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
-          500,
-        );
-        return;
-      }
-      clearSelectedPOI();
-      handleSelectSearchResult(result as any);
-    },
-    [
-      indoor,
-      handleSelectSearchResult,
-      handleSelectRoomResult,
-      setSearchQuery,
-      setIsSearchFocused,
-      searchInputRef,
-      handleCloseCard,
-      selectPOI,
-      clearSelectedPOI,
-    ],
-  );
 
-  /** Navigate to the room from the info bubble. Uses GPS proximity to decide:
+const handleSelectMergedResult = useCallback(
+  (result: {
+    id: string;
+    name: string;
+    address: string | null;
+    code: string | null;
+    _room?: any;
+    _poi?: OutdoorPOI;
+  }) => {
+    if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
+      handleSelectRoomResult(result as RoomSearchResult);
+      return;
+    }
+
+    if (result.id.startsWith('poi-') && result._poi) {
+      const poi = result._poi;
+      handleCloseCard();
+      selectPOI(poi);
+      setSearchQuery(poi.name);
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+      mapRef.current?.animateToRegion(
+        {
+          ...poi.coordinate,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        500,
+      );
+      return;
+    }
+
+    clearSelectedPOI();
+    handleSelectSearchResult(result as any);
+  },
+  [
+    indoor,
+    handleSelectSearchResult,
+    handleSelectRoomResult,
+    setSearchQuery,
+    setIsSearchFocused,
+    searchInputRef,
+    handleCloseCard,
+    selectPOI,
+    clearSelectedPOI,
+  ],
+);  /** Navigate to the room from the info bubble. Uses GPS proximity to decide:
    *  if the user is near/inside the target building → indoor-only;
    *  if the user is far away → combined outdoor+indoor. */
   const handleRoomNavigate = useCallback(
