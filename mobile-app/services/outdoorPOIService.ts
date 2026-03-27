@@ -101,9 +101,8 @@ export async function fetchNearbyPOIs(
 }
 
 /**
- * Fetch place details (address, rating, hours) from Google Places Details API.
- * Used to enrich POIs selected via the map's onPoiClick which only provides
- * placeId, name, and coordinate.
+ * Fetch place details (address, rating, hours) from the Google Places Details API.
+ * Can be used to enrich a POI when only a placeId is initially available.
  */
 export async function fetchPlaceDetails(
   placeId: string,
