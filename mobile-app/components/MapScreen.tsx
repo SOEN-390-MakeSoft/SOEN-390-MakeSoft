@@ -288,6 +288,9 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
 
 const isSearchDisabled = false;
 const USER_LOCATION_REGION_DELTA = 0.01;
+const POI_REGION_DELTA = 0.01;
+const MAP_ANIMATION_DURATION_MS = 500;
+const POI_MARKER_Z_INDEX = 999;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
@@ -449,7 +452,7 @@ export default function MapScreen() {
     const centroid = polygonCentroid(building.polygon);
     mapRef.current?.animateToRegion(
       { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      500,
+      MAP_ANIMATION_DURATION_MS,
     );
   });
 
@@ -667,7 +670,7 @@ export default function MapScreen() {
           latitudeDelta: 0.001,
           longitudeDelta: 0.001,
         },
-        500,
+        MAP_ANIMATION_DURATION_MS,
       );
     },
     [indoor, setSearchQuery, setIsSearchFocused],
@@ -697,10 +700,10 @@ export default function MapScreen() {
         mapRef.current?.animateToRegion(
           {
             ...poi.coordinate,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: POI_REGION_DELTA,
+            longitudeDelta: POI_REGION_DELTA,
           },
-          500,
+          MAP_ANIMATION_DURATION_MS,
         );
         return;
       }
@@ -1113,7 +1116,7 @@ export default function MapScreen() {
     const centroid = polygonCentroid(match.polygon);
     mapRef.current?.animateToRegion(
       { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      500,
+      MAP_ANIMATION_DURATION_MS,
     );
   };
 
@@ -1302,7 +1305,7 @@ export default function MapScreen() {
             latitudeDelta: USER_LOCATION_REGION_DELTA,
             longitudeDelta: USER_LOCATION_REGION_DELTA,
           },
-          500,
+          MAP_ANIMATION_DURATION_MS,
         );
       },
     });
@@ -2022,7 +2025,7 @@ export default function MapScreen() {
             key={`outdoor-poi-${poi.id}`}
             poi={poi}
             testID={`outdoor-poi-marker-${poi.id}`}
-            zIndex={999}
+            zIndex={POI_MARKER_Z_INDEX}
             iconName={
               (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
             }
