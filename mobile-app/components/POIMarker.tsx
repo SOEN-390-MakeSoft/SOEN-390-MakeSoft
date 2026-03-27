@@ -10,12 +10,20 @@ type Props = {
   onPress?: () => void;
   testID?: string;
   zIndex?: number;
+  markerColor?: string;
 };
 
-export default function POIMarker({ poi, iconName = 'place', onPress, testID, zIndex }: Props) {
+export default function POIMarker({
+  poi,
+  iconName = 'place',
+  onPress,
+  testID,
+  zIndex,
+  markerColor = '#912338',
+}: Props) {
   return (
     <Marker coordinate={poi.coordinate} testID={testID} zIndex={zIndex} onPress={onPress}>
-      <View style={styles.markerPin}>
+      <View style={[styles.markerPin, { backgroundColor: markerColor }]}>
         <MaterialIcons name={iconName} size={16} color="#fff" />
       </View>
     </Marker>
@@ -27,7 +35,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#912338',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

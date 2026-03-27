@@ -1040,6 +1040,7 @@ export default function MapScreen() {
   const isColorBlind = colourBlindMode;
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';
   const colourBlindAccent = theme?.colourBlind2?.get?.() ?? '#1F4E8C';
+  const poiMarkerColor = isColorBlind ? colourBlindAccent : brandRed;
   const routeColor = isColorBlind ? colourBlindAccent : brandRed;
   const defaultColor = theme?.cred?.get?.() ?? POLYGON_STROKE;
   const { polygonFillBase, polygonStrokeBase, polygonFillSelected } = getPolygonThemeColors(
@@ -2024,6 +2025,7 @@ export default function MapScreen() {
           <POIMarker
             key={`outdoor-poi-${poi.id}`}
             poi={poi}
+            markerColor={poiMarkerColor}
             testID={`outdoor-poi-marker-${poi.id}`}
             zIndex={POI_MARKER_Z_INDEX}
             iconName={
