@@ -13,9 +13,23 @@ import {
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
 const MOCK_KEY = 'test-api-key';
+let originalIosKey: string | undefined;
+let originalAndroidKey: string | undefined;
+
 beforeAll(() => {
+  originalIosKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
+  originalAndroidKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
+});
+
+beforeEach(() => {
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = MOCK_KEY;
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = MOCK_KEY;
+});
+
+afterEach(() => {
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = originalIosKey;
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID = originalAndroidKey;
+  jest.restoreAllMocks();
 });
 
 const SGW_CENTER = { latitude: 45.4973, longitude: -73.5789 };
