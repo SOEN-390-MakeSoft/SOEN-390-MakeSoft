@@ -256,6 +256,18 @@ describe('fetchNearbyPOIs', () => {
     expect(calledUrl).toContain('rankby=distance');
     expect(calledUrl).toContain(`key=${MOCK_KEY}`);
   });
+
+  it('passes AbortSignal to fetch when provided', async () => {
+    const signal = new AbortController().signal;
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'OK', results: [] }),
+    } as Response);
+
+    await fetchNearbyPOIs('pharmacy', center, 5000, signal);
+
+    expect(fetchSpy).toHaveBeenCalledWith(expect.any(String), { signal });
+  });
 });
 
 // ---------------------------------------------------------------------------

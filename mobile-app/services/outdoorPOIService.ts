@@ -63,6 +63,7 @@ export async function fetchNearbyPOIs(
   type: string,
   center: LatLng,
   radiusMeters: number,
+  signal?: AbortSignal,
 ): Promise<OutdoorPOI[]> {
   const key = getPlacesKey();
   if (!key) return [];
@@ -74,7 +75,7 @@ export async function fetchNearbyPOIs(
     `&type=${type}` +
     `&key=${key}`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) return [];
 
   const data = await response.json();

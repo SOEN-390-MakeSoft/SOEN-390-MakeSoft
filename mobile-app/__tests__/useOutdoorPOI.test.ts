@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useOutdoorPOI } from '../hooks/useOutdoorPOI';
+import type { LatLng } from '../utils/mapUtils';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -25,6 +26,10 @@ jest.mock('expo-location', () => ({
 
 const SGW_CENTER = { latitude: 45.4973, longitude: -73.5789 };
 let warnSpy: jest.SpiedFunction<typeof console.warn>;
+
+function expectAbortSignal(signal: unknown) {
+  expect(signal).toEqual(expect.objectContaining({ aborted: false }));
+}
 
 const makePOI = (id: string, name: string) => ({
   id,
@@ -84,7 +89,12 @@ describe('useOutdoorPOI', () => {
       expect(result.current.outdoorPOIResults).toEqual(pois);
     });
 
-    expect(mockFetchNearbyPOIs).toHaveBeenCalledWith('cafe', SGW_CENTER, 1000);
+    expect(mockFetchNearbyPOIs).toHaveBeenCalledWith(
+      'cafe',
+      SGW_CENTER,
+      1000,
+      expect.objectContaining({ aborted: false }),
+    );
     expect(mockGetCampusCenterForPOI).toHaveBeenCalledWith(null, 'sgw');
     expect(result.current.isOutdoorPOILoading).toBe(false);
   });
@@ -300,7 +310,12 @@ describe('useOutdoorPOI', () => {
     );
 
     await waitFor(() => {
-      expect(mockFetchNearbyPOIs).toHaveBeenCalledWith('cafe', userLocation, 1000);
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledWith(
+        'cafe',
+        userLocation,
+        1000,
+        expect.objectContaining({ aborted: false }),
+      );
     });
     expect(mockGetCurrentPositionAsync).not.toHaveBeenCalled();
     expect(mockGetCampusCenterForPOI).not.toHaveBeenCalled();
@@ -324,7 +339,12 @@ describe('useOutdoorPOI', () => {
 
     await waitFor(() => {
       expect(mockGetCurrentPositionAsync).toHaveBeenCalled();
-      expect(mockFetchNearbyPOIs).toHaveBeenCalledWith('cafe', gpsLocation, 1000);
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledWith(
+        'cafe',
+        gpsLocation,
+        1000,
+        expect.objectContaining({ aborted: false }),
+      );
     });
     expect(mockGetCampusCenterForPOI).not.toHaveBeenCalled();
   });
@@ -350,5 +370,55 @@ describe('useOutdoorPOI', () => {
       'useOutdoorPOI: failed to get current position for POI search',
       error,
     );
+  });
+
+  it('aborts the previous POI request when a new search starts', async () => {
+    const secondResults = [makePOI('p2', 'New Cafe')];
+    mockIsSupportedPOICategory.mockImplementation((query: string) => query);
+    mockGetCurrentPositionAsync.mockResolvedValue({
+      coords: { latitude: SGW_CENTER.latitude, longitude: SGW_CENTER.longitude },
+    });
+
+    mockFetchNearbyPOIs
+      .mockImplementationOnce(
+        (_type: string, _center: unknown, _radius: number, signal?: AbortSignal) =>
+          new Promise((_, reject) => {
+            signal?.addEventListener('abort', () => {
+              reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+            });
+          }),
+      )
+      .mockResolvedValueOnce(secondResults);
+
+    const { result, rerender } = renderHook((props) => useOutdoorPOI(props), {
+      initialProps: {
+        debouncedQuery: 'cafe',
+        userLocation: null as LatLng | null,
+        activeCampus: 'sgw' as const,
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledTimes(1);
+    });
+
+    const firstSignal = mockFetchNearbyPOIs.mock.calls[0][3];
+    expectAbortSignal(firstSignal);
+
+    rerender({
+      debouncedQuery: 'restaurant',
+      userLocation: null,
+      activeCampus: 'sgw' as const,
+    });
+
+    await waitFor(() => {
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledTimes(2);
+    });
+
+    expect(firstSignal.aborted).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.outdoorPOIResults).toEqual(secondResults);
+    });
   });
 });

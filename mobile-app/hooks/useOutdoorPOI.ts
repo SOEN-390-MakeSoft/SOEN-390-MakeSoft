@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as Location from 'expo-location';
 import {
   isSupportedPOICategory,
@@ -29,7 +29,6 @@ export function useOutdoorPOI({
   const [outdoorPOIResults, setOutdoorPOIResults] = useState<OutdoorPOI[]>([]);
   const [selectedOutdoorPOI, setSelectedOutdoorPOI] = useState<OutdoorPOI | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const fetchIdRef = useRef(0);
 
   useEffect(() => {
     const category = isSupportedPOICategory(debouncedQuery);
@@ -39,7 +38,7 @@ export function useOutdoorPOI({
       return;
     }
 
-    const id = ++fetchIdRef.current;
+    const controller = new AbortController();
     setIsLoading(true);
 
     const resolveCenter = async (): Promise<LatLng> => {
@@ -55,20 +54,34 @@ export function useOutdoorPOI({
       }
     };
 
-    resolveCenter()
-      .then((center) => fetchNearbyPOIs(category, center, POI_SEARCH_RADIUS_METERS))
-      .then((results) => {
-        if (id !== fetchIdRef.current) return;
+    const loadPOIs = async () => {
+      try {
+        const center = await resolveCenter();
+        if (controller.signal.aborted) return;
+
+        const results = await fetchNearbyPOIs(
+          category,
+          center,
+          POI_SEARCH_RADIUS_METERS,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+
         setOutdoorPOIResults(results);
-      })
-      .catch(() => {
-        if (id !== fetchIdRef.current) return;
+      } catch {
+        if (controller.signal.aborted) return;
         setOutdoorPOIResults([]);
-      })
-      .finally(() => {
-        if (id !== fetchIdRef.current) return;
+      } finally {
+        if (controller.signal.aborted) return;
         setIsLoading(false);
-      });
+      }
+    };
+
+    void loadPOIs();
+
+    return () => {
+      controller.abort();
+    };
   }, [debouncedQuery, userLocation, activeCampus]);
 
   const selectPOI = useCallback((poi: OutdoorPOI) => {
