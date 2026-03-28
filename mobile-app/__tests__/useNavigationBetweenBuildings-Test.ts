@@ -2068,4 +2068,48 @@ describe('useNavigationBetweenBuildings', () => {
       expect(result.current.isIndoorOnlyRoute).toBe(false);
     });
   });
+
+  describe('openNavigationForCoordinate', () => {
+    it('sets destination label and coordinate, opens navigation', () => {
+      const { result } = renderNavHook();
+      const coord = { latitude: 45.501, longitude: -73.575 };
+
+      act(() => {
+        result.current.openNavigationForCoordinate('Great Cafe', coord);
+      });
+
+      expect(result.current.isNavigationOpen).toBe(true);
+      expect(result.current.navigationDestination).toBe('Great Cafe');
+      expect(result.current.navigationStart).toBe('Your location');
+      expect(result.current.tapMarkerCoordinate).toEqual(coord);
+    });
+
+    it('does not set isDestinationLocked', () => {
+      const { result } = renderNavHook();
+      const coord = { latitude: 45.501, longitude: -73.575 };
+
+      act(() => {
+        result.current.openNavigationForCoordinate('Test Place', coord);
+      });
+
+      expect(result.current.isDestinationLocked).toBe(false);
+    });
+
+    it('resets isIndoorOnlyRoute to false', () => {
+      const { result } = renderNavHook();
+
+      act(() => {
+        result.current.openIndoorOnlyNavigation('H-840', 'Hall Building');
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(true);
+
+      act(() => {
+        result.current.openNavigationForCoordinate('Pharmacy', {
+          latitude: 45.499,
+          longitude: -73.577,
+        });
+      });
+      expect(result.current.isIndoorOnlyRoute).toBe(false);
+    });
+  });
 });
