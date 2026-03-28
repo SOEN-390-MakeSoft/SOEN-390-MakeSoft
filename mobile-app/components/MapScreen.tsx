@@ -341,6 +341,7 @@ const HIDE_POIS_MAP_STYLE = [
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [poiSearchLocation, setPoiSearchLocation] = useState<LatLng | null>(null);
   const { width, height } = Dimensions.get('window');
 
   // Use custom hooks for state management
@@ -472,7 +473,7 @@ export default function MapScreen() {
     clearSelectedPOI,
   } = useOutdoorPOI({
     debouncedQuery,
-    userLocation: userPositionRef.current,
+    userLocation: poiSearchLocation,
     activeCampus,
   });
 
@@ -1883,7 +1884,11 @@ export default function MapScreen() {
         }
         onUserLocationChange={(e) => {
           const c = e.nativeEvent.coordinate;
-          if (c) userPositionRef.current = { latitude: c.latitude, longitude: c.longitude };
+          if (!c) return;
+
+          const nextCoordinate = { latitude: c.latitude, longitude: c.longitude };
+          userPositionRef.current = nextCoordinate;
+          setPoiSearchLocation(nextCoordinate);
         }}
         onRegionChangeComplete={handleRegionChange}
         onPoiClick={(e) => {
