@@ -29,6 +29,7 @@ import FloorSelector from './indoor/FloorSelector';
 import RoomInfoBubble from './indoor/RoomInfoBubble';
 import PoiInfoBubble from './indoor/PoiInfoBubble';
 import IndoorStartPromptModal from './indoor/IndoorStartPromptModal';
+import POIMarker from './POIMarker';
 import {
   INDOOR_BUILDINGS,
   findBuildingAtCoordinate,
@@ -77,6 +78,10 @@ import {
   resolveEventLocation,
   type LocationConflict,
 } from '../utils/stringUtils';
+import { useOutdoorPOI } from '../hooks/useOutdoorPOI';
+import type { OutdoorPOI } from '../services/outdoorPOIService';
+import { isSupportedPOICategory } from '../services/outdoorPOIService';
+import OutdoorPOIInfoCard from './OutdoorPOIInfoCard';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
 function formatIndoorTime(seconds: number): string {
@@ -283,6 +288,9 @@ const FEATURED_BUILDINGS: Record<Campus, QuickPick[]> = {
 
 const isSearchDisabled = false;
 const USER_LOCATION_REGION_DELTA = 0.01;
+const POI_REGION_DELTA = 0.01;
+const MAP_ANIMATION_DURATION_MS = 500;
+const POI_MARKER_Z_INDEX = 999;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
@@ -307,6 +315,22 @@ const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 const INDOOR_ZOOM_THRESHOLD = 0.002;
 const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
+const POI_MARKER_ICONS: Record<string, string> = {
+  restaurant: 'restaurant',
+  cafe: 'local-cafe',
+  pharmacy: 'local-pharmacy',
+  gym: 'fitness-center',
+  bank: 'account-balance',
+  supermarket: 'shopping-cart',
+  bar: 'local-bar',
+  hospital: 'local-hospital',
+  library: 'local-library',
+  parking: 'local-parking',
+  gas_station: 'local-gas-station',
+  hotel: 'hotel',
+  place: 'place',
+};
+
 // Google Maps style that hides POI labels/icons (used when indoor overlay is active)
 const HIDE_POIS_MAP_STYLE = [
   { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -317,6 +341,7 @@ const HIDE_POIS_MAP_STYLE = [
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [poiSearchLocation, setPoiSearchLocation] = useState<LatLng | null>(null);
   const { width, height } = Dimensions.get('window');
 
   // Use custom hooks for state management
@@ -402,6 +427,7 @@ export default function MapScreen() {
     lateTransportModes = [],
     routeSegments,
     openNavigationForResolvedDestination,
+    openNavigationForCoordinate,
     openIndoorOnlyNavigation,
     isIndoorOnlyRoute,
     isDestinationLocked,
@@ -427,7 +453,7 @@ export default function MapScreen() {
     const centroid = polygonCentroid(building.polygon);
     mapRef.current?.animateToRegion(
       { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      500,
+      MAP_ANIMATION_DURATION_MS,
     );
   });
 
@@ -437,6 +463,19 @@ export default function MapScreen() {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const {
+    outdoorPOIResults,
+    selectedOutdoorPOI,
+    isOutdoorPOILoading,
+    selectPOI,
+    selectPOIFromMap,
+    clearSelectedPOI,
+  } = useOutdoorPOI({
+    debouncedQuery,
+    userLocation: poiSearchLocation,
+    activeCampus,
+  });
 
   const {
     isMenuOpen,
@@ -593,10 +632,19 @@ export default function MapScreen() {
 
   type RoomSearchResult = (typeof roomSearchResults)[number];
 
+  const outdoorPOISearchResults = useMemo(() => {
+    return outdoorPOIResults.map((poi) => ({
+      id: `poi-${poi.id}`,
+      name: poi.name,
+      address: poi.address,
+      code: poi.category.replace(/_/g, ' '),
+      _poi: poi,
+    }));
+  }, [outdoorPOIResults]);
+
   const mergedSearchResults = useMemo(() => {
-    // Room results first, then building results
-    return [...roomSearchResults, ...searchResults];
-  }, [roomSearchResults, searchResults]);
+    return [...roomSearchResults, ...searchResults, ...outdoorPOISearchResults];
+  }, [roomSearchResults, searchResults, outdoorPOISearchResults]);
 
   const handleSelectRoomResult = useCallback(
     (result: RoomSearchResult) => {
@@ -623,13 +671,13 @@ export default function MapScreen() {
           latitudeDelta: 0.001,
           longitudeDelta: 0.001,
         },
-        500,
+        MAP_ANIMATION_DURATION_MS,
       );
     },
     [indoor, setSearchQuery, setIsSearchFocused],
   );
 
-  /** Handle selecting an autocomplete result — room or building. */
+  /** Handle selecting an autocomplete result — room, building, or outdoor POI. */
   const handleSelectMergedResult = useCallback(
     (result: {
       id: string;
@@ -637,16 +685,43 @@ export default function MapScreen() {
       address: string | null;
       code: string | null;
       _room?: any;
+      _poi?: OutdoorPOI;
     }) => {
-      // If it's a room result, select the room and show the bubble
       if (result.id.startsWith('room-') && (result as RoomSearchResult)._room) {
         handleSelectRoomResult(result as RoomSearchResult);
         return;
       }
-      // Otherwise delegate to the normal building search handler
+      if (result.id.startsWith('poi-') && result._poi) {
+        const poi = result._poi;
+        handleCloseCard();
+        selectPOI(poi);
+        setSearchQuery(poi.name);
+        setIsSearchFocused(false);
+        searchInputRef.current?.blur();
+        mapRef.current?.animateToRegion(
+          {
+            ...poi.coordinate,
+            latitudeDelta: POI_REGION_DELTA,
+            longitudeDelta: POI_REGION_DELTA,
+          },
+          MAP_ANIMATION_DURATION_MS,
+        );
+        return;
+      }
+      clearSelectedPOI();
       handleSelectSearchResult(result as any);
     },
-    [indoor, handleSelectSearchResult, setSearchQuery, setIsSearchFocused, searchInputRef],
+    [
+      indoor,
+      handleSelectSearchResult,
+      handleSelectRoomResult,
+      setSearchQuery,
+      setIsSearchFocused,
+      searchInputRef,
+      handleCloseCard,
+      selectPOI,
+      clearSelectedPOI,
+    ],
   );
 
   /** Navigate to the room from the info bubble. Uses GPS proximity to decide:
@@ -698,6 +773,7 @@ export default function MapScreen() {
   );
 
   const roomPressedRef = useRef(false);
+  const poiPressedRef = useRef(false);
 
   /** Room marker tapped on the indoor overlay → toggle selection. */
   const handleRoomMarkerPress = useCallback(
@@ -965,6 +1041,7 @@ export default function MapScreen() {
   const isColorBlind = colourBlindMode;
   const brandRed = theme?.cred?.get?.() ?? '#b21b2c';
   const colourBlindAccent = theme?.colourBlind2?.get?.() ?? '#1F4E8C';
+  const poiMarkerColor = isColorBlind ? colourBlindAccent : brandRed;
   const routeColor = isColorBlind ? colourBlindAccent : brandRed;
   const defaultColor = theme?.cred?.get?.() ?? POLYGON_STROKE;
   const { polygonFillBase, polygonStrokeBase, polygonFillSelected } = getPolygonThemeColors(
@@ -1041,7 +1118,7 @@ export default function MapScreen() {
     const centroid = polygonCentroid(match.polygon);
     mapRef.current?.animateToRegion(
       { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      500,
+      MAP_ANIMATION_DURATION_MS,
     );
   };
 
@@ -1230,7 +1307,7 @@ export default function MapScreen() {
             latitudeDelta: USER_LOCATION_REGION_DELTA,
             longitudeDelta: USER_LOCATION_REGION_DELTA,
           },
-          500,
+          MAP_ANIMATION_DURATION_MS,
         );
       },
     });
@@ -1801,30 +1878,45 @@ export default function MapScreen() {
         showsUserLocation
         showsCompass={false}
         showsMyLocationButton={false}
-        showsPointsOfInterest={!indoor.isIndoorActive}
-        customMapStyle={indoor.isIndoorActive ? HIDE_POIS_MAP_STYLE : []}
+        showsPointsOfInterest={!indoor.isIndoorActive && outdoorPOIResults.length === 0}
+        customMapStyle={
+          indoor.isIndoorActive || outdoorPOIResults.length > 0 ? HIDE_POIS_MAP_STYLE : []
+        }
         onUserLocationChange={(e) => {
           const c = e.nativeEvent.coordinate;
-          if (c) userPositionRef.current = { latitude: c.latitude, longitude: c.longitude };
+          if (!c) return;
+
+          const nextCoordinate = { latitude: c.latitude, longitude: c.longitude };
+          userPositionRef.current = nextCoordinate;
+          setPoiSearchLocation(nextCoordinate);
         }}
         onRegionChangeComplete={handleRegionChange}
+        onPoiClick={(e) => {
+          const { placeId, name, coordinate } = e.nativeEvent;
+          if (!coordinate || !name) return;
+          handleCloseCard();
+          selectPOIFromMap({
+            id: placeId ?? `map-poi-${Date.now()}`,
+            name,
+            address: '',
+            coordinate: { latitude: coordinate.latitude, longitude: coordinate.longitude },
+            category: 'place',
+          });
+        }}
         onPress={(e) => {
-          // Always dismiss keyboard & search focus when tapping the map
           if (isSearchFocused) {
             Keyboard.dismiss();
             setIsSearchFocused(false);
           }
 
+          if (!poiPressedRef.current) clearSelectedPOI();
           const coordinate = e.nativeEvent?.coordinate;
           if (coordinate?.latitude != null && coordinate?.longitude != null) {
-            // When indoor mode is active, tapping empty space on the map should
-            // dismiss the selected room bubble rather than selecting the building.
-            // Skip if a room polygon was just tapped (iOS bubbles polygon press to map).
             if (indoor.isIndoorActive) {
               if (!roomPressedRef.current) indoor.selectRoom(null);
               return;
             }
-            handleMapCoordinatePress(coordinate);
+            if (!poiPressedRef.current) handleMapCoordinatePress(coordinate);
           }
         }}
       >
@@ -1934,6 +2026,26 @@ export default function MapScreen() {
             isColorBlind={isColorBlind}
           />
         )}
+        {outdoorPOIResults.map((poi) => (
+          <POIMarker
+            key={`outdoor-poi-${poi.id}`}
+            poi={poi}
+            markerColor={poiMarkerColor}
+            testID={`outdoor-poi-marker-${poi.id}`}
+            zIndex={POI_MARKER_Z_INDEX}
+            iconName={
+              (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
+            }
+            onPress={() => {
+              poiPressedRef.current = true;
+              requestAnimationFrame(() => {
+                poiPressedRef.current = false;
+              });
+              handleCloseCard();
+              selectPOI(poi);
+            }}
+          />
+        ))}
       </MapView>
 
       {/* Category filter chips */}
@@ -2046,6 +2158,12 @@ export default function MapScreen() {
             onSubmit={() => {
               // Try indoor destination first (e.g. "H-840"); fall back to normal building search
               if (!handleIndoorSearchQuery(searchQuery)) {
+                if (isSupportedPOICategory(searchQuery)) {
+                  if (mergedSearchResults.length > 0) {
+                    handleSelectMergedResult(mergedSearchResults[0]);
+                  }
+                  return;
+                }
                 handleSearchSubmit();
               }
             }}
@@ -2060,6 +2178,8 @@ export default function MapScreen() {
             brandColor={brandRed}
             logoSource={require('../assets/images/Concordia_icon.png')}
             onLogoPress={handleLogoPress}
+            blurOnSubmit={!isSupportedPOICategory(searchQuery)}
+            isLoading={isOutdoorPOILoading}
           />
           <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
             <CampusSwitch
@@ -2096,6 +2216,20 @@ export default function MapScreen() {
           openNavigationForBuilding(selectedBuilding, remoteBuilding);
           handleCloseCard();
         }}
+      />
+      <OutdoorPOIInfoCard
+        poi={isNavigationOpen ? null : selectedOutdoorPOI}
+        onClose={clearSelectedPOI}
+        isColorBlind={isColorBlind}
+        onDirections={
+          selectedOutdoorPOI
+            ? () => {
+                setArriveByClassEnd(null);
+                openNavigationForCoordinate(selectedOutdoorPOI.name, selectedOutdoorPOI.coordinate);
+                clearSelectedPOI();
+              }
+            : undefined
+        }
       />
       <NavigationScreen
         visible={isNavigationOpen && !isRoutePreviewOpen && !isDirectionsModeOpen}
