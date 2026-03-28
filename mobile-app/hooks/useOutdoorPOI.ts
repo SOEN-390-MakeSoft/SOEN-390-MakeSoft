@@ -89,21 +89,35 @@ export function useOutdoorPOI({
   }, []);
 
   /** Select a POI from the map and resolve its address via device geocoding. */
-  const selectPOIFromMap = useCallback((basePOI: OutdoorPOI) => {
-    setSelectedOutdoorPOI(basePOI);
-    if (!basePOI.address) {
-      Location.reverseGeocodeAsync(basePOI.coordinate)
-        .then((results) => {
-          if (results.length === 0) return;
-          const address = results[0].formattedAddress || formatGeocodedAddress(results[0]);
-          if (!address) return;
-          setSelectedOutdoorPOI((prev) => (prev?.id === basePOI.id ? { ...prev, address } : prev));
-        })
-        .catch((error) => {
-          console.warn('useOutdoorPOI: reverse geocoding failed for selected POI', error);
-        });
-    }
-  }, []);
+const selectPOIFromMap = useCallback((basePOI: OutdoorPOI) => {
+  let isActive = true;
+
+  setSelectedOutdoorPOI(basePOI);
+
+  if (!basePOI.address) {
+    Location.reverseGeocodeAsync(basePOI.coordinate)
+      .then((results) => {
+        if (!isActive || results.length === 0) return;
+
+        const address =
+          results[0].formattedAddress || formatGeocodedAddress(results[0]);
+
+        if (!isActive || !address) return;
+
+        setSelectedOutdoorPOI((prev) =>
+          isActive && prev?.id === basePOI.id ? { ...prev, address } : prev,
+        );
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        console.warn('useOutdoorPOI: reverse geocoding failed for selected POI', error);
+      });
+  }
+
+  return () => {
+    isActive = false;
+  };
+}, []);
 
   const clearSelectedPOI = useCallback(() => {
     setSelectedOutdoorPOI(null);
