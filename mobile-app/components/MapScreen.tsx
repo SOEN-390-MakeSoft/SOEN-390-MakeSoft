@@ -2139,9 +2139,7 @@ export default function MapScreen() {
             coordinate={label.coordinate}
             anchor={{ x: 0.5, y: 0.5 }}
             zIndex={30}
-            onPress={() => {
-              handleMapBuildingPress(label.id);
-            }}
+            tappable={false}
           >
             <View
               style={[
