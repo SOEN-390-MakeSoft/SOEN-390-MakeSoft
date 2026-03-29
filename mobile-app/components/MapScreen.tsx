@@ -66,6 +66,7 @@ import { useIndoorNavigation } from '../hooks/useIndoorNavigation';
 import { useIndoorRoomPicker } from '../hooks/useIndoorRoomPicker';
 import {
   findBuildingAtOrNearCoordinate,
+  distanceMeters,
   getClosestCampusWithinBorderThreshold,
   polygonCentroid,
   type BuildingWithPolygon,
@@ -295,6 +296,15 @@ const POI_MARKER_Z_INDEX = 999;
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
 const FLOOR_SELECTOR_FOCUS_RADIUS_METERS = 120;
+const BUILDING_LABEL_ZOOM_THRESHOLD = 0.012;
+const BUILDING_LABEL_MIN_SPACING_METERS: Record<Campus, number> = {
+  sgw: 18,
+  loyola: 24,
+};
+const BUILDING_LABEL_MAX_SPACING_METERS: Record<Campus, number> = {
+  sgw: 48,
+  loyola: 58,
+};
 
 function getConflictLabel(c: LocationConflict): string {
   switch (c.type) {
@@ -342,6 +352,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const [poiSearchLocation, setPoiSearchLocation] = useState<LatLng | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const { width, height } = Dimensions.get('window');
 
   // Use custom hooks for state management
@@ -826,6 +837,7 @@ export default function MapScreen() {
    */
   const handleRegionChange = useCallback(
     (region: Region) => {
+      setMapRegion(region);
       const center = { latitude: region.latitude, longitude: region.longitude };
       const now = Date.now();
       const focusLock = floorSelectorFocusLockRef.current;
@@ -1051,6 +1063,52 @@ export default function MapScreen() {
   );
   const polygonStroke = polygonStrokeBase;
   const polygonFill = polygonFillBase;
+  const buildingLabelBackground = isColorBlind ? colourBlindAccent : brandRed;
+  const buildingLabelTextColor = '#fff';
+  const buildingLabelBorderColor = 'rgba(0,0,0,0.35)';
+
+  const labelLatitudeDelta = mapRegion?.latitudeDelta ?? DEFAULT_REGION.latitudeDelta;
+  const shouldShowBuildingLabels =
+    labelLatitudeDelta <= BUILDING_LABEL_ZOOM_THRESHOLD &&
+    !indoor.isIndoorActive &&
+    !startIndoor.isIndoorActive;
+  const labelSpacingMeters = useMemo(() => {
+    const minSpacing = BUILDING_LABEL_MIN_SPACING_METERS[activeCampus];
+    const maxSpacing = BUILDING_LABEL_MAX_SPACING_METERS[activeCampus];
+    const zoomRatio = Math.min(Math.max(labelLatitudeDelta / BUILDING_LABEL_ZOOM_THRESHOLD, 0), 1);
+    return minSpacing + (maxSpacing - minSpacing) * zoomRatio;
+  }, [activeCampus, labelLatitudeDelta]);
+  const labelCandidates = useMemo(() => {
+    const campusBuildings = activeCampus === 'sgw' ? sgwBuildings : loyolaBuildings;
+    return campusBuildings
+      .filter((building) => building.code)
+      .map((building) => ({
+        id: building.id,
+        code: building.code?.toUpperCase() ?? '',
+        coordinate: polygonCentroid(building.polygon),
+        building,
+        isSelected: building.id === selectedBuildingId,
+      }));
+  }, [activeCampus, loyolaBuildings, sgwBuildings, selectedBuildingId]);
+  const visibleBuildingLabels = useMemo(() => {
+    if (!shouldShowBuildingLabels) return [];
+    const sorted = [...labelCandidates].sort((a, b) => {
+      if (a.isSelected && !b.isSelected) return -1;
+      if (!a.isSelected && b.isSelected) return 1;
+      return a.code.localeCompare(b.code);
+    });
+    const chosen: typeof sorted = [];
+    for (const candidate of sorted) {
+      const tooClose = chosen.some(
+        (existing) =>
+          distanceMeters(existing.coordinate, candidate.coordinate) < labelSpacingMeters,
+      );
+      if (!tooClose) {
+        chosen.push(candidate);
+      }
+    }
+    return chosen;
+  }, [labelCandidates, labelSpacingMeters, shouldShowBuildingLabels]);
 
   /**
    * Handle quick pick building selection
@@ -1999,6 +2057,32 @@ export default function MapScreen() {
             </React.Fragment>
           );
         })}
+        {visibleBuildingLabels.map((label) => (
+          <Marker
+            key={`building-label-${label.id}`}
+            coordinate={label.coordinate}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={30}
+            onPress={() => {
+              handleMapBuildingPress(label.id);
+            }}
+          >
+            <View
+              style={[
+                styles.buildingLabel,
+                { backgroundColor: buildingLabelBackground, borderColor: buildingLabelBorderColor },
+                label.isSelected && styles.buildingLabelSelected,
+              ]}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`Building ${label.code}`}
+            >
+              <Text style={[styles.buildingLabelText, { color: buildingLabelTextColor }]}>
+                {label.code}
+              </Text>
+            </View>
+          </Marker>
+        ))}
         {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
         {(startIndoor.isIndoorActive || startIndoor.indoorRoute) &&
           startIndoor.activeBuildingCode !== indoor.activeBuildingCode && (
@@ -2530,6 +2614,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#999',
     fontWeight: '500',
+  },
+  buildingLabel: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    minWidth: 24,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  buildingLabelSelected: {
+    borderWidth: 2,
+  },
+  buildingLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    includeFontPadding: false,
   },
   indoorCategoryChips: {
     position: 'absolute',
