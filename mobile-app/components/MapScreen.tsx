@@ -474,15 +474,6 @@ export default function MapScreen() {
     handleSelectSearchResult,
   } = useSearch(buildings, (building) => {
     handleSelectBuilding(building.id);
-    const centroid = polygonCentroid(building.polygon);
-    mapRef.current?.animateToRegion(
-      {
-        ...centroid,
-        latitudeDelta: BUILDING_SELECTION_REGION_DELTA,
-        longitudeDelta: BUILDING_SELECTION_REGION_DELTA,
-      },
-      MAP_ANIMATION_DURATION_MS,
-    );
   });
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
@@ -1191,15 +1182,6 @@ export default function MapScreen() {
       buildings.find((building) => building.code?.toUpperCase() === pick.code);
     if (!match) return;
     handleSelectBuilding(match.id);
-    const centroid = polygonCentroid(match.polygon);
-    mapRef.current?.animateToRegion(
-      {
-        ...centroid,
-        latitudeDelta: BUILDING_SELECTION_REGION_DELTA,
-        longitudeDelta: BUILDING_SELECTION_REGION_DELTA,
-      },
-      MAP_ANIMATION_DURATION_MS,
-    );
   };
 
   /**
