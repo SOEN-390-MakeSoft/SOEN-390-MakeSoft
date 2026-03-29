@@ -588,7 +588,8 @@ export function useNavigationBetweenBuildings({
         if (cancelled) return;
 
         setShuttleInfo(nextShuttleInfo);
-      } catch {
+      } catch (error) {
+        console.error('Failed to load shuttle information', error);
         if (!cancelled) setShuttleInfo(null);
       } finally {
         if (!cancelled) setIsShuttleLoading(false);

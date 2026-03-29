@@ -1,5 +1,9 @@
 import type { ModeRoute, WalkingRouteVariant } from './types';
-import type { ModeRouteStrategy, ModeRouteStrategyContext } from './strategies/ModeRouteStrategy';
+import type {
+  ModeRouteStrategy,
+  ModeRouteStrategyContext,
+  ModeRouteStrategyKey,
+} from './strategies/ModeRouteStrategy';
 
 export type PlannedModeRoutes = {
   driving: ModeRoute | null;
@@ -9,10 +13,18 @@ export type PlannedModeRoutes = {
 };
 
 export class RoutePlanner {
-  constructor(private readonly strategies: readonly ModeRouteStrategy[]) {}
+  constructor(private readonly strategies: readonly ModeRouteStrategy[]) {
+    const seenKeys = new Set<ModeRouteStrategyKey>();
+    for (const strategy of strategies) {
+      if (seenKeys.has(strategy.key)) {
+        throw new Error(`Duplicate route strategy key: ${strategy.key}`);
+      }
+      seenKeys.add(strategy.key);
+    }
+  }
 
   async plan(context: ModeRouteStrategyContext): Promise<PlannedModeRoutes> {
-    const resultMap = new Map<string, ModeRoute | null>();
+    const resultMap = new Map<ModeRouteStrategyKey, ModeRoute | null>();
 
     await Promise.all(
       this.strategies.map(async (strategy) => {

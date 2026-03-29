@@ -1,5 +1,8 @@
 import { RoutePlanner } from '../services/navigation/RoutePlanner';
-import type { ModeRouteStrategy } from '../services/navigation/strategies/ModeRouteStrategy';
+import type {
+  ModeRouteStrategy,
+  ModeRouteStrategyKey,
+} from '../services/navigation/strategies/ModeRouteStrategy';
 import type { ModeRoute } from '../services/navigation/types';
 
 const makeRoute = (durationSec: number, viaText: string): ModeRoute => ({
@@ -22,7 +25,7 @@ const makeRoute = (durationSec: number, viaText: string): ModeRoute => ({
 
 class FakeStrategy implements ModeRouteStrategy {
   constructor(
-    public readonly key: 'driving' | 'outdoorWalking' | 'tunnelWalking',
+    public readonly key: ModeRouteStrategyKey,
     private readonly route: ModeRoute | null,
   ) {}
 
@@ -68,5 +71,15 @@ describe('RoutePlanner', () => {
     expect(result.outdoorWalking).not.toBeNull();
     expect(result.tunnelWalking).toBeNull();
     expect(result.preferredWalkingVariant).toBe('outdoor');
+  });
+
+  it('throws when duplicate strategy keys are registered', () => {
+    expect(
+      () =>
+        new RoutePlanner([
+          new FakeStrategy('driving', makeRoute(900, 'Drive route A')),
+          new FakeStrategy('driving', makeRoute(800, 'Drive route B')),
+        ]),
+    ).toThrow('Duplicate route strategy key: driving');
   });
 });
