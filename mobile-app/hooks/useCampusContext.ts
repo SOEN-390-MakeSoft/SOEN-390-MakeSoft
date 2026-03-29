@@ -102,7 +102,6 @@ export function useCampusContext(onCampusChange?: (campus: Campus) => void) {
         const codeLookup = code ? addressByCode.get(code.toUpperCase()) : undefined;
         const address = formatAddress(record) ?? lookup?.address ?? codeLookup?.address ?? null;
         const name = codeLookup?.name ?? lookup?.name ?? record.name;
-        if (!code && codeLookup?.code) code = codeLookup.code;
 
         return { id, name, address, code, polygon: record.polygon };
       })
