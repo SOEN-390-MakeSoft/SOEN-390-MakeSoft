@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
-import { getNextShuttles } from '../services/api';
 import { findPath, getBuildingMeta, loadTunnelGraph } from '../services/indoor';
 import {
   coordsEqual,
@@ -12,6 +11,11 @@ import {
   type LatLng,
 } from '../utils/mapUtils';
 import { extractCodeFromName, normalizeLabel } from '../utils/stringUtils';
+import { RoutePlanner } from '../services/navigation/RoutePlanner';
+import { DrivingRouteStrategy } from '../services/navigation/strategies/DrivingRouteStrategy';
+import { OutdoorWalkingRouteStrategy } from '../services/navigation/strategies/OutdoorWalkingRouteStrategy';
+import { TunnelWalkingRouteStrategy } from '../services/navigation/strategies/TunnelWalkingRouteStrategy';
+import { DefaultShuttleRouteStrategy } from '../services/navigation/strategies/ShuttleRouteStrategy';
 
 const MAX_TAP_DISTANCE_METERS = 0;
 
@@ -155,7 +159,7 @@ function formatDistanceLabel(distance: number): string {
 function dedupePolyline(points: LatLng[]): LatLng[] {
   const deduped: LatLng[] = [];
   for (const point of points) {
-    const last = deduped[deduped.length - 1];
+    const last = deduped.at(-1);
     if (!last || distanceMeters(last, point) >= 1) {
       deduped.push(point);
     }
@@ -244,7 +248,7 @@ function buildTunnelModeRoute(
       instruction: step.instruction,
       distanceText: formatDistanceLabel(step.distanceMeters),
       durationText: formatMinutesLabel(step.estimatedSeconds),
-      focusCoordinate: midpointOrFallback(step.path, step.path[step.path.length - 1]),
+      focusCoordinate: midpointOrFallback(step.path, step.path.at(-1) ?? step.path[0]),
       focusRegion: step.path.length > 1 ? boundsToRegion(calculateBounds(step.path)) : undefined,
       maneuver: step.edgeType,
     });
@@ -731,6 +735,16 @@ export function useNavigationBetweenBuildings({
   const [routeRegion, setRouteRegion] = useState<MapRegion | null>(null);
   const [navigationSteps, setNavigationSteps] = useState<NavigationStep[]>([]);
   const selectedTransportModeRef = useRef<TransportMode>('driving');
+  const routePlanner = useMemo(
+    () =>
+      new RoutePlanner([
+        new DrivingRouteStrategy(),
+        new OutdoorWalkingRouteStrategy(),
+        new TunnelWalkingRouteStrategy(),
+      ]),
+    [],
+  );
+  const shuttleStrategy = useMemo(() => new DefaultShuttleRouteStrategy(), []);
 
   // --- Shuttle state ---
   const [isShuttleRoute, setIsShuttleRoute] = useState(false);
@@ -812,99 +826,31 @@ export function useNavigationBetweenBuildings({
 
     let cancelled = false;
     const baseNowMs = currentTime?.getTime() ?? Date.now();
-    const tunnelWalkingRoute = buildTunnelModeRoute(
-      navigationOrigin,
-      navigationDestinationCoord,
-      allBuildings,
-    );
     const key = getDirectionsKey();
-    if (!key && !tunnelWalkingRoute) {
-      setIsRouteLoading(false);
-      return;
-    }
-
-    const fetchDirections = async (mode: 'driving' | 'walking'): Promise<ModeRoute | null> => {
-      if (!key) return null;
-
-      const origin = `${navigationOrigin.latitude},${navigationOrigin.longitude}`;
-      const destination = `${navigationDestinationCoord.latitude},${navigationDestinationCoord.longitude}`;
-      const trafficParam =
-        mode === 'driving'
-          ? currentTime
-            ? `&departure_time=${Math.floor(baseNowMs / 1000)}`
-            : '&departure_time=now'
-          : '';
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&mode=${mode}${trafficParam}&key=${key}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.status !== 'OK' || !data.routes?.length) return null;
-      const route = data.routes[0];
-      const leg = route.legs?.[0];
-      if (!leg) return null;
-
-      const polyline: LatLng[] = route.overview_polyline?.points
-        ? decodePolyline(route.overview_polyline.points)
-        : [];
-
-      // Prefer duration_in_traffic for driving (requires departure_time)
-      const duration = leg.duration_in_traffic ?? leg.duration;
-
-      const steps: NavigationStep[] = (leg.steps ?? []).map(
-        (s: {
-          html_instructions?: string;
-          distance?: { text?: string };
-          duration?: { text?: string };
-          maneuver?: string;
-          start_location?: { lat?: number; lng?: number };
-          end_location?: { lat?: number; lng?: number };
-        }) => {
-          let focusCoordinate: LatLng | undefined;
-          if (s.end_location?.lat != null && s.end_location?.lng != null) {
-            focusCoordinate = {
-              latitude: s.end_location.lat,
-              longitude: s.end_location.lng,
-            };
-          } else if (s.start_location?.lat != null && s.start_location?.lng != null) {
-            focusCoordinate = {
-              latitude: s.start_location.lat,
-              longitude: s.start_location.lng,
-            };
-          }
-
-          return {
-            instruction: (s.html_instructions ?? '').replaceAll(/<[^>]*>/g, ''),
-            distanceText: s.distance?.text ?? '',
-            durationText: s.duration?.text ?? '',
-            maneuver: s.maneuver,
-            focusCoordinate,
-          };
-        },
-      );
-
-      return {
-        durationText: duration?.text ?? '',
-        durationSec: duration?.value ?? 0,
-        distanceText: leg.distance?.text ?? '',
-        viaText: route.summary || '',
-        polyline,
-        steps,
-      };
-    };
 
     const load = async () => {
       setIsRouteLoading(true);
       try {
-        const [driving, outdoorWalking] = await Promise.all([
-          fetchDirections('driving'),
-          fetchDirections('walking'),
-        ]);
+        const plannedRoutes = await routePlanner.plan({
+          origin: navigationOrigin,
+          destination: navigationDestinationCoord,
+          currentTime,
+          buildings: allBuildings,
+          googleMapsApiKey: key,
+          fetchImpl: fetch,
+        });
+
+        const driving = plannedRoutes.driving;
+        const outdoorWalking = plannedRoutes.outdoorWalking;
+        const tunnelWalkingRoute = plannedRoutes.tunnelWalking;
+
         if (cancelled) return;
 
         const walkingRoutes: WalkingModeRoutes = {
           outdoor: outdoorWalking,
           tunnel: tunnelWalkingRoute,
         };
-        const preferredWalkingVariant = getFastestWalkingRouteVariant(walkingRoutes) ?? 'outdoor';
+        const preferredWalkingVariant = plannedRoutes.preferredWalkingVariant;
         setSelectedWalkingRouteVariant(preferredWalkingVariant);
         setAllModeRoutes({ driving, walking: walkingRoutes });
         setModeDurations({
@@ -961,6 +907,7 @@ export function useNavigationBetweenBuildings({
     missingCoordinates,
     currentTime,
     allBuildings,
+    routePlanner,
   ]); // --- Shuttle route fetch ---
   // Runs whenever origin/destination change and it is a cross-campus route on a weekday.
   useEffect(() => {
@@ -981,78 +928,19 @@ export function useNavigationBetweenBuildings({
     let cancelled = false;
     setIsShuttleLoading(true);
 
-    const fetchShuttleSegment = async (
-      origin: LatLng,
-      destination: LatLng,
-      mode: 'walking' | 'driving' = 'walking',
-    ): Promise<{ polyline: LatLng[]; durationSec: number }> => {
-      if (!key) return { polyline: [], durationSec: 0 };
-      const o = `${origin.latitude},${origin.longitude}`;
-      const d = `${destination.latitude},${destination.longitude}`;
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${o}&destination=${d}&mode=${mode}&key=${key}`;
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.status !== 'OK' || !data.routes?.length) return { polyline: [], durationSec: 0 };
-        const leg = data.routes[0].legs?.[0];
-        const points = data.routes[0].overview_polyline?.points;
-        return {
-          polyline: points ? decodePolyline(points) : [],
-          durationSec: leg?.duration?.value ?? 0,
-        };
-      } catch {
-        return { polyline: [], durationSec: 0 };
-      }
-    };
     const loadShuttle = async () => {
       try {
-        const departureCampus = getDepartureCampus(navigationOrigin);
-        const arrivalHub = departureCampus === 'SGW' ? SHUTTLE_HUB_LOY : SHUTTLE_HUB_SGW;
-        const departureHub = departureCampus === 'SGW' ? SHUTTLE_HUB_SGW : SHUTTLE_HUB_LOY;
-        const shuttleDateTime = currentTime ? toLocalDateTimeParam(currentTime) : undefined;
-        const requestNowMs = currentTime?.getTime() ?? Date.now();
-
-        const walkToHub = await fetchShuttleSegment(navigationOrigin, departureHub, 'walking');
-        const offMinutes = walkToHub.durationSec > 0 ? Math.ceil(walkToHub.durationSec / 60) : 10;
-
-        const [shuttleResp, shuttleSegment, walkFromHub] = await Promise.all([
-          getNextShuttles(departureCampus, offMinutes, shuttleDateTime),
-          fetchShuttleSegment(departureHub, arrivalHub, 'driving'),
-          fetchShuttleSegment(arrivalHub, navigationDestinationCoord),
-        ]);
+        const nextShuttleInfo = await shuttleStrategy.execute({
+          origin: navigationOrigin,
+          destination: navigationDestinationCoord,
+          currentTime,
+          googleMapsApiKey: key,
+          fetchImpl: fetch,
+        });
 
         if (cancelled) return;
 
-        const walkToHubArrivalMs = requestNowMs + walkToHub.durationSec * 1000;
-        const firstCatchableDeparture =
-          shuttleResp.threeNextShuttles.find((departure) => {
-            if (!departure) return false;
-            const departureMs = new Date(departure).getTime();
-            return Number.isFinite(departureMs) && departureMs >= walkToHubArrivalMs;
-          }) ?? null;
-        const firstCatchableDepartureMs = firstCatchableDeparture
-          ? new Date(firstCatchableDeparture).getTime()
-          : Number.NaN;
-        const waitDurationMin = Number.isFinite(firstCatchableDepartureMs)
-          ? minutesBetween(walkToHubArrivalMs, firstCatchableDepartureMs)
-          : null;
-        const hasDirections =
-          waitDurationMin !== null && waitDurationMin >= 0 && waitDurationMin <= 120;
-
-        setShuttleInfo({
-          departureTimes: [firstCatchableDeparture],
-          tripDurationMin: shuttleResp.tripDuration,
-          departureCampus,
-          walkToHubPolyline: walkToHub.polyline,
-          shuttleSegmentPolyline: shuttleSegment.polyline,
-          walkFromHubPolyline: walkFromHub.polyline,
-          walkToHubDurationMin: Math.max(0, Math.round(walkToHub.durationSec / 60)),
-          walkFromHubDurationMin: Math.max(0, Math.round(walkFromHub.durationSec / 60)),
-          departureHubCoordinate: departureHub,
-          arrivalHubCoordinate: arrivalHub,
-          waitDurationMin,
-          hasDirections,
-        });
+        setShuttleInfo(nextShuttleInfo);
       } catch {
         if (!cancelled) setShuttleInfo(null);
       } finally {
@@ -1071,6 +959,7 @@ export function useNavigationBetweenBuildings({
     sameOriginDestination,
     missingCoordinates,
     currentTime,
+    shuttleStrategy,
   ]); // When the user switches transport mode, update the displayed polyline
   useEffect(() => {
     const baseNowMs = currentTime?.getTime() ?? Date.now();
