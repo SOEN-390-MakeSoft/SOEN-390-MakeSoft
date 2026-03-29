@@ -296,7 +296,14 @@ const POI_MARKER_Z_INDEX = 999;
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
 const FLOOR_SELECTOR_FOCUS_RADIUS_METERS = 120;
-const BUILDING_LABEL_ZOOM_THRESHOLD = 0.012;
+const BUILDING_LABEL_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
+  sgw: 0.012,
+  loyola: 0.016,
+};
+const BUILDING_LABEL_FULL_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
+  sgw: 0.006,
+  loyola: 0.008,
+};
 const BUILDING_LABEL_MIN_SPACING_METERS: Record<Campus, number> = {
   sgw: 18,
   loyola: 24,
@@ -1068,16 +1075,19 @@ export default function MapScreen() {
   const buildingLabelBorderColor = 'rgba(0,0,0,0.35)';
 
   const labelLatitudeDelta = mapRegion?.latitudeDelta ?? DEFAULT_REGION.latitudeDelta;
+  const labelZoomThreshold = BUILDING_LABEL_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
   const shouldShowBuildingLabels =
-    labelLatitudeDelta <= BUILDING_LABEL_ZOOM_THRESHOLD &&
+    labelLatitudeDelta <= labelZoomThreshold &&
     !indoor.isIndoorActive &&
     !startIndoor.isIndoorActive;
+  const showAllBuildingLabels =
+    labelLatitudeDelta <= BUILDING_LABEL_FULL_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
   const labelSpacingMeters = useMemo(() => {
     const minSpacing = BUILDING_LABEL_MIN_SPACING_METERS[activeCampus];
     const maxSpacing = BUILDING_LABEL_MAX_SPACING_METERS[activeCampus];
-    const zoomRatio = Math.min(Math.max(labelLatitudeDelta / BUILDING_LABEL_ZOOM_THRESHOLD, 0), 1);
+    const zoomRatio = Math.min(Math.max(labelLatitudeDelta / labelZoomThreshold, 0), 1);
     return minSpacing + (maxSpacing - minSpacing) * zoomRatio;
-  }, [activeCampus, labelLatitudeDelta]);
+  }, [activeCampus, labelLatitudeDelta, labelZoomThreshold]);
   const labelCandidates = useMemo(() => {
     const campusBuildings = activeCampus === 'sgw' ? sgwBuildings : loyolaBuildings;
     return campusBuildings
@@ -1092,6 +1102,7 @@ export default function MapScreen() {
   }, [activeCampus, loyolaBuildings, sgwBuildings, selectedBuildingId]);
   const visibleBuildingLabels = useMemo(() => {
     if (!shouldShowBuildingLabels) return [];
+    if (showAllBuildingLabels) return labelCandidates;
     const sorted = [...labelCandidates].sort((a, b) => {
       if (a.isSelected && !b.isSelected) return -1;
       if (!a.isSelected && b.isSelected) return 1;
@@ -1108,7 +1119,7 @@ export default function MapScreen() {
       }
     }
     return chosen;
-  }, [labelCandidates, labelSpacingMeters, shouldShowBuildingLabels]);
+  }, [labelCandidates, labelSpacingMeters, shouldShowBuildingLabels, showAllBuildingLabels]);
 
   /**
    * Handle quick pick building selection
