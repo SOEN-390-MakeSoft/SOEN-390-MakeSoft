@@ -1,37 +1,136 @@
 import type { LatLng } from '../../utils/mapUtils';
 import { distanceMeters } from '../../utils/mapUtils';
-import type { MapRegion } from './types';
+import type { MapRegion, ModeRoute, NavigationStep } from './types';
+
+type GoogleLocation = {
+  lat?: number;
+  lng?: number;
+};
+
+type GoogleLegStep = {
+  html_instructions?: string;
+  distance?: { text?: string };
+  duration?: { text?: string };
+  maneuver?: string;
+  start_location?: GoogleLocation;
+  end_location?: GoogleLocation;
+};
+
+type GoogleLeg = {
+  distance?: { text?: string };
+  duration?: { text?: string; value?: number };
+  duration_in_traffic?: { text?: string; value?: number };
+  steps?: GoogleLegStep[];
+};
+
+type GoogleRoute = {
+  summary?: string;
+  overview_polyline?: { points?: string };
+};
+
+function decodeNextValue(encoded: string, cursor: { index: number }): number {
+  let b: number;
+  let shift = 0;
+  let result = 0;
+
+  do {
+    b = (encoded.codePointAt(cursor.index++) ?? 0) - 63;
+    result |= (b & 0x1f) << shift;
+    shift += 5;
+  } while (b >= 0x20);
+
+  return result & 1 ? ~(result >> 1) : result >> 1;
+}
 
 export function decodePolyline(encoded: string): LatLng[] {
   const points: LatLng[] = [];
-  let index = 0;
+  const cursor = { index: 0 };
   let lat = 0;
   let lng = 0;
 
-  while (index < encoded.length) {
-    let b: number;
-    let shift = 0;
-    let result = 0;
-    do {
-      b = (encoded.codePointAt(index++) ?? 0) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lat += result & 1 ? ~(result >> 1) : result >> 1;
-
-    shift = 0;
-    result = 0;
-    do {
-      b = (encoded.codePointAt(index++) ?? 0) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lng += result & 1 ? ~(result >> 1) : result >> 1;
+  while (cursor.index < encoded.length) {
+    lat += decodeNextValue(encoded, cursor);
+    lng += decodeNextValue(encoded, cursor);
 
     points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
   }
 
   return points;
+}
+
+export function stripHtmlInstructions(value: string): string {
+  if (value.length === 0) return value;
+
+  let inTag = false;
+  let output = '';
+
+  for (const char of value) {
+    if (char === '<') {
+      inTag = true;
+      continue;
+    }
+
+    if (char === '>') {
+      inTag = false;
+      continue;
+    }
+
+    if (!inTag) {
+      output += char;
+    }
+  }
+
+  return output;
+}
+
+function resolveFocusCoordinate(step: GoogleLegStep): LatLng | undefined {
+  if (step.end_location?.lat != null && step.end_location.lng != null) {
+    return {
+      latitude: step.end_location.lat,
+      longitude: step.end_location.lng,
+    };
+  }
+
+  if (step.start_location?.lat != null && step.start_location.lng != null) {
+    return {
+      latitude: step.start_location.lat,
+      longitude: step.start_location.lng,
+    };
+  }
+
+  return undefined;
+}
+
+export function mapGoogleLegSteps(steps: GoogleLegStep[] | undefined): NavigationStep[] {
+  if (!steps) return [];
+
+  return steps.map((step) => ({
+    instruction: stripHtmlInstructions(step.html_instructions ?? ''),
+    distanceText: step.distance?.text ?? '',
+    durationText: step.duration?.text ?? '',
+    maneuver: step.maneuver,
+    focusCoordinate: resolveFocusCoordinate(step),
+  }));
+}
+
+export function buildModeRouteFromGoogleLeg(
+  route: GoogleRoute,
+  leg: GoogleLeg,
+  options?: { preferTrafficDuration?: boolean },
+): ModeRoute {
+  const duration =
+    options?.preferTrafficDuration && leg.duration_in_traffic
+      ? leg.duration_in_traffic
+      : leg.duration;
+
+  return {
+    durationText: duration?.text ?? '',
+    durationSec: duration?.value ?? 0,
+    distanceText: leg.distance?.text ?? '',
+    viaText: route.summary || '',
+    polyline: route.overview_polyline?.points ? decodePolyline(route.overview_polyline.points) : [],
+    steps: mapGoogleLegSteps(leg.steps),
+  };
 }
 
 export function calculateBounds(coords: LatLng[]) {

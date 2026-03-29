@@ -1,10 +1,6 @@
-import { decodePolyline } from '../routeUtils';
+import { buildModeRouteFromGoogleLeg } from '../routeUtils';
 import type { ModeRoute } from '../types';
 import type { ModeRouteStrategy, ModeRouteStrategyContext } from './ModeRouteStrategy';
-
-function stripHtmlInstructions(value: string): string {
-  return value.replaceAll(/<[^>]*>/g, '');
-}
 
 export class OutdoorWalkingRouteStrategy implements ModeRouteStrategy {
   readonly key = 'outdoorWalking' as const;
@@ -24,47 +20,6 @@ export class OutdoorWalkingRouteStrategy implements ModeRouteStrategy {
     const leg = route.legs?.[0];
     if (!leg) return null;
 
-    const polyline = route.overview_polyline?.points
-      ? decodePolyline(route.overview_polyline.points)
-      : [];
-
-    return {
-      durationText: leg.duration?.text ?? '',
-      durationSec: leg.duration?.value ?? 0,
-      distanceText: leg.distance?.text ?? '',
-      viaText: route.summary || '',
-      polyline,
-      steps: (leg.steps ?? []).map(
-        (s: {
-          html_instructions?: string;
-          distance?: { text?: string };
-          duration?: { text?: string };
-          maneuver?: string;
-          start_location?: { lat?: number; lng?: number };
-          end_location?: { lat?: number; lng?: number };
-        }) => {
-          let focusCoordinate;
-          if (s.end_location?.lat != null && s.end_location?.lng != null) {
-            focusCoordinate = {
-              latitude: s.end_location.lat,
-              longitude: s.end_location.lng,
-            };
-          } else if (s.start_location?.lat != null && s.start_location?.lng != null) {
-            focusCoordinate = {
-              latitude: s.start_location.lat,
-              longitude: s.start_location.lng,
-            };
-          }
-
-          return {
-            instruction: stripHtmlInstructions(s.html_instructions ?? ''),
-            distanceText: s.distance?.text ?? '',
-            durationText: s.duration?.text ?? '',
-            maneuver: s.maneuver,
-            focusCoordinate,
-          };
-        },
-      ),
-    };
+    return buildModeRouteFromGoogleLeg(route, leg);
   }
 }
