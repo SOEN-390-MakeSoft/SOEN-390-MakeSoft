@@ -300,7 +300,7 @@ const BUILDING_LABEL_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
   sgw: 0.012,
   loyola: 0.016,
 };
-const BUILDING_LABEL_FULL_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
+const BUILDING_LABEL_DENSE_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
   sgw: 0.006,
   loyola: 0.008,
 };
@@ -312,6 +312,29 @@ const BUILDING_LABEL_MAX_SPACING_METERS: Record<Campus, number> = {
   sgw: 48,
   loyola: 58,
 };
+const BUILDING_LABEL_MIN_WIDTH = 24;
+const BUILDING_LABEL_BASE_WIDTH = 14;
+const BUILDING_LABEL_CHAR_WIDTH = 8;
+const BUILDING_LABEL_HEIGHT = 20;
+const BUILDING_LABEL_PADDING_NORMAL = 6;
+const BUILDING_LABEL_PADDING_DENSE = 3;
+
+type ScreenPoint = { x: number; y: number };
+
+function projectToScreen(
+  coordinate: LatLng,
+  region: Region,
+  width: number,
+  height: number,
+): ScreenPoint {
+  const leftLng = region.longitude - region.longitudeDelta / 2;
+  const rightLng = region.longitude + region.longitudeDelta / 2;
+  const topLat = region.latitude + region.latitudeDelta / 2;
+  const bottomLat = region.latitude - region.latitudeDelta / 2;
+  const x = ((coordinate.longitude - leftLng) / (rightLng - leftLng)) * width;
+  const y = ((topLat - coordinate.latitude) / (topLat - bottomLat)) * height;
+  return { x, y };
+}
 
 function getConflictLabel(c: LocationConflict): string {
   switch (c.type) {
@@ -1080,8 +1103,8 @@ export default function MapScreen() {
     labelLatitudeDelta <= labelZoomThreshold &&
     !indoor.isIndoorActive &&
     !startIndoor.isIndoorActive;
-  const showAllBuildingLabels =
-    labelLatitudeDelta <= BUILDING_LABEL_FULL_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
+  const isDenseLabelMode =
+    labelLatitudeDelta <= BUILDING_LABEL_DENSE_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
   const labelSpacingMeters = useMemo(() => {
     const minSpacing = BUILDING_LABEL_MIN_SPACING_METERS[activeCampus];
     const maxSpacing = BUILDING_LABEL_MAX_SPACING_METERS[activeCampus];
@@ -1092,23 +1115,65 @@ export default function MapScreen() {
     const campusBuildings = activeCampus === 'sgw' ? sgwBuildings : loyolaBuildings;
     return campusBuildings
       .filter((building) => building.code)
-      .map((building) => ({
-        id: building.id,
-        code: building.code?.toUpperCase() ?? '',
-        coordinate: polygonCentroid(building.polygon),
-        building,
-        isSelected: building.id === selectedBuildingId,
-      }));
-  }, [activeCampus, loyolaBuildings, sgwBuildings, selectedBuildingId]);
+      .map((building) => {
+        const coordinate = polygonCentroid(building.polygon);
+        return {
+          id: building.id,
+          code: building.code?.toUpperCase() ?? '',
+          coordinate,
+          screen: mapRegion ? projectToScreen(coordinate, mapRegion, width, height) : null,
+          building,
+          isSelected: building.id === selectedBuildingId,
+        };
+      });
+  }, [activeCampus, height, mapRegion, loyolaBuildings, sgwBuildings, selectedBuildingId, width]);
   const visibleBuildingLabels = useMemo(() => {
     if (!shouldShowBuildingLabels) return [];
-    if (showAllBuildingLabels) return labelCandidates;
     const sorted = [...labelCandidates].sort((a, b) => {
       if (a.isSelected && !b.isSelected) return -1;
       if (!a.isSelected && b.isSelected) return 1;
       return a.code.localeCompare(b.code);
     });
     const chosen: typeof sorted = [];
+
+    if (mapRegion) {
+      const padding = isDenseLabelMode
+        ? BUILDING_LABEL_PADDING_DENSE
+        : BUILDING_LABEL_PADDING_NORMAL;
+      const rects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+
+      for (const candidate of sorted) {
+        if (!candidate.screen) continue;
+        const labelWidth = Math.max(
+          BUILDING_LABEL_MIN_WIDTH,
+          BUILDING_LABEL_BASE_WIDTH + BUILDING_LABEL_CHAR_WIDTH * candidate.code.length,
+        );
+        const halfWidth = labelWidth / 2 + padding;
+        const halfHeight = BUILDING_LABEL_HEIGHT / 2 + padding;
+        const rect = {
+          left: candidate.screen.x - halfWidth,
+          right: candidate.screen.x + halfWidth,
+          top: candidate.screen.y - halfHeight,
+          bottom: candidate.screen.y + halfHeight,
+        };
+
+        const overlaps = rects.some(
+          (r) =>
+            !(
+              rect.right < r.left ||
+              rect.left > r.right ||
+              rect.bottom < r.top ||
+              rect.top > r.bottom
+            ),
+        );
+        if (!overlaps) {
+          rects.push(rect);
+          chosen.push(candidate);
+        }
+      }
+      return chosen;
+    }
+
     for (const candidate of sorted) {
       const tooClose = chosen.some(
         (existing) =>
@@ -1119,7 +1184,7 @@ export default function MapScreen() {
       }
     }
     return chosen;
-  }, [labelCandidates, labelSpacingMeters, shouldShowBuildingLabels, showAllBuildingLabels]);
+  }, [isDenseLabelMode, labelCandidates, labelSpacingMeters, mapRegion, shouldShowBuildingLabels]);
 
   /**
    * Handle quick pick building selection
