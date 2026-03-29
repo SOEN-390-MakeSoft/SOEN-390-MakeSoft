@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
-import { findPath, getBuildingMeta, loadTunnelGraph } from '../services/indoor';
+import { getBuildingMeta } from '../services/indoor';
 import {
   coordsEqual,
-  distanceMeters,
   findBuildingAtOrNearCoordinate,
   polygonCentroid,
   type LatLng,
@@ -16,81 +15,42 @@ import { DrivingRouteStrategy } from '../services/navigation/strategies/DrivingR
 import { OutdoorWalkingRouteStrategy } from '../services/navigation/strategies/OutdoorWalkingRouteStrategy';
 import { TunnelWalkingRouteStrategy } from '../services/navigation/strategies/TunnelWalkingRouteStrategy';
 import { DefaultShuttleRouteStrategy } from '../services/navigation/strategies/ShuttleRouteStrategy';
+import {
+  calculateBounds,
+  boundsToRegion,
+  midpointOrFallback,
+  minutesBetween,
+} from '../services/navigation/routeUtils';
+import type {
+  Building,
+  RouteSummary,
+  RouteMode,
+  ModeDurations,
+  TransportMode,
+  WalkingRouteVariant,
+  NavigationStep,
+  ModeRoute,
+  WalkingModeRoutes,
+  AllModeRoutes,
+  WalkingRouteComparison,
+  MapRegion,
+  ShuttleInfo,
+} from '../services/navigation/types';
+
+export type {
+  WalkingRouteVariant,
+  NavigationStep,
+  WalkingRouteComparison,
+  ShuttleInfo,
+} from '../services/navigation/types';
 
 const MAX_TAP_DISTANCE_METERS = 0;
-
-/** Decode a Google-encoded polyline string into an array of LatLng. */
-function decodePolyline(encoded: string): LatLng[] {
-  const points: LatLng[] = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-  while (index < encoded.length) {
-    let b: number;
-    let shift = 0;
-    let result = 0;
-    do {
-      b = (encoded.codePointAt(index++) ?? 0) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lat += result & 1 ? ~(result >> 1) : result >> 1;
-
-    shift = 0;
-    result = 0;
-    do {
-      b = (encoded.codePointAt(index++) ?? 0) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    lng += result & 1 ? ~(result >> 1) : result >> 1;
-
-    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
-  }
-  return points;
-}
-
-function calculateBounds(coords: LatLng[]) {
-  let minLat = coords[0].latitude;
-  let maxLat = coords[0].latitude;
-  let minLng = coords[0].longitude;
-  let maxLng = coords[0].longitude;
-  for (const c of coords) {
-    if (c.latitude < minLat) minLat = c.latitude;
-    if (c.latitude > maxLat) maxLat = c.latitude;
-    if (c.longitude < minLng) minLng = c.longitude;
-    if (c.longitude > maxLng) maxLng = c.longitude;
-  }
-  return { minLat, maxLat, minLng, maxLng };
-}
-
-function boundsToRegion(bounds: ReturnType<typeof calculateBounds>): MapRegion {
-  const PADDING = 1.4;
-  const latDelta = (bounds.maxLat - bounds.minLat) * PADDING || 0.005;
-  const lngDelta = (bounds.maxLng - bounds.minLng) * PADDING || 0.005;
-  return {
-    latitude: (bounds.minLat + bounds.maxLat) / 2,
-    longitude: (bounds.minLng + bounds.maxLng) / 2,
-    latitudeDelta: latDelta,
-    longitudeDelta: lngDelta,
-  };
-}
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function midpointOrFallback(polyline: LatLng[], fallback: LatLng): LatLng {
-  if (polyline.length === 0) return fallback;
-  return polyline[Math.floor(polyline.length / 2)];
-}
-
-function minutesBetween(startMs: number, endMs: number): number {
-  if (endMs <= startMs) return 0;
-  return Math.round((endMs - startMs) / 60_000);
 }
 
 function formatHoursMinutes(totalMinutes: number): string {
@@ -102,278 +62,10 @@ function formatHoursMinutes(totalMinutes: number): string {
   return `${minutes} min`;
 }
 
-const WALK_SPEED_MPS = 1.4;
-const TUNNEL_ROUTE_VIA_TEXT = 'Underground tunnel network';
-const TUNNEL_GRAPH_SNAP_MAX_METERS = 25;
-
-type TunnelAccessPoint = {
-  code: string;
-  level: string;
-  position: LatLng;
-  label: string;
-};
-
-const SGW_TUNNEL_ACCESS: Record<string, TunnelAccessPoint> = {
-  H: {
-    code: 'H',
-    level: '-1',
-    position: { latitude: 45.49684, longitude: -73.57881 },
-    label: 'Hall basement tunnel entrance',
-  },
-  EV: {
-    code: 'EV',
-    level: '-1',
-    position: { latitude: 45.49593, longitude: -73.57845 },
-    label: 'EV metro tunnel entrance',
-  },
-  GM: {
-    code: 'GM',
-    level: '-1',
-    position: { latitude: 45.49608, longitude: -73.57872 },
-    label: 'GM metro tunnel entrance',
-  },
-  LB: {
-    code: 'LB',
-    level: '-1',
-    position: { latitude: 45.4969, longitude: -73.57839 },
-    label: 'LB basement tunnel entrance',
-  },
-  MB: {
-    code: 'MB',
-    level: '-2',
-    position: { latitude: 45.49523, longitude: -73.57852 },
-    label: 'MB lower tunnel entrance',
-  },
-};
-
-function formatMinutesLabel(seconds: number): string {
-  const minutes = Math.max(1, Math.round(seconds / 60));
-  return `${minutes} min`;
-}
-
-function formatDistanceLabel(distance: number): string {
-  if (distance >= 1000) return `${(distance / 1000).toFixed(1)} km`;
-  return `${Math.max(1, Math.round(distance))} m`;
-}
-
-function dedupePolyline(points: LatLng[]): LatLng[] {
-  const deduped: LatLng[] = [];
-  for (const point of points) {
-    const last = deduped.at(-1);
-    if (!last || distanceMeters(last, point) >= 1) {
-      deduped.push(point);
-    }
-  }
-  return deduped;
-}
-
-function resolveTunnelBuilding(
-  point: LatLng,
-  buildings: readonly Building[],
-): { building: Building; access: TunnelAccessPoint } | null {
-  const building = findBuildingAtOrNearCoordinate(point, buildings, 150);
-  if (!building) return null;
-
-  const buildingCode = (building.code ?? extractCodeFromName(building.name) ?? '').toUpperCase();
-  const access = SGW_TUNNEL_ACCESS[buildingCode];
-  if (!access) return null;
-
-  return { building, access };
-}
-
-function buildTunnelModeRoute(
-  origin: LatLng,
-  destination: LatLng,
-  buildings: readonly Building[],
-): ModeRoute | null {
-  const originTunnel = resolveTunnelBuilding(origin, buildings);
-  const destinationTunnel = resolveTunnelBuilding(destination, buildings);
-  if (!originTunnel || !destinationTunnel) return null;
-  if (originTunnel.access.code === destinationTunnel.access.code) return null;
-
-  const tunnelGraph = loadTunnelGraph('SGW');
-  if (!tunnelGraph) return null;
-
-  const startNode = tunnelGraph.findClosestNode(
-    originTunnel.access.position,
-    originTunnel.access.level,
-  );
-  const endNode = tunnelGraph.findClosestNode(
-    destinationTunnel.access.position,
-    destinationTunnel.access.level,
-  );
-  if (!startNode || !endNode) return null;
-
-  if (
-    distanceMeters(startNode.position, originTunnel.access.position) >
-      TUNNEL_GRAPH_SNAP_MAX_METERS ||
-    distanceMeters(endNode.position, destinationTunnel.access.position) >
-      TUNNEL_GRAPH_SNAP_MAX_METERS
-  ) {
-    return null;
-  }
-
-  const tunnelRoute = findPath(tunnelGraph, startNode.id, endNode.id);
-  if (!tunnelRoute) return null;
-
-  const walkToTunnelDistance = distanceMeters(origin, originTunnel.access.position);
-  const walkFromTunnelDistance = distanceMeters(destinationTunnel.access.position, destination);
-  const walkToTunnelSeconds = walkToTunnelDistance / WALK_SPEED_MPS;
-  const walkFromTunnelSeconds = walkFromTunnelDistance / WALK_SPEED_MPS;
-  const totalDistanceMeters =
-    walkToTunnelDistance + tunnelRoute.totalDistanceMeters + walkFromTunnelDistance;
-  const totalDurationSeconds =
-    walkToTunnelSeconds + tunnelRoute.totalEstimatedSeconds + walkFromTunnelSeconds;
-
-  const steps: NavigationStep[] = [];
-
-  if (walkToTunnelDistance >= 5) {
-    steps.push({
-      instruction: `Go to the tunnel entrance in ${originTunnel.building.name}`,
-      distanceText: formatDistanceLabel(walkToTunnelDistance),
-      durationText: formatMinutesLabel(walkToTunnelSeconds),
-      focusCoordinate: originTunnel.access.position,
-    });
-  }
-
-  steps.push({
-    instruction: `Enter the tunnel at ${originTunnel.access.label} on level ${originTunnel.access.level}`,
-    distanceText: '',
-    durationText: '',
-    focusCoordinate: originTunnel.access.position,
-  });
-
-  for (const step of tunnelRoute.steps) {
-    steps.push({
-      instruction: step.instruction,
-      distanceText: formatDistanceLabel(step.distanceMeters),
-      durationText: formatMinutesLabel(step.estimatedSeconds),
-      focusCoordinate: midpointOrFallback(step.path, step.path.at(-1) ?? step.path[0]),
-      focusRegion: step.path.length > 1 ? boundsToRegion(calculateBounds(step.path)) : undefined,
-      maneuver: step.edgeType,
-    });
-  }
-
-  steps.push({
-    instruction: `Exit the tunnel toward ${destinationTunnel.building.name}`,
-    distanceText: '',
-    durationText: '',
-    focusCoordinate: destinationTunnel.access.position,
-  });
-
-  if (walkFromTunnelDistance >= 5) {
-    steps.push({
-      instruction: `Walk to ${destinationTunnel.building.name}`,
-      distanceText: formatDistanceLabel(walkFromTunnelDistance),
-      durationText: formatMinutesLabel(walkFromTunnelSeconds),
-      focusCoordinate: destination,
-    });
-  }
-
-  return {
-    durationText: formatMinutesLabel(totalDurationSeconds),
-    durationSec: Math.round(totalDurationSeconds),
-    distanceText: formatDistanceLabel(totalDistanceMeters),
-    viaText: TUNNEL_ROUTE_VIA_TEXT,
-    polyline: dedupePolyline([
-      origin,
-      originTunnel.access.position,
-      ...tunnelRoute.polyline,
-      destinationTunnel.access.position,
-      destination,
-    ]),
-    steps,
-  };
-}
-
-type Building = {
-  id: string;
-  name: string;
-  code: string | null;
-  polygon: readonly LatLng[];
-};
-
 type RemoteBuilding = {
   name?: string | null;
   code?: string | null;
 } | null;
-
-type RouteSummary = {
-  arrivalText: string;
-  distanceText: string;
-  durationText: string;
-  viaText: string;
-};
-
-type RouteMode = 'driving' | 'transit' | 'walking';
-
-type ModeDurations = {
-  driving?: string;
-  walking?: string;
-};
-
-type TransportMode = 'driving' | 'walking' | 'shuttle';
-export type WalkingRouteVariant = 'outdoor' | 'tunnel';
-
-export type NavigationStep = {
-  instruction: string;
-  distanceText: string;
-  durationText: string;
-  maneuver?: string;
-  focusCoordinate?: LatLng;
-  focusRegion?: {
-    latitude: number;
-    longitude: number;
-    latitudeDelta: number;
-    longitudeDelta: number;
-  };
-};
-
-type ModeRoute = {
-  durationText: string;
-  durationSec: number;
-  distanceText: string;
-  viaText: string;
-  polyline: LatLng[];
-  steps: NavigationStep[];
-};
-
-type WalkingModeRoutes = {
-  outdoor?: ModeRoute | null;
-  tunnel?: ModeRoute | null;
-};
-
-type AllModeRoutes = {
-  driving?: ModeRoute | null;
-  walking?: WalkingModeRoutes;
-};
-
-export type WalkingRouteComparison = {
-  originLabel: string;
-  destinationLabel: string;
-  activeVariant: WalkingRouteVariant;
-  fastestVariant: WalkingRouteVariant;
-  outdoor: {
-    durationText: string;
-    distanceText: string;
-  };
-  tunnel: {
-    durationText: string;
-    distanceText: string;
-  };
-};
-
-type MapRegion = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-};
-
-// SGW shuttle hub: Hall Building (1455 De Maisonneuve Blvd W)
-const SHUTTLE_HUB_SGW: LatLng = { latitude: 45.4972, longitude: -73.5789 };
-// Loyola shuttle hub: Vanier Library area (7141 Sherbrooke St W)
-const SHUTTLE_HUB_LOY: LatLng = { latitude: 45.4584, longitude: -73.6387 };
 
 /** Returns true when the origin is on SGW campus and the destination is on Loyola campus (or vice versa). */
 function isCrossCampusRoute(origin: LatLng | null, destination: LatLng | null): boolean {
@@ -393,56 +85,11 @@ function isCrossCampusRoute(origin: LatLng | null, destination: LatLng | null): 
   return (inSgw(origin) && inLoy(destination)) || (inLoy(origin) && inSgw(destination));
 }
 
-/** Returns the departure campus key ('SGW' | 'LOY') based on which campus the origin is on. */
-function getDepartureCampus(origin: LatLng): 'SGW' | 'LOY' {
-  const SGW_BOUNDS = { minLat: 45.491, maxLat: 45.502, minLng: -73.582, maxLng: -73.57 };
-  const inSgw =
-    origin.latitude >= SGW_BOUNDS.minLat &&
-    origin.latitude <= SGW_BOUNDS.maxLat &&
-    origin.longitude >= SGW_BOUNDS.minLng &&
-    origin.longitude <= SGW_BOUNDS.maxLng;
-  return inSgw ? 'SGW' : 'LOY';
-}
-
 /** Returns true if date is a weekend (Saturday or Sunday). */
 function isWeekend(referenceDate: Date = new Date()): boolean {
   const day = referenceDate.getDay();
   return day === 0 || day === 6;
 }
-
-function toLocalDateTimeParam(date: Date): string {
-  const pad2 = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(
-    date.getHours(),
-  )}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
-}
-
-export type ShuttleInfo = {
-  /** ISO strings for the next (up to 3) departure times; null entries mean no departure. */
-  departureTimes: (string | null)[];
-  /** Fixed shuttle trip duration in minutes (from backend). */
-  tripDurationMin: number;
-  /** Campus the shuttle departs from. */
-  departureCampus: 'SGW' | 'LOY';
-  /** Polyline from current location to the departure hub (walk). */
-  walkToHubPolyline: LatLng[];
-  /** Road-following polyline for the shuttle segment between the two hubs (driving route). */
-  shuttleSegmentPolyline: LatLng[];
-  /** Polyline from the arrival hub to the final destination (walk). */
-  walkFromHubPolyline: LatLng[];
-  /** Estimated walk duration to the departure hub (minutes). */
-  walkToHubDurationMin?: number;
-  /** Estimated walk duration from arrival hub to destination (minutes). */
-  walkFromHubDurationMin?: number;
-  /** Coordinate of the departure shuttle hub. */
-  departureHubCoordinate?: LatLng;
-  /** Coordinate of the destination shuttle hub. */
-  arrivalHubCoordinate?: LatLng;
-  /** Waiting time at the departure hub before shuttle departure (minutes). */
-  waitDurationMin?: number | null;
-  /** Whether shuttle directions should be shown (false when wait is too long). */
-  hasDirections?: boolean;
-};
 
 /** Build the three shuttle leg steps when directions are allowed. */
 function buildShuttleNavigationSteps(
