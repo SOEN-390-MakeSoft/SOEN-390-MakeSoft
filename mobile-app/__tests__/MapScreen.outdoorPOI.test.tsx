@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import MapScreen from '../components/MapScreen';
 
 // ---------------------------------------------------------------------------
@@ -101,13 +101,14 @@ jest.mock('../hooks/useSelectedBuilding', () => ({
 
 const mockSetSearchQuery = jest.fn();
 const mockSetIsSearchFocused = jest.fn();
+const mockSearchInputRef = { current: { blur: jest.fn() } };
 jest.mock('../hooks/useSearch', () => ({
   useSearch: () => ({
     searchQuery: '',
     setSearchQuery: mockSetSearchQuery,
     isSearchFocused: false,
     setIsSearchFocused: mockSetIsSearchFocused,
-    searchInputRef: { current: { blur: jest.fn() } },
+    searchInputRef: mockSearchInputRef,
     searchResults: [],
     handleSearchSubmit: jest.fn(),
     handleSelectSearchResult: jest.fn(),

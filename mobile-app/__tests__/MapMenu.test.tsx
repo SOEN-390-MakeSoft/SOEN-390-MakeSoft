@@ -67,4 +67,31 @@ describe('MapMenu date/time simulation', () => {
       'Use date YYYY-MM-DD and time HH:mm.',
     );
   });
+
+  it('invokes outdoor category handler when a chip is pressed', () => {
+    const onOutdoorCategoryPress = jest.fn();
+    const { getByTestId } = render(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          outdoorCategoryChips={[
+            {
+              key: 'restaurant',
+              label: 'Restaurant',
+              query: 'restaurant',
+              category: 'restaurant',
+              icon: 'restaurant',
+            },
+          ]}
+          selectedOutdoorCategory={null}
+          onOutdoorCategoryPress={onOutdoorCategoryPress}
+        />
+      </SettingsProvider>,
+    );
+
+    fireEvent.press(getByTestId('outdoor-chip-restaurant'));
+
+    expect(onOutdoorCategoryPress).toHaveBeenCalledWith('restaurant', 'restaurant');
+  });
 });

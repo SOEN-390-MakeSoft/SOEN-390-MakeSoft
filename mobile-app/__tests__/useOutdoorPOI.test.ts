@@ -61,7 +61,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'hall building',
+        poiQuery: 'hall building',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -79,7 +79,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -106,7 +106,7 @@ describe('useOutdoorPOI', () => {
 
     const { result, rerender } = renderHook((props) => useOutdoorPOI(props), {
       initialProps: {
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation: null as any,
         activeCampus: 'sgw' as const,
       },
@@ -118,7 +118,7 @@ describe('useOutdoorPOI', () => {
 
     mockIsSupportedPOICategory.mockReturnValue(null);
     rerender({
-      debouncedQuery: 'hall',
+      poiQuery: 'hall',
       userLocation: null,
       activeCampus: 'sgw' as const,
     });
@@ -134,7 +134,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'restaurant',
+        poiQuery: 'restaurant',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -152,7 +152,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: '',
+        poiQuery: '',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -171,7 +171,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: '',
+        poiQuery: '',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -203,7 +203,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: '',
+        poiQuery: '',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -236,7 +236,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: '',
+        poiQuery: '',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -268,7 +268,7 @@ describe('useOutdoorPOI', () => {
 
     const { result } = renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: '',
+        poiQuery: '',
         userLocation: null,
         activeCampus: 'sgw',
       }),
@@ -303,7 +303,7 @@ describe('useOutdoorPOI', () => {
 
     renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation,
         activeCampus: 'loyola',
       }),
@@ -331,7 +331,7 @@ describe('useOutdoorPOI', () => {
 
     renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation: null,
         activeCampus: 'loyola',
       }),
@@ -357,7 +357,7 @@ describe('useOutdoorPOI', () => {
 
     renderHook(() =>
       useOutdoorPOI({
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation: null,
         activeCampus: 'loyola',
       }),
@@ -392,7 +392,7 @@ describe('useOutdoorPOI', () => {
 
     const { result, rerender } = renderHook((props) => useOutdoorPOI(props), {
       initialProps: {
-        debouncedQuery: 'cafe',
+        poiQuery: 'cafe',
         userLocation: null as LatLng | null,
         activeCampus: 'sgw' as const,
       },
@@ -406,7 +406,7 @@ describe('useOutdoorPOI', () => {
     expectAbortSignal(firstSignal);
 
     rerender({
-      debouncedQuery: 'restaurant',
+      poiQuery: 'restaurant',
       userLocation: null,
       activeCampus: 'sgw' as const,
     });

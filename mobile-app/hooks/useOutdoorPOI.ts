@@ -16,22 +16,18 @@ function formatGeocodedAddress(geo: Location.LocationGeocodedAddress): string {
 const POI_SEARCH_RADIUS_METERS = 1000;
 
 interface UseOutdoorPOIOptions {
-  debouncedQuery: string;
+  poiQuery: string;
   userLocation: LatLng | null;
   activeCampus: 'sgw' | 'loyola';
 }
 
-export function useOutdoorPOI({
-  debouncedQuery,
-  userLocation,
-  activeCampus,
-}: UseOutdoorPOIOptions) {
+export function useOutdoorPOI({ poiQuery, userLocation, activeCampus }: UseOutdoorPOIOptions) {
   const [outdoorPOIResults, setOutdoorPOIResults] = useState<OutdoorPOI[]>([]);
   const [selectedOutdoorPOI, setSelectedOutdoorPOI] = useState<OutdoorPOI | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const category = isSupportedPOICategory(debouncedQuery);
+    const category = isSupportedPOICategory(poiQuery);
     if (!category) {
       setOutdoorPOIResults([]);
       setIsLoading(false);
@@ -82,42 +78,41 @@ export function useOutdoorPOI({
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery, userLocation, activeCampus]);
+  }, [poiQuery, userLocation, activeCampus]);
 
   const selectPOI = useCallback((poi: OutdoorPOI) => {
     setSelectedOutdoorPOI(poi);
   }, []);
 
   /** Select a POI from the map and resolve its address via device geocoding. */
-const selectPOIFromMap = useCallback((basePOI: OutdoorPOI) => {
-  let isActive = true;
+  const selectPOIFromMap = useCallback((basePOI: OutdoorPOI) => {
+    let isActive = true;
 
-  setSelectedOutdoorPOI(basePOI);
+    setSelectedOutdoorPOI(basePOI);
 
-  if (!basePOI.address) {
-    Location.reverseGeocodeAsync(basePOI.coordinate)
-      .then((results) => {
-        if (!isActive || results.length === 0) return;
+    if (!basePOI.address) {
+      Location.reverseGeocodeAsync(basePOI.coordinate)
+        .then((results) => {
+          if (!isActive || results.length === 0) return;
 
-        const address =
-          results[0].formattedAddress || formatGeocodedAddress(results[0]);
+          const address = results[0].formattedAddress || formatGeocodedAddress(results[0]);
 
-        if (!isActive || !address) return;
+          if (!isActive || !address) return;
 
-        setSelectedOutdoorPOI((prev) =>
-          isActive && prev?.id === basePOI.id ? { ...prev, address } : prev,
-        );
-      })
-      .catch((error) => {
-        if (!isActive) return;
-        console.warn('useOutdoorPOI: reverse geocoding failed for selected POI', error);
-      });
-  }
+          setSelectedOutdoorPOI((prev) =>
+            isActive && prev?.id === basePOI.id ? { ...prev, address } : prev,
+          );
+        })
+        .catch((error) => {
+          if (!isActive) return;
+          console.warn('useOutdoorPOI: reverse geocoding failed for selected POI', error);
+        });
+    }
 
-  return () => {
-    isActive = false;
-  };
-}, []);
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const clearSelectedPOI = useCallback(() => {
     setSelectedOutdoorPOI(null);

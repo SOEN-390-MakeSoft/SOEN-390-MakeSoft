@@ -375,6 +375,66 @@ const POI_MARKER_ICONS: Record<string, string> = {
   place: 'place',
 };
 
+type OutdoorCategoryChip = {
+  key: string;
+  label: string;
+  query: string;
+  category: string | null;
+  icon: keyof typeof MaterialIcons.glyphMap;
+};
+
+const OUTDOOR_POI_CATEGORIES: OutdoorCategoryChip[] = [
+  { key: 'all', label: 'All', query: '', category: null, icon: 'public' },
+  {
+    key: 'restaurant',
+    label: 'Restaurant',
+    query: 'restaurant',
+    category: 'restaurant',
+    icon: 'restaurant',
+  },
+  { key: 'cafe', label: 'Cafe', query: 'cafe', category: 'cafe', icon: 'local-cafe' },
+  {
+    key: 'pharmacy',
+    label: 'Pharmacy',
+    query: 'pharmacy',
+    category: 'pharmacy',
+    icon: 'local-pharmacy',
+  },
+  { key: 'gym', label: 'Gym', query: 'gym', category: 'gym', icon: 'fitness-center' },
+  {
+    key: 'library',
+    label: 'Library',
+    query: 'library',
+    category: 'library',
+    icon: 'local-library',
+  },
+  {
+    key: 'parking',
+    label: 'Parking',
+    query: 'parking',
+    category: 'parking',
+    icon: 'local-parking',
+  },
+  { key: 'bank', label: 'Bank', query: 'bank', category: 'bank', icon: 'account-balance' },
+  {
+    key: 'supermarket',
+    label: 'Grocery',
+    query: 'grocery',
+    category: 'supermarket',
+    icon: 'shopping-cart',
+  },
+  { key: 'bar', label: 'Bar', query: 'bar', category: 'bar', icon: 'local-bar' },
+  {
+    key: 'hospital',
+    label: 'Hospital',
+    query: 'hospital',
+    category: 'hospital',
+    icon: 'local-hospital',
+  },
+  { key: 'gas', label: 'Gas', query: 'gas', category: 'gas_station', icon: 'local-gas-station' },
+  { key: 'hotel', label: 'Hotel', query: 'hotel', category: 'hotel', icon: 'hotel' },
+];
+
 // Google Maps style that hides POI labels/icons (used when indoor overlay is active)
 const HIDE_POIS_MAP_STYLE = [
   { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -518,11 +578,28 @@ export default function MapScreen() {
   });
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+  const [selectedOutdoorCategory, setSelectedOutdoorCategory] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const typedOutdoorCategory = useMemo(
+    () => (searchQuery.trim() ? isSupportedPOICategory(searchQuery) : null),
+    [searchQuery],
+  );
+  const debouncedOutdoorCategory = useMemo(
+    () => (debouncedQuery.trim() ? isSupportedPOICategory(debouncedQuery) : null),
+    [debouncedQuery],
+  );
+  const activeOutdoorCategory = typedOutdoorCategory ?? selectedOutdoorCategory;
+  const effectivePOIQuery = selectedOutdoorCategory ?? debouncedOutdoorCategory ?? '';
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    if (selectedOutdoorCategory) setSelectedOutdoorCategory(null);
+  }, [searchQuery, selectedOutdoorCategory]);
 
   const {
     outdoorPOIResults,
@@ -532,10 +609,27 @@ export default function MapScreen() {
     selectPOIFromMap,
     clearSelectedPOI,
   } = useOutdoorPOI({
-    debouncedQuery,
+    poiQuery: effectivePOIQuery,
     userLocation: poiSearchLocation,
     activeCampus,
   });
+
+  const handleOutdoorCategoryPress = useCallback(
+    (category: string | null, query: string) => {
+      if (!category || selectedOutdoorCategory === category) {
+        setSelectedOutdoorCategory(null);
+        setSearchQuery('');
+        clearSelectedPOI();
+      } else {
+        setSelectedOutdoorCategory(category);
+        setSearchQuery('');
+        clearSelectedPOI();
+      }
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+    },
+    [clearSelectedPOI, searchInputRef, selectedOutdoorCategory, setIsSearchFocused, setSearchQuery],
+  );
 
   const {
     isMenuOpen,
@@ -2560,6 +2654,10 @@ export default function MapScreen() {
           onClose={() => setIsMenuOpen(false)}
           visiblePoiAmenities={visiblePoiAmenities}
           onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
+          outdoorCategoryChips={OUTDOOR_POI_CATEGORIES}
+          selectedOutdoorCategory={activeOutdoorCategory}
+          outdoorCategoryAccentColor={poiMarkerColor}
+          onOutdoorCategoryPress={handleOutdoorCategoryPress}
         />
       )}
 
