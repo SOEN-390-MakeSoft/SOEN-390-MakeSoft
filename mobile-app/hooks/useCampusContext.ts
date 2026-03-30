@@ -39,24 +39,40 @@ const LOYOLA_REGION = {
 export function useCampusContext(onCampusChange?: (campus: Campus) => void) {
   const [activeCampus, setActiveCampus] = useState<Campus>('sgw');
 
-  // Build address lookup map
-  const addressLookup = useMemo(() => {
+  // Build address lookup map + fuzzy list
+  const { addressLookup, addressEntries } = useMemo(() => {
+    const lookup = new Map<string, { name: string; address: string; code: string }>();
+    const entries: { normalizedName: string; name: string; address: string; code: string }[] = [];
+
+    const addEntry = (key: string, entry: { name: string; address: string; code: string }) => {
+      const normalizedKey = normalizeLabel(key);
+      if (!lookup.has(normalizedKey)) {
+        lookup.set(normalizedKey, entry);
+        entries.push({ normalizedName: normalizedKey, ...entry });
+      }
+    };
+
+    for (const entry of BUILDING_ADDRESSES) {
+      const data = { name: entry.name, address: entry.address, code: entry.code };
+      addEntry(entry.name, data);
+      if (entry.aliases) {
+        for (const alias of entry.aliases) {
+          addEntry(alias, data);
+        }
+      }
+    }
+
+    return { addressLookup: lookup, addressEntries: entries };
+  }, []);
+
+  const addressByCode = useMemo(() => {
     const lookup = new Map<string, { name: string; address: string; code: string }>();
     for (const entry of BUILDING_ADDRESSES) {
-      lookup.set(normalizeLabel(entry.name), {
+      lookup.set(entry.code.toUpperCase(), {
         name: entry.name,
         address: entry.address,
         code: entry.code,
       });
-      if (entry.aliases) {
-        for (const alias of entry.aliases) {
-          lookup.set(normalizeLabel(alias), {
-            name: entry.name,
-            address: entry.address,
-            code: entry.code,
-          });
-        }
-      }
     }
     return lookup;
   }, []);
@@ -64,20 +80,40 @@ export function useCampusContext(onCampusChange?: (campus: Campus) => void) {
   const mapCampusPolygons = (campusPolygons: Record<string, BuildingRecord>): Building[] =>
     (Object.entries(campusPolygons) as [string, BuildingRecord][])
       .map(([id, record]) => {
-        const lookup = addressLookup.get(normalizeLabel(record.name));
-        const address = formatAddress(record) ?? lookup?.address ?? null;
-        const code = lookup?.code ?? extractCodeFromName(record.name);
-        return { id, name: record.name, address, code, polygon: record.polygon };
+        const normalizedName = normalizeLabel(record.name);
+        let lookup = addressLookup.get(normalizedName);
+
+        if (!lookup) {
+          const fuzzyMatches = addressEntries.filter(
+            (entry) =>
+              normalizedName.includes(entry.normalizedName) ||
+              entry.normalizedName.includes(normalizedName),
+          );
+          if (fuzzyMatches.length === 1) {
+            lookup = {
+              name: fuzzyMatches[0].name,
+              address: fuzzyMatches[0].address,
+              code: fuzzyMatches[0].code,
+            };
+          }
+        }
+
+        let code = lookup?.code ?? extractCodeFromName(record.name);
+        const codeLookup = code ? addressByCode.get(code.toUpperCase()) : undefined;
+        const address = formatAddress(record) ?? lookup?.address ?? codeLookup?.address ?? null;
+        const name = codeLookup?.name ?? lookup?.name ?? record.name;
+
+        return { id, name, address, code, polygon: record.polygon };
       })
       .filter((building) => building.polygon.length > 0);
 
   const sgwBuildings = useMemo<Building[]>(() => {
     return mapCampusPolygons(BUILDING_POLYGONS as Record<string, BuildingRecord>);
-  }, [addressLookup]);
+  }, [addressEntries, addressByCode, addressLookup]);
 
   const loyolaBuildings = useMemo<Building[]>(() => {
     return mapCampusPolygons(LOYOLA_BUILDING_POLYGONS as Record<string, BuildingRecord>);
-  }, [addressLookup]);
+  }, [addressEntries, addressByCode, addressLookup]);
 
   const buildings = useMemo<Building[]>(() => {
     return [...sgwBuildings, ...loyolaBuildings];
