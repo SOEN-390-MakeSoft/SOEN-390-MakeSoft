@@ -66,6 +66,7 @@ import { useIndoorNavigation } from '../hooks/useIndoorNavigation';
 import { useIndoorRoomPicker } from '../hooks/useIndoorRoomPicker';
 import {
   findBuildingAtOrNearCoordinate,
+  distanceMeters,
   getClosestCampusWithinBorderThreshold,
   polygonCentroid,
   type BuildingWithPolygon,
@@ -295,6 +296,45 @@ const POI_MARKER_Z_INDEX = 999;
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
 const FLOOR_SELECTOR_FOCUS_RADIUS_METERS = 120;
+const BUILDING_LABEL_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
+  sgw: 0.012,
+  loyola: 0.016,
+};
+const BUILDING_LABEL_DENSE_ZOOM_THRESHOLD_BY_CAMPUS: Record<Campus, number> = {
+  sgw: 0.006,
+  loyola: 0.008,
+};
+const BUILDING_LABEL_MIN_SPACING_METERS: Record<Campus, number> = {
+  sgw: 18,
+  loyola: 24,
+};
+const BUILDING_LABEL_MAX_SPACING_METERS: Record<Campus, number> = {
+  sgw: 48,
+  loyola: 58,
+};
+const BUILDING_LABEL_MIN_WIDTH = 24;
+const BUILDING_LABEL_BASE_WIDTH = 14;
+const BUILDING_LABEL_CHAR_WIDTH = 8;
+const BUILDING_LABEL_HEIGHT = 20;
+const BUILDING_LABEL_PADDING_NORMAL = 6;
+const BUILDING_LABEL_PADDING_DENSE = 3;
+
+type ScreenPoint = { x: number; y: number };
+
+function projectToScreen(
+  coordinate: LatLng,
+  region: Region,
+  width: number,
+  height: number,
+): ScreenPoint {
+  const leftLng = region.longitude - region.longitudeDelta / 2;
+  const rightLng = region.longitude + region.longitudeDelta / 2;
+  const topLat = region.latitude + region.latitudeDelta / 2;
+  const bottomLat = region.latitude - region.latitudeDelta / 2;
+  const x = ((coordinate.longitude - leftLng) / (rightLng - leftLng)) * width;
+  const y = ((topLat - coordinate.latitude) / (topLat - bottomLat)) * height;
+  return { x, y };
+}
 
 function getConflictLabel(c: LocationConflict): string {
   switch (c.type) {
@@ -342,6 +382,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const [poiSearchLocation, setPoiSearchLocation] = useState<LatLng | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const { width, height } = Dimensions.get('window');
 
   // Use custom hooks for state management
@@ -826,6 +867,7 @@ export default function MapScreen() {
    */
   const handleRegionChange = useCallback(
     (region: Region) => {
+      setMapRegion(region);
       const center = { latitude: region.latitude, longitude: region.longitude };
       const now = Date.now();
       const focusLock = floorSelectorFocusLockRef.current;
@@ -1051,6 +1093,98 @@ export default function MapScreen() {
   );
   const polygonStroke = polygonStrokeBase;
   const polygonFill = polygonFillBase;
+  const buildingLabelBackground = isColorBlind ? colourBlindAccent : brandRed;
+  const buildingLabelTextColor = '#fff';
+  const buildingLabelBorderColor = 'rgba(0,0,0,0.35)';
+
+  const labelLatitudeDelta = mapRegion?.latitudeDelta ?? DEFAULT_REGION.latitudeDelta;
+  const labelZoomThreshold = BUILDING_LABEL_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
+  const shouldShowBuildingLabels =
+    labelLatitudeDelta <= labelZoomThreshold &&
+    !indoor.isIndoorActive &&
+    !startIndoor.isIndoorActive;
+  const isDenseLabelMode =
+    labelLatitudeDelta <= BUILDING_LABEL_DENSE_ZOOM_THRESHOLD_BY_CAMPUS[activeCampus];
+  const labelSpacingMeters = useMemo(() => {
+    const minSpacing = BUILDING_LABEL_MIN_SPACING_METERS[activeCampus];
+    const maxSpacing = BUILDING_LABEL_MAX_SPACING_METERS[activeCampus];
+    const zoomRatio = Math.min(Math.max(labelLatitudeDelta / labelZoomThreshold, 0), 1);
+    return minSpacing + (maxSpacing - minSpacing) * zoomRatio;
+  }, [activeCampus, labelLatitudeDelta, labelZoomThreshold]);
+  const labelCandidates = useMemo(() => {
+    const campusBuildings = activeCampus === 'sgw' ? sgwBuildings : loyolaBuildings;
+    return campusBuildings
+      .filter((building) => building.code)
+      .map((building) => {
+        const coordinate = polygonCentroid(building.polygon);
+        return {
+          id: building.id,
+          code: building.code?.toUpperCase() ?? '',
+          coordinate,
+          screen: mapRegion ? projectToScreen(coordinate, mapRegion, width, height) : null,
+          building,
+          isSelected: building.id === selectedBuildingId,
+        };
+      });
+  }, [activeCampus, height, mapRegion, loyolaBuildings, sgwBuildings, selectedBuildingId, width]);
+  const visibleBuildingLabels = useMemo(() => {
+    if (!shouldShowBuildingLabels) return [];
+    const sorted = [...labelCandidates].sort((a, b) => {
+      if (a.isSelected && !b.isSelected) return -1;
+      if (!a.isSelected && b.isSelected) return 1;
+      return a.code.localeCompare(b.code);
+    });
+    const chosen: typeof sorted = [];
+
+    if (mapRegion) {
+      const padding = isDenseLabelMode
+        ? BUILDING_LABEL_PADDING_DENSE
+        : BUILDING_LABEL_PADDING_NORMAL;
+      const rects: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+
+      for (const candidate of sorted) {
+        if (!candidate.screen) continue;
+        const labelWidth = Math.max(
+          BUILDING_LABEL_MIN_WIDTH,
+          BUILDING_LABEL_BASE_WIDTH + BUILDING_LABEL_CHAR_WIDTH * candidate.code.length,
+        );
+        const halfWidth = labelWidth / 2 + padding;
+        const halfHeight = BUILDING_LABEL_HEIGHT / 2 + padding;
+        const rect = {
+          left: candidate.screen.x - halfWidth,
+          right: candidate.screen.x + halfWidth,
+          top: candidate.screen.y - halfHeight,
+          bottom: candidate.screen.y + halfHeight,
+        };
+
+        const overlaps = rects.some(
+          (r) =>
+            !(
+              rect.right < r.left ||
+              rect.left > r.right ||
+              rect.bottom < r.top ||
+              rect.top > r.bottom
+            ),
+        );
+        if (!overlaps) {
+          rects.push(rect);
+          chosen.push(candidate);
+        }
+      }
+      return chosen;
+    }
+
+    for (const candidate of sorted) {
+      const tooClose = chosen.some(
+        (existing) =>
+          distanceMeters(existing.coordinate, candidate.coordinate) < labelSpacingMeters,
+      );
+      if (!tooClose) {
+        chosen.push(candidate);
+      }
+    }
+    return chosen;
+  }, [isDenseLabelMode, labelCandidates, labelSpacingMeters, mapRegion, shouldShowBuildingLabels]);
 
   /**
    * Handle quick pick building selection
@@ -1999,6 +2133,30 @@ export default function MapScreen() {
             </React.Fragment>
           );
         })}
+        {visibleBuildingLabels.map((label) => (
+          <Marker
+            key={`building-label-${label.id}`}
+            coordinate={label.coordinate}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={30}
+            tappable={false}
+          >
+            <View
+              style={[
+                styles.buildingLabel,
+                { backgroundColor: buildingLabelBackground, borderColor: buildingLabelBorderColor },
+                label.isSelected && styles.buildingLabelSelected,
+              ]}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`Building ${label.code}`}
+            >
+              <Text style={[styles.buildingLabelText, { color: buildingLabelTextColor }]}>
+                {label.code}
+              </Text>
+            </View>
+          </Marker>
+        ))}
         {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
         {(startIndoor.isIndoorActive || startIndoor.indoorRoute) &&
           startIndoor.activeBuildingCode !== indoor.activeBuildingCode && (
@@ -2530,6 +2688,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#999',
     fontWeight: '500',
+  },
+  buildingLabel: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    minWidth: 24,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  buildingLabelSelected: {
+    borderWidth: 2,
+  },
+  buildingLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    includeFontPadding: false,
   },
   indoorCategoryChips: {
     position: 'absolute',
