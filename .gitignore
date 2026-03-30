@@ -17,6 +17,7 @@ mobile-app/android/
 
 # Native / mobile
 .kotlin/
+mobile-app/.gradle-user-home/
 *.orig.*
 *.jks
 *.p8

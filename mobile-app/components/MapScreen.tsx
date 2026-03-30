@@ -74,6 +74,12 @@ import {
 } from '../utils/mapUtils';
 import { resolveIndoorCategorySelection } from '../utils/indoorCategoryFilter';
 import {
+  BUILDING_SELECTION_REGION_DELTA,
+  INDOOR_DISCOVERY_FOCUS_DELTA,
+  INDOOR_DISCOVERY_ZOOM_THRESHOLD,
+  isIndoorZoomTooLow,
+} from '../utils/indoorDiscovery';
+import {
   normalizeLabel,
   parseLocationString,
   resolveEventLocation,
@@ -351,8 +357,6 @@ function getConflictLabel(c: LocationConflict): string {
 
 const NORMALIZED_YOUR_LOCATION = normalizeLabel('Your location');
 const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
-// When latitudeDelta drops below this value, auto-show indoor floor plan (≈ zoom 19)
-const INDOOR_ZOOM_THRESHOLD = 0.002;
 const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
 const POI_MARKER_ICONS: Record<string, string> = {
@@ -393,13 +397,17 @@ export default function MapScreen() {
     remoteBuilding,
     isLoading,
     errorMessage,
-    handleSelectBuilding,
+    handleSelectBuilding: selectBuilding,
     handleCloseCard,
   } = useSelectedBuilding(buildings, mapRef);
+  const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
   const [buildingNotFoundToast, setBuildingNotFoundToast] = useState(false);
   const [isRoutePreviewOpen, setIsRoutePreviewOpen] = useState(false);
   const [isDirectionsModeOpen, setIsDirectionsModeOpen] = useState(false);
   const [previewStepIndex, setPreviewStepIndex] = useState(0);
+  const [currentLatitudeDelta, setCurrentLatitudeDelta] = useState(DEFAULT_REGION.latitudeDelta);
+  const [hintedIndoorBuildingId, setHintedIndoorBuildingId] = useState<string | null>(null);
+  const [hasDiscoveredIndoorZoomHint, setHasDiscoveredIndoorZoomHint] = useState(false);
 
   // Indoor Location Detection Modal State
   const [showFloorSelectModal, setShowFloorSelectModal] = useState(false);
@@ -433,6 +441,22 @@ export default function MapScreen() {
     const t = setTimeout(() => setBuildingNotFoundToast(false), 2500);
     return () => clearTimeout(t);
   }, [buildingNotFoundToast]);
+
+  const handleSelectBuilding = useCallback(
+    (id: string) => {
+      selectBuilding(id);
+
+      const building = buildings.find((item) => item.id === id);
+      if (!building?.code || !hasIndoorMap(building.code) || hasDiscoveredIndoorZoomHint) {
+        setHintedIndoorBuildingId(null);
+        return;
+      }
+
+      setCurrentLatitudeDelta(BUILDING_SELECTION_REGION_DELTA);
+      setHintedIndoorBuildingId(id);
+    },
+    [buildings, hasDiscoveredIndoorZoomHint, selectBuilding],
+  );
 
   const {
     isNavigationOpen,
@@ -491,11 +515,6 @@ export default function MapScreen() {
     handleSelectSearchResult,
   } = useSearch(buildings, (building) => {
     handleSelectBuilding(building.id);
-    const centroid = polygonCentroid(building.polygon);
-    mapRef.current?.animateToRegion(
-      { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      MAP_ANIMATION_DURATION_MS,
-    );
   });
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
@@ -867,6 +886,7 @@ export default function MapScreen() {
    */
   const handleRegionChange = useCallback(
     (region: Region) => {
+      setCurrentLatitudeDelta(region.latitudeDelta);
       setMapRegion(region);
       const center = { latitude: region.latitude, longitude: region.longitude };
       const now = Date.now();
@@ -881,6 +901,23 @@ export default function MapScreen() {
         findBuildingAtCoordinate(center)?.code ??
         null;
 
+      const hintedIndoorBuildingCode =
+        hintedIndoorBuildingId &&
+        selectedBuilding?.id === hintedIndoorBuildingId &&
+        selectedBuilding.code &&
+        hasIndoorMap(selectedBuilding.code)
+          ? selectedBuilding.code.toUpperCase()
+          : null;
+
+      if (
+        hintedIndoorBuildingCode &&
+        centeredIndoorBuilding?.toUpperCase() === hintedIndoorBuildingCode &&
+        region.latitudeDelta < INDOOR_DISCOVERY_ZOOM_THRESHOLD
+      ) {
+        setHasDiscoveredIndoorZoomHint(true);
+        setHintedIndoorBuildingId(null);
+      }
+
       if (
         !isFocusLocked &&
         centeredIndoorBuilding &&
@@ -890,7 +927,7 @@ export default function MapScreen() {
         setFocusedIndoorBuildingCode(centeredIndoorBuilding);
       }
 
-      if (region.latitudeDelta < INDOOR_ZOOM_THRESHOLD) {
+      if (region.latitudeDelta < INDOOR_DISCOVERY_ZOOM_THRESHOLD) {
         // Zoomed in — check if a building with indoor data is under the camera centre
         const meta = findBuildingAtCoordinate(center);
         if (
@@ -908,8 +945,15 @@ export default function MapScreen() {
         lastIndoorAutoRef.current = null;
       }
     },
-    [indoor, loyolaBuildings, sgwBuildings, startIndoor],
+    [hintedIndoorBuildingId, indoor, loyolaBuildings, selectedBuilding, sgwBuildings, startIndoor],
   );
+
+  useEffect(() => {
+    if (!indoor.isIndoorActive) return;
+
+    setHasDiscoveredIndoorZoomHint(true);
+    setHintedIndoorBuildingId(null);
+  }, [indoor.isIndoorActive]);
 
   const theme = useTheme();
   const { isLocating, goToUserLocation } = useUserLocation(
@@ -1060,8 +1104,31 @@ export default function MapScreen() {
     resolveNextClassIndoorRoomRef,
   ]);
 
-  // Get selected building for info card
-  const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId) ?? null;
+  const showIndoorDiscoveryHint =
+    !!selectedBuilding &&
+    !!selectedBuilding.code &&
+    hasIndoorMap(selectedBuilding.code) &&
+    !indoor.isIndoorActive &&
+    !isNavigationOpen &&
+    !isMenuOpen &&
+    !isSearchFocused &&
+    !hasDiscoveredIndoorZoomHint &&
+    hintedIndoorBuildingId === selectedBuilding.id &&
+    isIndoorZoomTooLow(currentLatitudeDelta);
+
+  const handleIndoorDiscoveryHintPress = useCallback(() => {
+    if (!selectedBuilding) return;
+
+    const centroid = polygonCentroid(selectedBuilding.polygon);
+    mapRef.current?.animateToRegion(
+      {
+        ...centroid,
+        latitudeDelta: INDOOR_DISCOVERY_FOCUS_DELTA,
+        longitudeDelta: INDOOR_DISCOVERY_FOCUS_DELTA,
+      },
+      MAP_ANIMATION_DURATION_MS,
+    );
+  }, [selectedBuilding]);
 
   // Auto-zoom camera to fit the route polyline
   useEffect(() => {
@@ -1249,11 +1316,6 @@ export default function MapScreen() {
       buildings.find((building) => building.code?.toUpperCase() === pick.code);
     if (!match) return;
     handleSelectBuilding(match.id);
-    const centroid = polygonCentroid(match.polygon);
-    mapRef.current?.animateToRegion(
-      { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
-      MAP_ANIMATION_DURATION_MS,
-    );
   };
 
   /**
@@ -2507,6 +2569,24 @@ export default function MapScreen() {
         </View>
       ) : null}
 
+      {showIndoorDiscoveryHint ? (
+        <Pressable
+          style={[
+            styles.indoorDiscoveryHint,
+            {
+              top: menuTop + (Platform.OS === 'ios' ? 154 : 136),
+            },
+          ]}
+          testID="indoor-discovery-hint"
+          accessibilityRole="button"
+          accessibilityLabel="Zoom in to see rooms"
+          onPress={handleIndoorDiscoveryHintPress}
+        >
+          <MaterialIcons name="zoom-in" size={18} color="#fff" />
+          <Text style={styles.indoorDiscoveryHintText}>Zoom in to see rooms</Text>
+        </Pressable>
+      ) : null}
+
       {/* Google Calendar Modal */}
       <CalendarModal
         visible={calendarModalVisible}
@@ -2646,6 +2726,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+  indoorDiscoveryHint: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+    backgroundColor: 'rgba(26, 26, 31, 0.92)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 5,
+    zIndex: 20,
+  },
+  indoorDiscoveryHintText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   poiInfoBubble: {
     position: 'absolute',

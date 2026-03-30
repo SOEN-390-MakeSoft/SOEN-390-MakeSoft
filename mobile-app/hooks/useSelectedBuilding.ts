@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import MapView from 'react-native-maps';
 import { BuildingResponse, getBuildingById } from '../services/api';
 import { polygonCentroid } from '../utils/mapUtils';
+import { BUILDING_SELECTION_REGION_DELTA } from '../utils/indoorDiscovery';
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -84,7 +85,11 @@ export function useSelectedBuilding(
     if (building) {
       const centroid = polygonCentroid(building.polygon);
       mapRef.current?.animateToRegion(
-        { ...centroid, latitudeDelta: 0.0032, longitudeDelta: 0.0032 },
+        {
+          ...centroid,
+          latitudeDelta: BUILDING_SELECTION_REGION_DELTA,
+          longitudeDelta: BUILDING_SELECTION_REGION_DELTA,
+        },
         500,
       );
     }

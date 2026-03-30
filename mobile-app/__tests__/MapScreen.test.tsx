@@ -164,6 +164,25 @@ jest.mock('../data/building-addresses', () => ({
   ],
 }));
 
+const H_BUILDING_SEARCH_RESULT = {
+  id: 'H',
+  name: 'Henry F Hall Building',
+  code: 'H',
+  polygon: [
+    { latitude: 45.497, longitude: -73.579 },
+    { latitude: 45.497, longitude: -73.578 },
+    { latitude: 45.496, longitude: -73.578 },
+    { latitude: 45.496, longitude: -73.579 },
+  ],
+};
+
+const H_INDOOR_REGION = {
+  latitude: 45.49704433962407,
+  longitude: -73.5786497963592,
+  latitudeDelta: 0.0015,
+  longitudeDelta: 0.0015,
+};
+
 // Mock Alert.alert after import
 const mockAlertFn = jest.fn();
 Alert.alert = mockAlertFn;
@@ -332,6 +351,82 @@ describe('MapScreen', () => {
       ],
     });
     expect(mockAnimateToRegion).toHaveBeenCalled();
+  });
+
+  it('shows an indoor discovery hint when an indoor-enabled building is selected at low zoom', () => {
+    const { getByTestId, getByText } = renderWithProviders(<MapScreen />);
+
+    act(() => {
+      lastSearchSelect?.(H_BUILDING_SEARCH_RESULT as any);
+    });
+
+    expect(getByTestId('indoor-discovery-hint')).toBeTruthy();
+    expect(getByText('Zoom in to see rooms')).toBeTruthy();
+  });
+
+  it('zooms closer when the indoor discovery hint is pressed', () => {
+    const { getByTestId } = renderWithProviders(<MapScreen />);
+
+    act(() => {
+      lastSearchSelect?.(H_BUILDING_SEARCH_RESULT as any);
+    });
+
+    fireEvent.press(getByTestId('indoor-discovery-hint'));
+
+    expect(mockAnimateToRegion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        latitudeDelta: 0.0016,
+        longitudeDelta: 0.0016,
+      }),
+      expect.any(Number),
+    );
+  });
+
+  it('dismisses the indoor discovery hint after zooming in and does not show it again', async () => {
+    const { getByLabelText, getByTestId, queryByTestId } = renderWithProviders(<MapScreen />);
+
+    act(() => {
+      lastSearchSelect?.(H_BUILDING_SEARCH_RESULT as any);
+    });
+
+    expect(getByTestId('indoor-discovery-hint')).toBeTruthy();
+
+    act(() => {
+      getByTestId('campus-map').props.onRegionChangeComplete(H_INDOOR_REGION);
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId('indoor-discovery-hint')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(getByTestId('indoor-chip-washrooms')).toBeTruthy();
+    });
+
+    fireEvent.press(getByLabelText('Close building details'));
+
+    act(() => {
+      lastSearchSelect?.(H_BUILDING_SEARCH_RESULT as any);
+    });
+
+    expect(queryByTestId('indoor-discovery-hint')).toBeNull();
+  });
+
+  it('does not show the discovery hint after indoor details were already activated once', async () => {
+    const { getByTestId, queryByTestId } = renderWithProviders(<MapScreen />);
+
+    act(() => {
+      getByTestId('campus-map').props.onRegionChangeComplete(H_INDOOR_REGION);
+    });
+
+    await waitFor(() => {
+      expect(getByTestId('indoor-chip-washrooms')).toBeTruthy();
+    });
+
+    act(() => {
+      lastSearchSelect?.(H_BUILDING_SEARCH_RESULT as any);
+    });
+
+    expect(queryByTestId('indoor-discovery-hint')).toBeNull();
   });
 
   it('uses colour blind theme colors when enabled', () => {
