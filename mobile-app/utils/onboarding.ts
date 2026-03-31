@@ -13,8 +13,9 @@ export async function hasCompletedOnboarding(): Promise<boolean> {
 export async function markOnboardingCompleted(): Promise<void> {
   try {
     await SecureStore.setItemAsync(ONBOARDING_STORE_KEY, 'true');
-  } catch {
+  } catch (error) {
     // Navigation should still continue even if persistence is temporarily unavailable.
+    console.warn('Failed to persist onboarding completion state', error);
   }
 }
 

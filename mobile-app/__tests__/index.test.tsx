@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import WelcomeScreen from '../app/index';
 import * as SecureStore from 'expo-secure-store';
+import { ONBOARDING_STORE_KEY } from '../utils/onboarding';
 
 /**
  * Mock expo-router to capture navigation calls.
@@ -20,6 +21,7 @@ jest.mock('expo-secure-store', () => ({
 describe('WelcomeScreen', () => {
   const mockGetItemAsync = jest.mocked(SecureStore.getItemAsync);
   const mockSetItemAsync = jest.mocked(SecureStore.setItemAsync);
+  let warnSpy: jest.SpiedFunction<typeof console.warn>;
 
   /**
    * Reset mock function calls before each test to ensure test isolation.
@@ -30,6 +32,11 @@ describe('WelcomeScreen', () => {
     mockSetItemAsync.mockReset();
     mockGetItemAsync.mockResolvedValue(null);
     mockSetItemAsync.mockResolvedValue();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
   });
 
   /**
@@ -57,7 +64,7 @@ describe('WelcomeScreen', () => {
     fireEvent.press(getByText('Skip'));
 
     await waitFor(() => {
-      expect(mockSetItemAsync).toHaveBeenCalledWith('has_seen_onboarding_v1', 'true');
+      expect(mockSetItemAsync).toHaveBeenCalledWith(ONBOARDING_STORE_KEY, 'true');
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/Map');
     });
   });
@@ -85,9 +92,37 @@ describe('WelcomeScreen', () => {
     fireEvent.press(getByText('Start Exploring'));
 
     await waitFor(() => {
-      expect(mockSetItemAsync).toHaveBeenCalledWith('has_seen_onboarding_v1', 'true');
+      expect(mockSetItemAsync).toHaveBeenCalledWith(ONBOARDING_STORE_KEY, 'true');
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/Map');
     });
+  });
+
+  it('does not advance past the last slide on rapid next presses', async () => {
+    const { getByTestId, getByText } = render(<WelcomeScreen />);
+
+    await waitFor(() => expect(getByText('Navigation & directions')).toBeTruthy());
+
+    fireEvent.press(getByText('Next'));
+    await waitFor(() => expect(getByText('Campus switching')).toBeTruthy());
+
+    fireEvent.press(getByText('Next'));
+    await waitFor(() => expect(getByText('Indoor maps')).toBeTruthy());
+
+    fireEvent.press(getByText('Next'));
+    await waitFor(() => expect(getByText('POIs')).toBeTruthy());
+
+    const nextButton = getByTestId('onboarding-next');
+    act(() => {
+      fireEvent(nextButton, 'press');
+      fireEvent(nextButton, 'press');
+    });
+
+    await waitFor(() => {
+      expect(getByText('Calendar integration')).toBeTruthy();
+      expect(getByText('Start Exploring')).toBeTruthy();
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   /**
@@ -99,6 +134,21 @@ describe('WelcomeScreen', () => {
     render(<WelcomeScreen />);
 
     await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/Map');
+    });
+  });
+
+  it('continues navigation and warns when onboarding persistence fails', async () => {
+    const error = new Error('SecureStore unavailable');
+    mockSetItemAsync.mockRejectedValue(error);
+
+    const { getByText } = render(<WelcomeScreen />);
+
+    await waitFor(() => expect(getByText('Skip')).toBeTruthy());
+    fireEvent.press(getByText('Skip'));
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith('Failed to persist onboarding completion state', error);
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/Map');
     });
   });

@@ -109,7 +109,7 @@ export default function WelcomeScreen() {
       return;
     }
 
-    setCurrentSlide((previous) => previous + 1);
+    setCurrentSlide((previous) => Math.min(previous + 1, ONBOARDING_SLIDES.length - 1));
   };
 
   if (isLoading) {
