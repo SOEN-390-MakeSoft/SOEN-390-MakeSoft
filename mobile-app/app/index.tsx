@@ -1,6 +1,6 @@
 import { hasCompletedOnboarding, markOnboardingCompleted } from '@/utils/onboarding';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -90,7 +90,7 @@ export default function WelcomeScreen() {
     };
   }, [router]);
 
-  const activeSlide = useMemo(() => ONBOARDING_SLIDES[currentSlide], [currentSlide]);
+  const activeSlide = ONBOARDING_SLIDES[currentSlide];
   const isLastSlide = currentSlide === ONBOARDING_SLIDES.length - 1;
 
   const handleFinish = async () => {
