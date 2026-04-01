@@ -135,6 +135,72 @@ describe('useOutdoorPOI', () => {
     );
   });
 
+  it('limits concurrent category fetches when many outdoor filters are selected', async () => {
+    const selectedCategories: Array<'restaurant' | 'cafe' | 'pharmacy' | 'gym'> = [
+      'restaurant',
+      'cafe',
+      'pharmacy',
+      'gym',
+    ];
+    const pendingResolves: Array<(value: ReturnType<typeof makePOI>[]) => void> = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    mockIsSupportedPOICategory.mockReturnValue(null);
+    mockFetchNearbyPOIs.mockImplementation((category: string) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+
+      return new Promise((resolve) => {
+        pendingResolves.push((value) => {
+          inFlight -= 1;
+          resolve(value);
+        });
+      });
+    });
+
+    const { result } = renderHook(() =>
+      useOutdoorPOI({
+        debouncedQuery: '',
+        userLocation: null,
+        activeCampus: 'sgw',
+        selectedCategories,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledTimes(3);
+    });
+
+    expect(maxInFlight).toBe(3);
+
+    await act(async () => {
+      pendingResolves[0]([makePOI('p1', 'Restaurant A')]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockFetchNearbyPOIs).toHaveBeenCalledTimes(4);
+    });
+
+    expect(maxInFlight).toBe(3);
+
+    await act(async () => {
+      pendingResolves[1]([makePOI('p2', 'Cafe A')]);
+      pendingResolves[2]([makePOI('p3', 'Pharmacy A')]);
+      pendingResolves[3]([makePOI('p4', 'Gym A')]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.outdoorPOIResults).toEqual([
+        makePOI('p1', 'Restaurant A'),
+        makePOI('p2', 'Cafe A'),
+        makePOI('p3', 'Pharmacy A'),
+        makePOI('p4', 'Gym A'),
+      ]);
+    });
+  });
+
   it('clears results when query changes to non-category', async () => {
     const pois = [makePOI('p1', 'Cafe A')];
     mockIsSupportedPOICategory.mockReturnValue('cafe');

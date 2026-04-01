@@ -15,6 +15,7 @@ function formatGeocodedAddress(geo: Location.LocationGeocodedAddress): string {
 }
 
 const POI_SEARCH_RADIUS_METERS = 1000;
+const MAX_CONCURRENT_POI_REQUESTS = 3;
 const EMPTY_SELECTED_CATEGORIES: OutdoorPOICategory[] = [];
 
 interface UseOutdoorPOIOptions {
@@ -22,6 +23,36 @@ interface UseOutdoorPOIOptions {
   userLocation: LatLng | null;
   activeCampus: 'sgw' | 'loyola';
   selectedCategories?: OutdoorPOICategory[];
+}
+
+async function fetchPOIsWithConcurrencyLimit(
+  categories: OutdoorPOICategory[],
+  center: LatLng,
+  signal: AbortSignal,
+): Promise<OutdoorPOI[][]> {
+  const results: OutdoorPOI[][] = new Array(categories.length);
+  let nextIndex = 0;
+
+  const runWorker = async () => {
+    while (!signal.aborted) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      if (currentIndex >= categories.length) return;
+
+      results[currentIndex] = await fetchNearbyPOIs(
+        categories[currentIndex],
+        center,
+        POI_SEARCH_RADIUS_METERS,
+        signal,
+      );
+    }
+  };
+
+  const workerCount = Math.min(MAX_CONCURRENT_POI_REQUESTS, categories.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+
+  return results;
 }
 
 export function useOutdoorPOI({
@@ -67,10 +98,10 @@ export function useOutdoorPOI({
         const center = await resolveCenter();
         if (controller.signal.aborted) return;
 
-        const resultsByCategory = await Promise.all(
-          activeCategories.map((category) =>
-            fetchNearbyPOIs(category, center, POI_SEARCH_RADIUS_METERS, controller.signal),
-          ),
+        const resultsByCategory = await fetchPOIsWithConcurrencyLimit(
+          activeCategories,
+          center,
+          controller.signal,
         );
         if (controller.signal.aborted) return;
 
