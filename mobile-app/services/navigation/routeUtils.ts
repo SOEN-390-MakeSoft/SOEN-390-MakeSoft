@@ -134,6 +134,10 @@ export function buildModeRouteFromGoogleLeg(
 }
 
 export function calculateBounds(coords: LatLng[]) {
+  if (coords.length === 0) {
+    return { minLat: 0, maxLat: 0, minLng: 0, maxLng: 0 };
+  }
+
   let minLat = coords[0].latitude;
   let maxLat = coords[0].latitude;
   let minLng = coords[0].longitude;
