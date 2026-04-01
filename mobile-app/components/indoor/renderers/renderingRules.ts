@@ -1,5 +1,13 @@
 import type { IndoorRoom, IndoorRoute, LatLng } from '../../../services/indoor/types';
 
+function compareLevelTokens(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+export function toNormalizedLevelKey(levels: readonly string[]): string {
+  return [...new Set(levels)].sort(compareLevelTokens).join('|');
+}
+
 export function getRouteSegmentsOnLevel(route: IndoorRoute | null, activeLevel: string): LatLng[] {
   if (!route) return [];
 

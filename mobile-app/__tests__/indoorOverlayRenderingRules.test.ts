@@ -15,6 +15,7 @@ import {
   computeLevelCentroid,
   getFilteredRooms,
   getRouteSegmentsOnLevel,
+  toNormalizedLevelKey,
 } from '../components/indoor/renderers/renderingRules';
 
 function makeSquare(center: LatLng, delta = 0.0001): LatLng[] {
@@ -216,5 +217,12 @@ describe('indoor overlay rendering rules', () => {
     });
 
     expect(computeLevelCentroid([])).toBeNull();
+  });
+
+  it('normalizes level sets so order does not affect equality', () => {
+    expect(toNormalizedLevelKey(['2', '1', 'B1', '2'])).toBe(
+      toNormalizedLevelKey(['B1', '1', '2']),
+    );
+    expect(toNormalizedLevelKey(['1', '2'])).toBe('1|2');
   });
 });

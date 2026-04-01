@@ -6,6 +6,7 @@ import type { IndoorElevator } from '../../../services/indoor/types';
 import type { FeatureRenderer, IndoorFeatureRendererParams } from './FeatureRenderer';
 import { calculatePolygonCentroid } from './geometry';
 import { IconMarker, indoorMarkerStyles } from './markers';
+import { toNormalizedLevelKey } from './renderingRules';
 
 export class VerticalTransportFeatureRenderer implements FeatureRenderer {
   readonly key = 'verticalTransport' as const;
@@ -59,7 +60,8 @@ export class VerticalTransportFeatureRenderer implements FeatureRenderer {
       for (const group of groupedElevators) {
         const leader = group[0];
         const sameRef = elevator.ref && leader.ref && elevator.ref === leader.ref;
-        const sameLevels = elevator.levels.join(',') === leader.levels.join(',');
+        const sameLevels =
+          toNormalizedLevelKey(elevator.levels) === toNormalizedLevelKey(leader.levels);
         const distanceSquared =
           Math.pow(elevator.position.latitude - leader.position.latitude, 2) +
           Math.pow(elevator.position.longitude - leader.position.longitude, 2);
