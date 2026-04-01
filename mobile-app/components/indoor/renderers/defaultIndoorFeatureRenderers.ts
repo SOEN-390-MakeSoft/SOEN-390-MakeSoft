@@ -23,8 +23,6 @@ function createDefaultFactory(): FeatureRendererFactory {
   return factory;
 }
 
-export const indoorFeatureRendererFactory = createDefaultFactory();
-
 export function createDefaultIndoorFeatureRenderers(): FeatureRenderer[] {
-  return indoorFeatureRendererFactory.createMany(DEFAULT_INDOOR_RENDERER_ORDER);
+  return createDefaultFactory().createMany(DEFAULT_INDOOR_RENDERER_ORDER);
 }
