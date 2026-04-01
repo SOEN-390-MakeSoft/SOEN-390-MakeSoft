@@ -98,4 +98,28 @@ describe('DefaultShuttleRouteStrategy', () => {
       }),
     ).rejects.toThrow('Failed to fetch walking shuttle segment: Directions HTTP 503');
   });
+
+  it('rejects when the initial directions request fails at network level', async () => {
+    const mockedGetNextShuttles = getNextShuttles as jest.MockedFunction<typeof getNextShuttles>;
+    mockedGetNextShuttles.mockResolvedValue({
+      threeNextShuttles: ['2026-03-29T10:30:00.000Z', null, null],
+      tripDuration: 30,
+    });
+
+    const fetchImpl = jest.fn().mockRejectedValue(new Error('Network unavailable'));
+    const strategy = new DefaultShuttleRouteStrategy();
+
+    await expect(
+      strategy.execute({
+        origin: { latitude: 45.4972, longitude: -73.5789 },
+        destination: { latitude: 45.4584, longitude: -73.6387 },
+        currentTime: new Date('2026-03-29T10:00:00.000Z'),
+        googleMapsApiKey: 'test-key',
+        fetchImpl,
+      }),
+    ).rejects.toThrow('Failed to fetch walking shuttle segment: Network unavailable');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(mockedGetNextShuttles).not.toHaveBeenCalled();
+  });
 });
