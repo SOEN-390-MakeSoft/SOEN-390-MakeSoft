@@ -1,14 +1,14 @@
 import React from 'react';
-import { Image } from 'react-native';
+import { Image, type ImageSourcePropType } from 'react-native';
 import { Polygon } from 'react-native-maps';
 import type { IndoorPOI } from '../../../services/indoor/types';
 import type { FeatureRenderer, IndoorFeatureRendererParams } from './FeatureRenderer';
 import { PoiMarker, indoorMarkerStyles } from './markers';
 
-function getPoiImageSource(imagePath?: string) {
+function getPoiImageSource(imagePath?: string): ImageSourcePropType | null {
   if (!imagePath) return null;
 
-  const imageMap: Record<string, unknown> = {
+  const imageMap: Record<string, ImageSourcePropType> = {
     'assets/images/women_bathroom.png': require('../../../assets/images/women_bathroom.png'),
     'assets/images/men_bathroom.png': require('../../../assets/images/men_bathroom.png'),
     'assets/images/unisex_bathroom.png': require('../../../assets/images/unisex_bathroom.png'),
