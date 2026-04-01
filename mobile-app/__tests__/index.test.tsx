@@ -138,6 +138,17 @@ describe('WelcomeScreen', () => {
     });
   });
 
+  it('exposes an accessible loading state while onboarding status is resolving', () => {
+    mockGetItemAsync.mockImplementation(() => new Promise(() => {}));
+
+    const { getByHintText, getByLabelText, getByRole, getByTestId } = render(<WelcomeScreen />);
+
+    expect(getByTestId('onboarding-loading')).toBeTruthy();
+    expect(getByRole('progressbar')).toBeTruthy();
+    expect(getByLabelText('Loading onboarding')).toBeTruthy();
+    expect(getByHintText('Please wait while the onboarding status is being checked.')).toBeTruthy();
+  });
+
   it('continues navigation and warns when onboarding persistence fails', async () => {
     const error = new Error('SecureStore unavailable');
     mockSetItemAsync.mockRejectedValue(error);

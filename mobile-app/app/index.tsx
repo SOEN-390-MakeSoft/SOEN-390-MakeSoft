@@ -114,8 +114,20 @@ export default function WelcomeScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer} testID="onboarding-loading">
-        <ActivityIndicator size="large" color={BRAND_COLOR} />
+      <View
+        style={styles.loadingContainer}
+        testID="onboarding-loading"
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading onboarding"
+        accessibilityHint="Please wait while the onboarding status is being checked."
+      >
+        <ActivityIndicator
+          size="large"
+          color={BRAND_COLOR}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
       </View>
     );
   }
