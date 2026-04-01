@@ -59,28 +59,7 @@ export function decodePolyline(encoded: string): LatLng[] {
 }
 
 export function stripHtmlInstructions(value: string): string {
-  if (value.length === 0) return value;
-
-  let inTag = false;
-  let output = '';
-
-  for (const char of value) {
-    if (char === '<') {
-      inTag = true;
-      continue;
-    }
-
-    if (char === '>') {
-      inTag = false;
-      continue;
-    }
-
-    if (!inTag) {
-      output += char;
-    }
-  }
-
-  return output;
+  return value.replaceAll(/<[^>]+>/g, '');
 }
 
 function resolveFocusCoordinate(step: GoogleLegStep): LatLng | undefined {
