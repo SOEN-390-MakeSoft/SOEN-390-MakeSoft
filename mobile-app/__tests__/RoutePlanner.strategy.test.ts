@@ -105,4 +105,19 @@ describe('RoutePlanner', () => {
     expect(result.tunnelWalking?.viaText).toBe('Tunnel walk');
     expect(result.preferredWalkingVariant).toBe('tunnel');
   });
+
+  it('returns partial results when driving strategy fails', async () => {
+    const planner = new RoutePlanner([
+      new ThrowingStrategy('driving'),
+      new FakeStrategy('outdoorWalking', makeRoute(540, 'Outdoor walk')),
+      new FakeStrategy('tunnelWalking', makeRoute(600, 'Tunnel walk')),
+    ]);
+
+    const result = await planner.plan(baseContext);
+
+    expect(result.driving).toBeNull();
+    expect(result.outdoorWalking?.viaText).toBe('Outdoor walk');
+    expect(result.tunnelWalking?.viaText).toBe('Tunnel walk');
+    expect(result.preferredWalkingVariant).toBe('outdoor');
+  });
 });
