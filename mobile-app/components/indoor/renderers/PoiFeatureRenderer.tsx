@@ -176,13 +176,7 @@ export class PoiFeatureRenderer implements FeatureRenderer {
           const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
           const testID = `poi-${poi.amenity}-${poi.id}`;
 
-          return renderPoiFeature(
-            poi,
-            isHighlighted,
-            isColorBlind,
-            onPoiPress ? (targetPoi) => onPoiPress(targetPoi) : undefined,
-            testID,
-          );
+          return renderPoiFeature(poi, isHighlighted, isColorBlind, onPoiPress, testID);
         })}
       </>
     );
