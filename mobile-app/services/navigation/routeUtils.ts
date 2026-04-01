@@ -58,8 +58,41 @@ export function decodePolyline(encoded: string): LatLng[] {
   return points;
 }
 
+/**
+ * Removes HTML-like tags using a linear scan instead of regex.
+ *
+ * Algorithm:
+ * 1) Search for the next '<' from the current cursor.
+ * 2) Append plain text before '<' to the output.
+ * 3) Find the matching '>' and skip the whole tag.
+ * 4) Continue scanning from the first character after '>'.
+ *
+ * If no '<' is found, append the remaining tail and finish.
+ * If a tag is unterminated (missing '>'), stop and return what was safely collected.
+ *
+ * This keeps runtime predictable and avoids regex backtracking risks.
+ */
 export function stripHtmlInstructions(value: string): string {
-  return value.replaceAll(/<[^>]+>/g, '');
+  if (value.length === 0) return value;
+
+  let output = '';
+  let cursor = 0;
+
+  while (cursor < value.length) {
+    const open = value.indexOf('<', cursor);
+    if (open === -1) {
+      output += value.slice(cursor);
+      break;
+    }
+
+    output += value.slice(cursor, open);
+
+    const close = value.indexOf('>', open + 1);
+    if (close === -1) break;
+    cursor = close + 1;
+  }
+
+  return output;
 }
 
 function resolveFocusCoordinate(step: GoogleLegStep): LatLng | undefined {
