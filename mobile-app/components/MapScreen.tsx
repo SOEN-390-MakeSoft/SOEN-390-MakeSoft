@@ -1579,7 +1579,6 @@ export default function MapScreen() {
       ) {
         setPendingDestinationRef(nextClassPreview.indoorRoomRef);
         setPendingDestinationBuildingCode(destinationBuildingCode);
-        navigateToIndoorRoom(nextClassPreview.indoorRoomRef);
       } else {
         setPendingDestinationRef(null);
         setPendingDestinationBuildingCode(null);
@@ -1600,12 +1599,29 @@ export default function MapScreen() {
       'Unable to open directions',
       `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
     );
+  }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return;
+    if (!pendingDestinationRef || !pendingDestinationBuildingCode) return;
+    if (!hasIndoorMap(pendingDestinationBuildingCode)) return;
+    if (
+      indoor.destinationRoom?.ref === pendingDestinationRef &&
+      indoor.activeBuildingCode === pendingDestinationBuildingCode &&
+      indoor.indoorRoute
+    ) {
+      return;
+    }
+
+    navigateToIndoorRoom(pendingDestinationRef);
   }, [
-    activeCampus,
-    handleSelectCampus,
+    indoor.activeBuildingCode,
+    indoor.destinationRoom,
+    indoor.indoorRoute,
+    isNavigationOpen,
     navigateToIndoorRoom,
-    nextClassPreview,
-    openNavigationForResolvedDestination,
+    pendingDestinationBuildingCode,
+    pendingDestinationRef,
   ]);
 
   const handleTransportModeChange = useCallback(

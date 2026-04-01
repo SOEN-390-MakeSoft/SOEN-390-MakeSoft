@@ -36,8 +36,9 @@ export function useOutdoorPOI({
 
   useEffect(() => {
     const queryCategory = isSupportedPOICategory(debouncedQuery);
+    const fallbackCategories = queryCategory ? [queryCategory] : [];
     const activeCategories =
-      selectedCategories.length > 0 ? selectedCategories : queryCategory ? [queryCategory] : [];
+      selectedCategories.length > 0 ? selectedCategories : fallbackCategories;
 
     if (activeCategories.length === 0) {
       setOutdoorPOIResults([]);

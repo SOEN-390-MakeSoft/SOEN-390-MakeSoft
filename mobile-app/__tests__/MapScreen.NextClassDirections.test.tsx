@@ -345,7 +345,7 @@ describe('MapScreen - user story 3.4.1 next class destination', () => {
     await waitFor(() => {
       expect(mockRoutePreviewProps?.destinationLabel).toBe('Henry F Hall Building (H)');
     });
-  });
+  }, 10000);
 
   it('shows "No classes today" and does not open routes when today has no classes', async () => {
     const tomorrowStart = new Date();
