@@ -34,6 +34,14 @@ class FakeStrategy implements ModeRouteStrategy {
   }
 }
 
+class ThrowingStrategy implements ModeRouteStrategy {
+  constructor(public readonly key: ModeRouteStrategyKey) {}
+
+  async execute(): Promise<ModeRoute | null> {
+    throw new Error(`Strategy failed for ${this.key}`);
+  }
+}
+
 describe('RoutePlanner', () => {
   const baseContext = {
     origin: { latitude: 45.5, longitude: -73.57 },
@@ -81,5 +89,20 @@ describe('RoutePlanner', () => {
           new FakeStrategy('driving', makeRoute(800, 'Drive route B')),
         ]),
     ).toThrow('Duplicate route strategy key: driving');
+  });
+
+  it('keeps planning when one strategy throws', async () => {
+    const planner = new RoutePlanner([
+      new FakeStrategy('driving', makeRoute(900, 'Drive route')),
+      new ThrowingStrategy('outdoorWalking'),
+      new FakeStrategy('tunnelWalking', makeRoute(600, 'Tunnel walk')),
+    ]);
+
+    const result = await planner.plan(baseContext);
+
+    expect(result.driving?.viaText).toBe('Drive route');
+    expect(result.outdoorWalking).toBeNull();
+    expect(result.tunnelWalking?.viaText).toBe('Tunnel walk');
+    expect(result.preferredWalkingVariant).toBe('tunnel');
   });
 });

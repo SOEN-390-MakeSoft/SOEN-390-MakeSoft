@@ -28,8 +28,12 @@ export class RoutePlanner {
 
     await Promise.all(
       this.strategies.map(async (strategy) => {
-        const route = await strategy.execute(context);
-        resultMap.set(strategy.key, route);
+        try {
+          const route = await strategy.execute(context);
+          resultMap.set(strategy.key, route);
+        } catch {
+          resultMap.set(strategy.key, null);
+        }
       }),
     );
 
