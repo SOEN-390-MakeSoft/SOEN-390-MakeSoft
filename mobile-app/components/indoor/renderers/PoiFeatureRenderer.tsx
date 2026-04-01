@@ -48,34 +48,35 @@ function getImagePathForAmenity(
   return undefined;
 }
 
-function getPoiFillColor(amenity: string, isHighlighted: boolean, isColorBlind: boolean): string {
-  const alpha = isHighlighted ? '0.15' : '0.05';
+function getPoiColorChannels(amenity: string, isColorBlind: boolean): { baseChannel: string } {
   const bathroomChannel = isColorBlind ? '255, 150, 100' : '100, 150, 255';
   const waterChannel = isColorBlind ? '255, 200, 100' : '100, 200, 255';
 
   switch (amenity) {
-    case 'toilets':
-      return `rgba(${bathroomChannel}, ${alpha})`;
     case 'drinking_water':
-      return `rgba(${waterChannel}, ${alpha})`;
+      return { baseChannel: waterChannel };
+    case 'toilets':
     default:
-      return `rgba(${bathroomChannel}, ${alpha})`;
+      return { baseChannel: bathroomChannel };
   }
 }
 
-function getPoiStrokeColor(amenity: string, isHighlighted: boolean, isColorBlind: boolean): string {
-  const alpha = isHighlighted ? '0.6' : '0.2';
-  const bathroomChannel = isColorBlind ? '255, 150, 100' : '100, 150, 255';
-  const waterChannel = isColorBlind ? '255, 200, 100' : '100, 200, 255';
+function getPoiFillColor(amenity: string, isHighlighted: boolean, isColorBlind: boolean): string {
+  const { baseChannel } = getPoiColorChannels(amenity, isColorBlind);
+  const alphaHighlighted = '0.15';
+  const alphaMuted = '0.05';
+  const alpha = isHighlighted ? alphaHighlighted : alphaMuted;
 
-  switch (amenity) {
-    case 'toilets':
-      return `rgba(${bathroomChannel}, ${alpha})`;
-    case 'drinking_water':
-      return `rgba(${waterChannel}, ${alpha})`;
-    default:
-      return `rgba(${bathroomChannel}, ${alpha})`;
-  }
+  return `rgba(${baseChannel}, ${alpha})`;
+}
+
+function getPoiStrokeColor(amenity: string, isHighlighted: boolean, isColorBlind: boolean): string {
+  const { baseChannel } = getPoiColorChannels(amenity, isColorBlind);
+  const alphaHighlighted = '0.6';
+  const alphaMuted = '0.2';
+  const alpha = isHighlighted ? alphaHighlighted : alphaMuted;
+
+  return `rgba(${baseChannel}, ${alpha})`;
 }
 
 function renderPointPoi(
