@@ -378,6 +378,16 @@ const testPOI = {
   openNow: true,
 };
 
+const testPOI2 = {
+  id: 'place456',
+  name: 'Nearby Restaurant',
+  address: '101 Test St',
+  coordinate: { latitude: 45.49801, longitude: -73.57901 },
+  category: 'restaurant',
+  rating: 4.2,
+  openNow: true,
+};
+
 const mockSelectPOI = jest.fn();
 const mockSelectPOIFromMap = jest.fn();
 const mockClearSelectedPOI = jest.fn();
@@ -425,6 +435,18 @@ describe('MapScreen – Outdoor POI integration', () => {
     mockOutdoorPOIState.outdoorPOIResults = [testPOI];
     const { getByTestId } = render(<MapScreen />);
     expect(getByTestId('outdoor-poi-marker-place123')).toBeTruthy();
+  });
+
+  it('gives the selected outdoor POI marker a higher z-index than nearby markers', () => {
+    mockOutdoorPOIState.outdoorPOIResults = [testPOI, testPOI2];
+    mockOutdoorPOIState.selectedOutdoorPOI = testPOI2;
+
+    const { getByTestId } = render(<MapScreen />);
+
+    const firstMarker = getByTestId('outdoor-poi-marker-place123');
+    const selectedMarker = getByTestId('outdoor-poi-marker-place456');
+
+    expect(selectedMarker.props.zIndex).toBeGreaterThan(firstMarker.props.zIndex);
   });
 
   it('shows OutdoorPOIInfoCard when a POI is selected', () => {

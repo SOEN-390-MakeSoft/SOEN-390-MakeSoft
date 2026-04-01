@@ -22,7 +22,13 @@ export default function POIMarker({
   markerColor = '#912338',
 }: Props) {
   return (
-    <Marker coordinate={poi.coordinate} testID={testID} zIndex={zIndex} onPress={onPress}>
+    <Marker
+      coordinate={poi.coordinate}
+      testID={testID}
+      zIndex={zIndex}
+      tracksViewChanges={false}
+      onPress={onPress}
+    >
       <View style={[styles.markerPin, { backgroundColor: markerColor }]}>
         <MaterialIcons name={iconName} size={16} color="#fff" />
       </View>

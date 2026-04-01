@@ -302,6 +302,7 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 const POI_REGION_DELTA = 0.01;
 const MAP_ANIMATION_DURATION_MS = 500;
 const POI_MARKER_Z_INDEX = 999;
+const SELECTED_POI_MARKER_Z_INDEX = 1999;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
@@ -705,6 +706,31 @@ export default function MapScreen() {
   const mergedSearchResults = useMemo(() => {
     return [...roomSearchResults, ...searchResults, ...outdoorPOISearchResults];
   }, [roomSearchResults, searchResults, outdoorPOISearchResults]);
+
+  const orderedOutdoorPOIResults = useMemo(() => {
+    const sorted = [...outdoorPOIResults].sort((left, right) => {
+      if (left.id === selectedOutdoorPOI?.id) return 1;
+      if (right.id === selectedOutdoorPOI?.id) return -1;
+
+      if (left.coordinate.latitude !== right.coordinate.latitude) {
+        return left.coordinate.latitude - right.coordinate.latitude;
+      }
+
+      if (left.coordinate.longitude !== right.coordinate.longitude) {
+        return left.coordinate.longitude - right.coordinate.longitude;
+      }
+
+      return left.id.localeCompare(right.id);
+    });
+
+    return sorted.map((poi, index) => ({
+      poi,
+      zIndex:
+        poi.id === selectedOutdoorPOI?.id
+          ? SELECTED_POI_MARKER_Z_INDEX
+          : POI_MARKER_Z_INDEX + index,
+    }));
+  }, [outdoorPOIResults, selectedOutdoorPOI]);
 
   const handleSelectRoomResult = useCallback(
     (result: RoomSearchResult) => {
@@ -2258,13 +2284,13 @@ export default function MapScreen() {
             isColorBlind={isColorBlind}
           />
         )}
-        {outdoorPOIResults.map((poi) => (
+        {orderedOutdoorPOIResults.map(({ poi, zIndex }) => (
           <POIMarker
             key={`outdoor-poi-${poi.id}`}
             poi={poi}
             markerColor={poiMarkerColor}
             testID={`outdoor-poi-marker-${poi.id}`}
-            zIndex={POI_MARKER_Z_INDEX}
+            zIndex={zIndex}
             iconName={
               (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
             }
