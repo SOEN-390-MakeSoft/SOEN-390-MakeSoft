@@ -86,8 +86,12 @@ import {
   type LocationConflict,
 } from '../utils/stringUtils';
 import { useOutdoorPOI } from '../hooks/useOutdoorPOI';
-import type { OutdoorPOI } from '../services/outdoorPOIService';
-import { isSupportedPOICategory } from '../services/outdoorPOIService';
+import type { OutdoorPOI, OutdoorPOICategory } from '../services/outdoorPOIService';
+import {
+  getOutdoorPOICategoryLabel,
+  isSupportedPOICategory,
+  OUTDOOR_POI_CATEGORY_OPTIONS,
+} from '../services/outdoorPOIService';
 import OutdoorPOIInfoCard from './OutdoorPOIInfoCard';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
@@ -360,18 +364,10 @@ const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
 const POI_MARKER_ICONS: Record<string, string> = {
-  restaurant: 'restaurant',
-  cafe: 'local-cafe',
-  pharmacy: 'local-pharmacy',
-  gym: 'fitness-center',
-  bank: 'account-balance',
-  supermarket: 'shopping-cart',
-  bar: 'local-bar',
-  hospital: 'local-hospital',
-  library: 'local-library',
-  parking: 'local-parking',
-  gas_station: 'local-gas-station',
-  hotel: 'hotel',
+  ...OUTDOOR_POI_CATEGORY_OPTIONS.reduce<Record<string, string>>((accumulator, category) => {
+    accumulator[category.type] = category.icon;
+    return accumulator;
+  }, {}),
   place: 'place',
 };
 
@@ -518,6 +514,9 @@ export default function MapScreen() {
   });
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+  const [selectedOutdoorPOICategories, setSelectedOutdoorPOICategories] = useState<
+    OutdoorPOICategory[]
+  >([]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -535,6 +534,7 @@ export default function MapScreen() {
     debouncedQuery,
     userLocation: poiSearchLocation,
     activeCampus,
+    selectedCategories: selectedOutdoorPOICategories,
   });
 
   const {
@@ -697,7 +697,7 @@ export default function MapScreen() {
       id: `poi-${poi.id}`,
       name: poi.name,
       address: poi.address,
-      code: poi.category.replace(/_/g, ' '),
+      code: getOutdoorPOICategoryLabel(poi.category),
       _poi: poi,
     }));
   }, [outdoorPOIResults]);
@@ -1327,6 +1327,18 @@ export default function MapScreen() {
     setIsSearchFocused(false);
     searchInputRef.current?.blur();
   };
+
+  const handleOutdoorPOICategoriesChange = useCallback(
+    (categories: OutdoorPOICategory[]) => {
+      clearSelectedPOI();
+      handleCloseCard();
+      setSearchQuery('');
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+      setSelectedOutdoorPOICategories(categories);
+    },
+    [clearSelectedPOI, handleCloseCard, setIsSearchFocused, setSearchQuery],
+  );
 
   const resolveInsideBuilding = useCallback(
     (coordinate: LatLng): ResolvedCampusBuilding | null => {
@@ -2560,6 +2572,8 @@ export default function MapScreen() {
           onClose={() => setIsMenuOpen(false)}
           visiblePoiAmenities={visiblePoiAmenities}
           onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
+          selectedOutdoorPOICategories={selectedOutdoorPOICategories}
+          onOutdoorPOICategoriesChange={handleOutdoorPOICategoriesChange}
         />
       )}
 

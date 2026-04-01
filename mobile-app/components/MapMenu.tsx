@@ -1,10 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
 import { useSettings } from '../context/settings';
 import { useRouter } from 'expo-router';
+import {
+  OUTDOOR_POI_CATEGORY_OPTIONS,
+  type OutdoorPOICategory,
+} from '../services/outdoorPOIService';
 
 interface MapMenuProps {
   visible: boolean;
@@ -14,6 +28,10 @@ interface MapMenuProps {
   visiblePoiAmenities?: string[];
   /** Callback when POI visibility changes. */
   onVisiblePoiAmenitiesChange?: (amenities: string[]) => void;
+  /** Currently selected outdoor POI categories. */
+  selectedOutdoorPOICategories?: OutdoorPOICategory[];
+  /** Callback when outdoor POI categories change. */
+  onOutdoorPOICategoriesChange?: (categories: OutdoorPOICategory[]) => void;
 }
 
 function pad2(value: number): string {
@@ -64,6 +82,8 @@ export default function MapMenu({
   fullScreen = false,
   visiblePoiAmenities = ['toilets', 'drinking_water'],
   onVisiblePoiAmenitiesChange,
+  selectedOutdoorPOICategories = [],
+  onOutdoorPOICategoriesChange,
 }: Readonly<MapMenuProps>) {
   const { colourBlindMode, setColourBlindMode, simulatedNow, setSimulatedNow, resetSimulatedNow } =
     useSettings();
@@ -99,6 +119,22 @@ export default function MapMenu({
     seedInputs(new Date());
   };
 
+  const allOutdoorCategoryTypes = OUTDOOR_POI_CATEGORY_OPTIONS.map((category) => category.type);
+  const areAllOutdoorCategoriesSelected =
+    selectedOutdoorPOICategories.length === allOutdoorCategoryTypes.length;
+
+  const handleOutdoorCategoryToggle = (category: OutdoorPOICategory) => {
+    const nextCategories = selectedOutdoorPOICategories.includes(category)
+      ? selectedOutdoorPOICategories.filter((selectedCategory) => selectedCategory !== category)
+      : [...selectedOutdoorPOICategories, category];
+
+    onOutdoorPOICategoriesChange?.(nextCategories);
+  };
+
+  const handleAllOutdoorCategoriesPress = () => {
+    onOutdoorPOICategoriesChange?.(areAllOutdoorCategoriesSelected ? [] : allOutdoorCategoryTypes);
+  };
+
   const content = (
     <SafeAreaView style={styles.menuScreen}>
       <View style={styles.menuHeader}>
@@ -108,128 +144,199 @@ export default function MapMenu({
         <Text style={styles.menuTitle}>Menu</Text>
         <View style={styles.menuSpacer} />
       </View>
-      <Text style={styles.menuSubtitle}>Customize your map experience</Text>
-      <View style={styles.menuRow}>
-        <View style={styles.menuRowLeft}>
-          <MaterialIcons name="remove-red-eye" size={21} color={brandRed} />
-          <Text style={styles.menuRowText}>Color-blind mode</Text>
+      <ScrollView
+        style={styles.menuScroll}
+        contentContainerStyle={styles.menuScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.menuSubtitle}>Customize your map experience</Text>
+        <View style={styles.menuRow}>
+          <View style={styles.menuRowLeft}>
+            <MaterialIcons name="remove-red-eye" size={21} color={brandRed} />
+            <Text style={styles.menuRowText}>Color-blind mode</Text>
+          </View>
+          <Switch
+            value={colourBlindMode}
+            onValueChange={setColourBlindMode}
+            trackColor={{ false: '#ddd', true: '#f3b6bf' }}
+            thumbColor={colourBlindMode ? brandRed : '#fff'}
+          />
         </View>
-        <Switch
-          value={colourBlindMode}
-          onValueChange={setColourBlindMode}
-          trackColor={{ false: '#ddd', true: '#f3b6bf' }}
-          thumbColor={colourBlindMode ? brandRed : '#fff'}
-        />
-      </View>
 
-      {/* POI Visibility Filters */}
-      <View style={[styles.menuRow, styles.simulationRow]}>
-        <View style={styles.simulationHeader}>
-          <MaterialIcons name="place" size={21} color={brandRed} />
-          <Text style={styles.menuRowText}>Indoor Points of Interest</Text>
+        {/* POI Visibility Filters */}
+        <View style={[styles.menuRow, styles.simulationRow]}>
+          <View style={styles.simulationHeader}>
+            <MaterialIcons name="place" size={21} color={brandRed} />
+            <Text style={styles.menuRowText}>Indoor Points of Interest</Text>
+          </View>
+          <View style={styles.poiFilterRow}>
+            <View style={styles.poiFilterItem}>
+              <Text style={styles.poiFilterLabel}>Washrooms</Text>
+              <Switch
+                value={visiblePoiAmenities.includes('toilets')}
+                onValueChange={(enabled) => {
+                  const updated = enabled
+                    ? [...visiblePoiAmenities, 'toilets']
+                    : visiblePoiAmenities.filter((a) => a !== 'toilets');
+                  onVisiblePoiAmenitiesChange?.(updated);
+                }}
+                trackColor={{ false: '#ddd', true: '#f3b6bf' }}
+                thumbColor={visiblePoiAmenities.includes('toilets') ? brandRed : '#fff'}
+              />
+            </View>
+            <View style={styles.poiFilterItem}>
+              <Text style={styles.poiFilterLabel}>Water Fountains</Text>
+              <Switch
+                value={visiblePoiAmenities.includes('drinking_water')}
+                onValueChange={(enabled) => {
+                  const updated = enabled
+                    ? [...visiblePoiAmenities, 'drinking_water']
+                    : visiblePoiAmenities.filter((a) => a !== 'drinking_water');
+                  onVisiblePoiAmenitiesChange?.(updated);
+                }}
+                trackColor={{ false: '#ddd', true: '#f3b6bf' }}
+                thumbColor={visiblePoiAmenities.includes('drinking_water') ? brandRed : '#fff'}
+              />
+            </View>
+          </View>
         </View>
-        <View style={styles.poiFilterRow}>
-          <View style={styles.poiFilterItem}>
-            <Text style={styles.poiFilterLabel}>Washrooms</Text>
-            <Switch
-              value={visiblePoiAmenities.includes('toilets')}
-              onValueChange={(enabled) => {
-                const updated = enabled
-                  ? [...visiblePoiAmenities, 'toilets']
-                  : visiblePoiAmenities.filter((a) => a !== 'toilets');
-                onVisiblePoiAmenitiesChange?.(updated);
-              }}
-              trackColor={{ false: '#ddd', true: '#f3b6bf' }}
-              thumbColor={visiblePoiAmenities.includes('toilets') ? brandRed : '#fff'}
+
+        <View style={[styles.menuRow, styles.simulationRow]}>
+          <View style={styles.simulationHeader}>
+            <MaterialIcons name="map" size={21} color={brandRed} />
+            <Text style={styles.menuRowText}>Outdoor POI categories</Text>
+          </View>
+          <Text style={styles.simulationStatus}>
+            Select one or more categories to search nearby places on the map.
+          </Text>
+          <View style={styles.outdoorChipGrid}>
+            <Pressable
+              testID="outdoor-poi-chip-all"
+              accessibilityRole="button"
+              accessibilityLabel="Show all outdoor POI categories"
+              accessibilityState={{ selected: areAllOutdoorCategoriesSelected }}
+              style={[
+                styles.outdoorChip,
+                areAllOutdoorCategoriesSelected && styles.outdoorChipSelected,
+              ]}
+              onPress={handleAllOutdoorCategoriesPress}
+            >
+              <MaterialIcons
+                name="public"
+                size={18}
+                color={areAllOutdoorCategoriesSelected ? '#fff' : brandRed}
+              />
+              <Text
+                style={[
+                  styles.outdoorChipText,
+                  areAllOutdoorCategoriesSelected && styles.outdoorChipTextSelected,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+
+            {OUTDOOR_POI_CATEGORY_OPTIONS.map((category) => {
+              const isSelected = selectedOutdoorPOICategories.includes(category.type);
+
+              return (
+                <Pressable
+                  key={category.type}
+                  testID={`outdoor-poi-chip-${category.type}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Toggle nearby ${category.label.toLowerCase()} locations`}
+                  accessibilityState={{ selected: isSelected }}
+                  style={[styles.outdoorChip, isSelected && styles.outdoorChipSelected]}
+                  onPress={() => handleOutdoorCategoryToggle(category.type)}
+                >
+                  <MaterialIcons
+                    name={category.icon as keyof typeof MaterialIcons.glyphMap}
+                    size={18}
+                    color={isSelected ? '#fff' : brandRed}
+                  />
+                  <Text
+                    style={[styles.outdoorChipText, isSelected && styles.outdoorChipTextSelected]}
+                  >
+                    {category.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={[styles.menuRow, styles.simulationRow]}>
+          <View style={styles.simulationHeader}>
+            <MaterialIcons name="schedule" size={21} color={brandRed} />
+            <Text style={styles.menuRowText}>Simulated date and time</Text>
+          </View>
+          <Text style={styles.simulationStatus} testID="simulated-now-status">
+            {simulatedNow
+              ? `Using simulated: ${simulatedNow.toLocaleString()}`
+              : 'Using current date & time'}
+          </Text>
+          <View style={styles.simulationInputs}>
+            <TextInput
+              testID="simulated-date-input"
+              value={dateInput}
+              onChangeText={setDateInput}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#9a8f93"
+              style={styles.simulationInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TextInput
+              testID="simulated-time-input"
+              value={timeInput}
+              onChangeText={setTimeInput}
+              placeholder="HH:mm"
+              placeholderTextColor="#9a8f93"
+              style={styles.simulationInput}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
-          <View style={styles.poiFilterItem}>
-            <Text style={styles.poiFilterLabel}>Water Fountains</Text>
-            <Switch
-              value={visiblePoiAmenities.includes('drinking_water')}
-              onValueChange={(enabled) => {
-                const updated = enabled
-                  ? [...visiblePoiAmenities, 'drinking_water']
-                  : visiblePoiAmenities.filter((a) => a !== 'drinking_water');
-                onVisiblePoiAmenitiesChange?.(updated);
-              }}
-              trackColor={{ false: '#ddd', true: '#f3b6bf' }}
-              thumbColor={visiblePoiAmenities.includes('drinking_water') ? brandRed : '#fff'}
-            />
+          <View style={styles.simulationActions}>
+            <Pressable
+              testID="simulated-apply-button"
+              onPress={handleApplySimulation}
+              style={[styles.simulationButton, styles.simulationApplyButton]}
+            >
+              <Text style={[styles.simulationButtonText, styles.simulationApplyButtonText]}>
+                Apply
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="simulated-now-button"
+              onPress={handleNow}
+              style={[styles.simulationButton, styles.simulationNowButton]}
+            >
+              <Text style={styles.simulationButtonText}>Now</Text>
+            </Pressable>
           </View>
         </View>
-      </View>
 
-      <View style={[styles.menuRow, styles.simulationRow]}>
-        <View style={styles.simulationHeader}>
-          <MaterialIcons name="schedule" size={21} color={brandRed} />
-          <Text style={styles.menuRowText}>Simulated date and time</Text>
-        </View>
-        <Text style={styles.simulationStatus} testID="simulated-now-status">
-          {simulatedNow
-            ? `Using simulated: ${simulatedNow.toLocaleString()}`
-            : 'Using current date & time'}
-        </Text>
-        <View style={styles.simulationInputs}>
-          <TextInput
-            testID="simulated-date-input"
-            value={dateInput}
-            onChangeText={setDateInput}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#9a8f93"
-            style={styles.simulationInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            testID="simulated-time-input"
-            value={timeInput}
-            onChangeText={setTimeInput}
-            placeholder="HH:mm"
-            placeholderTextColor="#9a8f93"
-            style={styles.simulationInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-        <View style={styles.simulationActions}>
+        {/* New menu item for Google Calendar Instructions */}
+        <View style={[styles.menuRow, { marginTop: 18, alignItems: 'center' }]}>
           <Pressable
-            testID="simulated-apply-button"
-            onPress={handleApplySimulation}
-            style={[styles.simulationButton, styles.simulationApplyButton]}
+            onPress={() => {
+              onClose();
+              setTimeout(() => router.push('/google-calendar-instructions'), 300);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+            accessibilityLabel="Instructions to connect Google Calendar"
           >
-            <Text style={[styles.simulationButtonText, styles.simulationApplyButtonText]}>
-              Apply
-            </Text>
-          </Pressable>
-          <Pressable
-            testID="simulated-now-button"
-            onPress={handleNow}
-            style={[styles.simulationButton, styles.simulationNowButton]}
-          >
-            <Text style={styles.simulationButtonText}>Now</Text>
+            <MaterialIcons
+              name="info-outline"
+              size={21}
+              color={brandRed}
+              style={{ marginRight: 10 }}
+            />
+            <Text style={styles.menuRowText}>Instructions to connect Google Calendar</Text>
           </Pressable>
         </View>
-      </View>
-      {/* New menu item for Google Calendar Instructions */}
-      <View style={[styles.menuRow, { marginTop: 18, alignItems: 'center' }]}>
-        <Pressable
-          onPress={() => {
-            onClose();
-            setTimeout(() => router.push('/google-calendar-instructions'), 300);
-          }}
-          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-          accessibilityLabel="Instructions to connect Google Calendar"
-        >
-          <MaterialIcons
-            name="info-outline"
-            size={21}
-            color={brandRed}
-            style={{ marginRight: 10 }}
-          />
-          <Text style={styles.menuRowText}>Instructions to connect Google Calendar</Text>
-        </Pressable>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 
@@ -261,6 +368,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f1f4',
     paddingHorizontal: 26,
     paddingTop: 14,
+  },
+  menuScroll: {
+    flex: 1,
+  },
+  menuScrollContent: {
+    paddingBottom: 28,
   },
   menuHeader: {
     flexDirection: 'row',
@@ -364,5 +477,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#4a4a4a',
     fontWeight: '500',
+  },
+  outdoorChipGrid: {
+    marginTop: 14,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  outdoorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#ead8dc',
+    backgroundColor: '#fff',
+  },
+  outdoorChipSelected: {
+    backgroundColor: '#8e2334',
+    borderColor: '#8e2334',
+  },
+  outdoorChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5a4a4f',
+  },
+  outdoorChipTextSelected: {
+    color: '#fff',
   },
 });

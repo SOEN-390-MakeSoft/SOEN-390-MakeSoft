@@ -67,4 +67,39 @@ describe('MapMenu date/time simulation', () => {
       'Use date YYYY-MM-DD and time HH:mm.',
     );
   });
+
+  it('renders outdoor POI category chips and notifies when a chip is pressed', () => {
+    const onOutdoorPOICategoriesChange = jest.fn();
+    const { getByTestId } = render(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={['restaurant']}
+          onOutdoorPOICategoriesChange={onOutdoorPOICategoriesChange}
+        />
+      </SettingsProvider>,
+    );
+
+    fireEvent.press(getByTestId('outdoor-poi-chip-cafe'));
+    fireEvent.press(getByTestId('outdoor-poi-chip-restaurant'));
+    fireEvent.press(getByTestId('outdoor-poi-chip-all'));
+
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(1, ['restaurant', 'cafe']);
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(2, []);
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(3, [
+      'restaurant',
+      'cafe',
+      'pharmacy',
+      'gym',
+      'bank',
+      'supermarket',
+      'bar',
+      'hospital',
+      'library',
+      'parking',
+      'gas_station',
+      'hotel',
+    ]);
+  });
 });

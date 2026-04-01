@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import MapScreen from '../components/MapScreen';
 
 // ---------------------------------------------------------------------------
@@ -101,9 +101,11 @@ jest.mock('../hooks/useSelectedBuilding', () => ({
 
 const mockSetSearchQuery = jest.fn();
 const mockSetIsSearchFocused = jest.fn();
+let mockSearchQuery = '';
+const mockUseOutdoorPOI = jest.fn();
 jest.mock('../hooks/useSearch', () => ({
   useSearch: () => ({
-    searchQuery: '',
+    searchQuery: mockSearchQuery,
     setSearchQuery: mockSetSearchQuery,
     isSearchFocused: false,
     setIsSearchFocused: mockSetIsSearchFocused,
@@ -289,8 +291,28 @@ jest.mock('../components/QuickPickPanel', () => {
 
 jest.mock('../components/MapMenu', () => {
   const React = require('react');
-  const { View } = require('react-native');
-  return () => React.createElement(View, { testID: 'map-menu' });
+  const { View, Pressable, Text } = require('react-native');
+  return ({ onOutdoorPOICategoriesChange }: any) =>
+    React.createElement(
+      View,
+      { testID: 'map-menu' },
+      React.createElement(
+        Pressable,
+        {
+          testID: 'mock-menu-cafe',
+          onPress: () => onOutdoorPOICategoriesChange?.(['cafe']),
+        },
+        React.createElement(Text, null, 'Cafe'),
+      ),
+      React.createElement(
+        Pressable,
+        {
+          testID: 'mock-menu-all',
+          onPress: () => onOutdoorPOICategoriesChange?.([]),
+        },
+        React.createElement(Text, null, 'All'),
+      ),
+    );
 });
 
 jest.mock('../components/CalendarModal', () => {
@@ -369,7 +391,10 @@ let mockOutdoorPOIState = {
 };
 
 jest.mock('../hooks/useOutdoorPOI', () => ({
-  useOutdoorPOI: () => mockOutdoorPOIState,
+  useOutdoorPOI: (args: any) => {
+    mockUseOutdoorPOI(args);
+    return mockOutdoorPOIState;
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -379,6 +404,7 @@ jest.mock('../hooks/useOutdoorPOI', () => ({
 describe('MapScreen – Outdoor POI integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchQuery = '';
     mockOutdoorPOIState = {
       outdoorPOIResults: [],
       selectedOutdoorPOI: null,
@@ -448,6 +474,29 @@ describe('MapScreen – Outdoor POI integration', () => {
         coordinate: { latitude: 45.496, longitude: -73.577 },
         category: 'place',
       }),
+    );
+  });
+
+  it('updates the search query when an outdoor category is selected from the menu', () => {
+    const { getByTestId } = render(<MapScreen />);
+
+    fireEvent.press(getByTestId('mock-menu-cafe'));
+
+    expect(mockSetSearchQuery).toHaveBeenCalledWith('');
+    expect(mockClearSelectedPOI).toHaveBeenCalled();
+    expect(mockUseOutdoorPOI).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selectedCategories: ['cafe'] }),
+    );
+  });
+
+  it('clears selected outdoor categories when All is selected in the menu', () => {
+    const { getByTestId } = render(<MapScreen />);
+
+    fireEvent.press(getByTestId('mock-menu-all'));
+
+    expect(mockSetSearchQuery).toHaveBeenCalledWith('');
+    expect(mockUseOutdoorPOI).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selectedCategories: [] }),
     );
   });
 });

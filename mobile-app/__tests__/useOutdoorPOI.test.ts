@@ -99,6 +99,42 @@ describe('useOutdoorPOI', () => {
     expect(result.current.isOutdoorPOILoading).toBe(false);
   });
 
+  it('fetches and merges multiple selected categories from the menu', async () => {
+    const restaurantPOIs = [makePOI('p1', 'Restaurant A')];
+    const cafePOIs = [makePOI('p2', 'Cafe A'), makePOI('p1', 'Restaurant A')];
+    const selectedCategories: Array<'restaurant' | 'cafe'> = ['restaurant', 'cafe'];
+    mockIsSupportedPOICategory.mockReturnValue(null);
+    mockFetchNearbyPOIs.mockResolvedValueOnce(restaurantPOIs).mockResolvedValueOnce(cafePOIs);
+
+    const { result } = renderHook(() =>
+      useOutdoorPOI({
+        debouncedQuery: '',
+        userLocation: null,
+        activeCampus: 'sgw',
+        selectedCategories,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.outdoorPOIResults).toEqual([restaurantPOIs[0], cafePOIs[0]]);
+    });
+
+    expect(mockFetchNearbyPOIs).toHaveBeenNthCalledWith(
+      1,
+      'restaurant',
+      SGW_CENTER,
+      1000,
+      expect.objectContaining({ aborted: false }),
+    );
+    expect(mockFetchNearbyPOIs).toHaveBeenNthCalledWith(
+      2,
+      'cafe',
+      SGW_CENTER,
+      1000,
+      expect.objectContaining({ aborted: false }),
+    );
+  });
+
   it('clears results when query changes to non-category', async () => {
     const pois = [makePOI('p1', 'Cafe A')];
     mockIsSupportedPOICategory.mockReturnValue('cafe');
