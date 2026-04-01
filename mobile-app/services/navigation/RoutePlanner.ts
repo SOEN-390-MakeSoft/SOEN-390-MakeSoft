@@ -26,16 +26,14 @@ export class RoutePlanner {
   async plan(context: ModeRouteStrategyContext): Promise<PlannedModeRoutes> {
     const resultMap = new Map<ModeRouteStrategyKey, ModeRoute | null>();
 
-    await Promise.all(
-      this.strategies.map(async (strategy) => {
-        try {
-          const route = await strategy.execute(context);
-          resultMap.set(strategy.key, route);
-        } catch {
-          resultMap.set(strategy.key, null);
-        }
-      }),
+    const settledRoutes = await Promise.allSettled(
+      this.strategies.map((strategy) => Promise.resolve().then(() => strategy.execute(context))),
     );
+
+    settledRoutes.forEach((settledRoute, index) => {
+      const strategy = this.strategies[index];
+      resultMap.set(strategy.key, settledRoute.status === 'fulfilled' ? settledRoute.value : null);
+    });
 
     const outdoorWalking = resultMap.get('outdoorWalking') ?? null;
     const tunnelWalking = resultMap.get('tunnelWalking') ?? null;
