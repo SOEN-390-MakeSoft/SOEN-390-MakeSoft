@@ -3,15 +3,7 @@ import { Platform, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-
 import { Marker } from 'react-native-maps';
 import type { IndoorRoom, LatLng } from '../../../services/indoor/types';
 
-export function RoomLabelMarker({
-  room,
-  shortLabel,
-  onPress,
-}: Readonly<{
-  room: IndoorRoom;
-  shortLabel: string;
-  onPress?: () => void;
-}>) {
+function useTrackedViewChanges() {
   const [tracked, setTracked] = useState(true);
 
   const handleLayout = useCallback(
@@ -22,6 +14,20 @@ export function RoomLabelMarker({
     },
     [tracked],
   );
+
+  return { tracked, handleLayout };
+}
+
+export function RoomLabelMarker({
+  room,
+  shortLabel,
+  onPress,
+}: Readonly<{
+  room: IndoorRoom;
+  shortLabel: string;
+  onPress?: () => void;
+}>) {
+  const { tracked, handleLayout } = useTrackedViewChanges();
 
   return (
     <Marker
@@ -53,16 +59,7 @@ export function IconMarker({
   onPress?: () => void;
   opacity?: number;
 }>) {
-  const [tracked, setTracked] = useState(true);
-
-  const handleLayout = useCallback(
-    (_event: LayoutChangeEvent) => {
-      if (tracked) {
-        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
-      }
-    },
-    [tracked],
-  );
+  const { tracked, handleLayout } = useTrackedViewChanges();
 
   return (
     <Marker
@@ -97,16 +94,7 @@ export function PoiMarker({
   testID?: string;
   accessibilityLabel?: string;
 }>) {
-  const [tracked, setTracked] = useState(true);
-
-  const handleLayout = useCallback(
-    (_event: LayoutChangeEvent) => {
-      if (tracked) {
-        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
-      }
-    },
-    [tracked],
-  );
+  const { tracked, handleLayout } = useTrackedViewChanges();
 
   return (
     <Marker
