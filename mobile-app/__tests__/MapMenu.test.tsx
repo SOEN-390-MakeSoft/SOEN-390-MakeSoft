@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { SettingsProvider } from '../context/settings';
 import MapMenu from '../components/MapMenu';
+import { OUTDOOR_POI_CATEGORY_OPTIONS } from '../services/outdoorPOIService';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -101,5 +102,38 @@ describe('MapMenu date/time simulation', () => {
       'gas_station',
       'hotel',
     ]);
+  });
+
+  it('updates the all chip accessibility label based on selection state', () => {
+    const allOutdoorCategories = OUTDOOR_POI_CATEGORY_OPTIONS.map((category) => category.type);
+    const { getByTestId, rerender } = render(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={[]}
+          onOutdoorPOICategoriesChange={jest.fn()}
+        />
+      </SettingsProvider>,
+    );
+
+    expect(getByTestId('outdoor-poi-chip-all').props.accessibilityLabel).toBe(
+      'Select all outdoor POI categories',
+    );
+
+    rerender(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={allOutdoorCategories}
+          onOutdoorPOICategoriesChange={jest.fn()}
+        />
+      </SettingsProvider>,
+    );
+
+    expect(getByTestId('outdoor-poi-chip-all').props.accessibilityLabel).toBe(
+      'Clear all outdoor POI categories',
+    );
   });
 });

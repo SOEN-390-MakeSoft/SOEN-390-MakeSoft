@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { type LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { OutdoorPOI } from '../services/outdoorPOIService';
@@ -21,15 +22,34 @@ export default function POIMarker({
   zIndex,
   markerColor = '#912338',
 }: Props) {
+  const [tracked, setTracked] = useState(true);
+
+  useEffect(() => {
+    setTracked(true);
+  }, [iconName, markerColor]);
+
+  const handleLayout = useCallback(
+    (_e: LayoutChangeEvent) => {
+      if (tracked) {
+        setTimeout(() => setTracked(false), Platform.OS === 'ios' ? 250 : 100);
+      }
+    },
+    [tracked],
+  );
+
   return (
     <Marker
       coordinate={poi.coordinate}
       testID={testID}
       zIndex={zIndex}
-      tracksViewChanges={false}
+      tracksViewChanges={tracked}
       onPress={onPress}
     >
-      <View style={[styles.markerPin, { backgroundColor: markerColor }]}>
+      <View
+        collapsable={false}
+        onLayout={handleLayout}
+        style={[styles.markerPin, { backgroundColor: markerColor }]}
+      >
         <MaterialIcons name={iconName} size={16} color="#fff" />
       </View>
     </Marker>

@@ -122,6 +122,9 @@ export default function MapMenu({
   const allOutdoorCategoryTypes = OUTDOOR_POI_CATEGORY_OPTIONS.map((category) => category.type);
   const areAllOutdoorCategoriesSelected =
     selectedOutdoorPOICategories.length === allOutdoorCategoryTypes.length;
+  const allOutdoorCategoriesAccessibilityLabel = areAllOutdoorCategoriesSelected
+    ? 'Clear all outdoor POI categories'
+    : 'Select all outdoor POI categories';
 
   const handleOutdoorCategoryToggle = (category: OutdoorPOICategory) => {
     const nextCategories = selectedOutdoorPOICategories.includes(category)
@@ -213,7 +216,7 @@ export default function MapMenu({
             <Pressable
               testID="outdoor-poi-chip-all"
               accessibilityRole="button"
-              accessibilityLabel="Show all outdoor POI categories"
+              accessibilityLabel={allOutdoorCategoriesAccessibilityLabel}
               accessibilityState={{ selected: areAllOutdoorCategoriesSelected }}
               style={[
                 styles.outdoorChip,
