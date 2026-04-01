@@ -11,38 +11,111 @@ export type OutdoorPOI = {
   openNow?: boolean;
 };
 
+export const OUTDOOR_POI_CATEGORY_OPTIONS = [
+  {
+    type: 'restaurant',
+    label: 'Restaurant',
+    icon: 'restaurant',
+    searchTerms: ['restaurant', 'restaurants', 'food'],
+  },
+  {
+    type: 'cafe',
+    label: 'Cafe',
+    icon: 'local-cafe',
+    searchTerms: ['cafe', 'coffee', 'coffeeshop'],
+  },
+  {
+    type: 'pharmacy',
+    label: 'Pharmacy',
+    icon: 'local-pharmacy',
+    searchTerms: ['pharmacy', 'drugstore'],
+  },
+  {
+    type: 'gym',
+    label: 'Gym',
+    icon: 'fitness-center',
+    searchTerms: ['gym'],
+  },
+  {
+    type: 'bank',
+    label: 'Bank',
+    icon: 'account-balance',
+    searchTerms: ['bank'],
+  },
+  {
+    type: 'supermarket',
+    label: 'Supermarket',
+    icon: 'shopping-cart',
+    searchTerms: ['supermarket', 'grocery'],
+  },
+  {
+    type: 'bar',
+    label: 'Bar',
+    icon: 'local-bar',
+    searchTerms: ['bar'],
+  },
+  {
+    type: 'hospital',
+    label: 'Hospital',
+    icon: 'local-hospital',
+    searchTerms: ['hospital'],
+  },
+  {
+    type: 'library',
+    label: 'Library',
+    icon: 'local-library',
+    searchTerms: ['library'],
+  },
+  {
+    type: 'parking',
+    label: 'Parking',
+    icon: 'local-parking',
+    searchTerms: ['parking'],
+  },
+  {
+    type: 'gas_station',
+    label: 'Gas Station',
+    icon: 'local-gas-station',
+    searchTerms: ['gas_station', 'gas'],
+  },
+  {
+    type: 'hotel',
+    label: 'Hotel',
+    icon: 'hotel',
+    searchTerms: ['hotel'],
+  },
+] as const;
+
+export type OutdoorPOICategory = (typeof OUTDOOR_POI_CATEGORY_OPTIONS)[number]['type'];
+
 const SGW_CENTER: LatLng = { latitude: 45.4973, longitude: -73.5789 };
 const LOYOLA_CENTER: LatLng = { latitude: 45.4581, longitude: -73.6402 };
 
-const POI_CATEGORY_MAP: Record<string, string> = {
-  restaurant: 'restaurant',
-  restaurants: 'restaurant',
-  food: 'restaurant',
-  pharmacy: 'pharmacy',
-  drugstore: 'pharmacy',
-  cafe: 'cafe',
-  coffee: 'cafe',
-  coffeeshop: 'cafe',
-  gym: 'gym',
-  bank: 'bank',
-  supermarket: 'supermarket',
-  grocery: 'supermarket',
-  bar: 'bar',
-  hospital: 'hospital',
-  library: 'library',
-  parking: 'parking',
-  gas_station: 'gas_station',
-  gas: 'gas_station',
-  hotel: 'hotel',
-};
+const POI_CATEGORY_MAP: Record<string, OutdoorPOICategory> = OUTDOOR_POI_CATEGORY_OPTIONS.reduce<
+  Record<string, OutdoorPOICategory>
+>((accumulator, category) => {
+  for (const term of category.searchTerms) {
+    accumulator[term] = category.type;
+  }
+  return accumulator;
+}, {});
 
-export const SUPPORTED_CATEGORIES = [...new Set(Object.values(POI_CATEGORY_MAP))];
+export const SUPPORTED_CATEGORIES: OutdoorPOICategory[] = OUTDOOR_POI_CATEGORY_OPTIONS.map(
+  (category) => category.type,
+);
+
+export function getOutdoorPOICategoryLabel(category: string): string {
+  const match = OUTDOOR_POI_CATEGORY_OPTIONS.find((option) => option.type === category);
+  if (match) return match.label;
+
+  return category.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
 /**
  * Returns the Google Places type if the query matches a supported outdoor POI
  * category, or null otherwise.
  */
-export function isSupportedPOICategory(query: string): string | null {
+export function isSupportedPOICategory(query: string): OutdoorPOICategory | null {
   const normalized = query.trim().toLowerCase();
   return POI_CATEGORY_MAP[normalized] ?? null;
 }

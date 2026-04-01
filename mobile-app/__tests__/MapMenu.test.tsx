@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { SettingsProvider } from '../context/settings';
 import MapMenu from '../components/MapMenu';
+import { OUTDOOR_POI_CATEGORY_OPTIONS } from '../services/outdoorPOIService';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -65,6 +66,74 @@ describe('MapMenu date/time simulation', () => {
     expect(alertSpy).toHaveBeenCalledWith(
       'Invalid date/time',
       'Use date YYYY-MM-DD and time HH:mm.',
+    );
+  });
+
+  it('renders outdoor POI category chips and notifies when a chip is pressed', () => {
+    const onOutdoorPOICategoriesChange = jest.fn();
+    const { getByTestId } = render(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={['restaurant']}
+          onOutdoorPOICategoriesChange={onOutdoorPOICategoriesChange}
+        />
+      </SettingsProvider>,
+    );
+
+    fireEvent.press(getByTestId('outdoor-poi-chip-cafe'));
+    fireEvent.press(getByTestId('outdoor-poi-chip-restaurant'));
+    fireEvent.press(getByTestId('outdoor-poi-chip-all'));
+
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(1, ['restaurant', 'cafe']);
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(2, []);
+    expect(onOutdoorPOICategoriesChange).toHaveBeenNthCalledWith(3, [
+      'restaurant',
+      'cafe',
+      'pharmacy',
+      'gym',
+      'bank',
+      'supermarket',
+      'bar',
+      'hospital',
+      'library',
+      'parking',
+      'gas_station',
+      'hotel',
+    ]);
+  });
+
+  it('updates the all chip accessibility label based on selection state', () => {
+    const allOutdoorCategories = OUTDOOR_POI_CATEGORY_OPTIONS.map((category) => category.type);
+    const { getByTestId, rerender } = render(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={[]}
+          onOutdoorPOICategoriesChange={jest.fn()}
+        />
+      </SettingsProvider>,
+    );
+
+    expect(getByTestId('outdoor-poi-chip-all').props.accessibilityLabel).toBe(
+      'Select all outdoor POI categories',
+    );
+
+    rerender(
+      <SettingsProvider>
+        <MapMenu
+          visible={true}
+          onClose={jest.fn()}
+          selectedOutdoorPOICategories={allOutdoorCategories}
+          onOutdoorPOICategoriesChange={jest.fn()}
+        />
+      </SettingsProvider>,
+    );
+
+    expect(getByTestId('outdoor-poi-chip-all').props.accessibilityLabel).toBe(
+      'Clear all outdoor POI categories',
     );
   });
 });

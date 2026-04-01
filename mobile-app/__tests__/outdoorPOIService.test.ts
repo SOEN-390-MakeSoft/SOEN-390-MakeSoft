@@ -3,6 +3,8 @@ import {
   fetchNearbyPOIs,
   fetchPlaceDetails,
   getCampusCenterForPOI,
+  getOutdoorPOICategoryLabel,
+  OUTDOOR_POI_CATEGORY_OPTIONS,
   SUPPORTED_CATEGORIES,
 } from '../services/outdoorPOIService';
 
@@ -124,6 +126,24 @@ describe('isSupportedPOICategory', () => {
     expect(SUPPORTED_CATEGORIES).toContain('restaurant');
     expect(SUPPORTED_CATEGORIES).toContain('cafe');
     expect(SUPPORTED_CATEGORIES).toContain('pharmacy');
+  });
+
+  it('exposes ordered outdoor POI category options for the menu selector', () => {
+    expect(OUTDOOR_POI_CATEGORY_OPTIONS[0]).toMatchObject({
+      type: 'restaurant',
+      label: 'Restaurant',
+    });
+    expect(OUTDOOR_POI_CATEGORY_OPTIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'cafe', label: 'Cafe' }),
+        expect.objectContaining({ type: 'gym', label: 'Gym' }),
+      ]),
+    );
+  });
+
+  it('formats category labels for UI display', () => {
+    expect(getOutdoorPOICategoryLabel('gas_station')).toBe('Gas Station');
+    expect(getOutdoorPOICategoryLabel('cafe')).toBe('Cafe');
   });
 });
 
@@ -247,11 +267,11 @@ describe('fetchNearbyPOIs', () => {
     const pois = await fetchNearbyPOIs('restaurant', center, 5000);
     expect(pois).toEqual([]);
   });
-it('returns empty array when API key is empty', async () => {
-  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
-  const pois = await fetchNearbyPOIs('restaurant', center, 5000);
-  expect(pois).toEqual([]);
-});
+  it('returns empty array when API key is empty', async () => {
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
+    const pois = await fetchNearbyPOIs('restaurant', center, 5000);
+    expect(pois).toEqual([]);
+  });
 
   it('constructs the correct URL', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
@@ -330,10 +350,10 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('returns empty address when API key is empty', async () => {
-  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
-  const details = await fetchPlaceDetails('ChIJ123');
-  expect(details.address).toBe('');
-});
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS = '';
+    const details = await fetchPlaceDetails('ChIJ123');
+    expect(details.address).toBe('');
+  });
 
   it('constructs the correct URL with place_id and fields', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({

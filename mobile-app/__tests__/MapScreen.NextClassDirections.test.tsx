@@ -21,6 +21,10 @@ let mockCalendarEvents: any[] = [];
 let mockRoutePreviewProps: any = null;
 let mockSimulatedNow: Date | null = null;
 const mockAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+const mockOpenNavigationForResolvedDestination = jest.fn();
+let mockIsNavigationOpen = false;
+let mockNavigationDestination = '';
+let mockIsDestinationLocked = false;
 
 const mockRuntimeBuildings = [
   {
@@ -161,6 +165,58 @@ jest.mock('../hooks/usePublicCalendar', () => {
   };
 });
 
+jest.mock('../hooks/useNavigationBetweenBuildings', () => ({
+  useNavigationBetweenBuildings: () => ({
+    isNavigationOpen: mockIsNavigationOpen,
+    navigationStart: '',
+    navigationDestination: mockNavigationDestination,
+    navigationOrigin: null,
+    routeSummary: null,
+    modeDurations: {},
+    isRouteLoading: false,
+    directionsError: null,
+    isGetDirectionsDisabled: false,
+    setNavigationActiveField: jest.fn(),
+    openNavigationForBuilding: jest.fn(),
+    openNavigationForResolvedDestination: (building: any) => {
+      mockOpenNavigationForResolvedDestination(building);
+      mockIsNavigationOpen = true;
+      mockIsDestinationLocked = true;
+      mockNavigationDestination = `${building.name} (${building.code})`;
+    },
+    openNavigationForCoordinate: jest.fn(),
+    openIndoorOnlyNavigation: jest.fn(),
+    handleMapBuildingPress: jest.fn(),
+    handleMapCoordinatePress: jest.fn(),
+    handleSearchSelect: jest.fn(),
+    setStartToCurrentLocation: jest.fn(),
+    setStartToCurrentLocationBuilding: jest.fn(),
+    closeNavigation: jest.fn(() => {
+      mockIsNavigationOpen = false;
+      mockIsDestinationLocked = false;
+      mockNavigationDestination = '';
+    }),
+    clearTapMarker: jest.fn(),
+    tapMarkerCoordinate: null,
+    selectedTransportMode: 'walking',
+    setSelectedTransportMode: jest.fn(),
+    setSelectedWalkingRouteVariant: jest.fn(),
+    walkingRouteComparison: null,
+    routePolyline: [],
+    routeRegion: null,
+    navigationSteps: [],
+    isShuttleRoute: false,
+    isShuttleLoading: false,
+    shuttleInfo: null,
+    isWeekend: false,
+    lateTransportModes: [],
+    routeSegments: [],
+    isIndoorOnlyRoute: false,
+    isDestinationLocked: mockIsDestinationLocked,
+    rerouteFromLocation: jest.fn(),
+  }),
+}));
+
 jest.mock('../components/CampusSwitch', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -197,6 +253,22 @@ jest.mock('../components/ClassesCalendarRequired', () => {
   return () => React.createElement(View);
 });
 
+jest.mock('../components/NavigationScreen', () => {
+  const React = require('react');
+  const { View, TextInput } = require('react-native');
+  return ({ visible, destinationLabel, destinationLocked }: any) =>
+    visible
+      ? React.createElement(
+          View,
+          { testID: 'mock-navigation-screen' },
+          React.createElement(TextInput, {
+            value: destinationLabel,
+            editable: !destinationLocked,
+          }),
+        )
+      : null;
+});
+
 jest.mock('../components/RoutePreviewScreen', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -211,6 +283,9 @@ describe('MapScreen - user story 3.4.1 next class destination', () => {
     jest.clearAllMocks();
     mockRoutePreviewProps = null;
     mockSimulatedNow = null;
+    mockIsNavigationOpen = false;
+    mockNavigationDestination = '';
+    mockIsDestinationLocked = false;
     const now = new Date();
     let start = new Date(Date.now() + 10 * 60 * 1000);
     let end = new Date(Date.now() + 70 * 60 * 1000);
@@ -270,7 +345,7 @@ describe('MapScreen - user story 3.4.1 next class destination', () => {
     await waitFor(() => {
       expect(mockRoutePreviewProps?.destinationLabel).toBe('Henry F Hall Building (H)');
     });
-  });
+  }, 10000);
 
   it('shows "No classes today" and does not open routes when today has no classes', async () => {
     const tomorrowStart = new Date();

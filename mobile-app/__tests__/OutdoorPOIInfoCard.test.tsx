@@ -62,7 +62,7 @@ describe('OutdoorPOIInfoCard', () => {
 
     expect(getByTestId('poi-name').props.children).toBe('Test Cafe');
     expect(getByTestId('poi-address').props.children).toBe('123 Main St');
-    expect(getByTestId('poi-category').props.children).toBe('cafe');
+    expect(getByTestId('poi-category').props.children).toBe('Cafe');
   });
 
   it('displays "Address unavailable" when address is empty', () => {
@@ -121,7 +121,7 @@ describe('OutdoorPOIInfoCard', () => {
     const { getByTestId } = render(
       <OutdoorPOIInfoCard poi={poi} onClose={jest.fn()} isColorBlind={false} />,
     );
-    expect(getByTestId('poi-category').props.children).toBe('gas station');
+    expect(getByTestId('poi-category').props.children).toBe('Gas Station');
   });
 
   it('calls onClose when close button is pressed', () => {

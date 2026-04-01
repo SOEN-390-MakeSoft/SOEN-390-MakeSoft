@@ -86,8 +86,12 @@ import {
   type LocationConflict,
 } from '../utils/stringUtils';
 import { useOutdoorPOI } from '../hooks/useOutdoorPOI';
-import type { OutdoorPOI } from '../services/outdoorPOIService';
-import { isSupportedPOICategory } from '../services/outdoorPOIService';
+import type { OutdoorPOI, OutdoorPOICategory } from '../services/outdoorPOIService';
+import {
+  getOutdoorPOICategoryLabel,
+  isSupportedPOICategory,
+  OUTDOOR_POI_CATEGORY_OPTIONS,
+} from '../services/outdoorPOIService';
 import OutdoorPOIInfoCard from './OutdoorPOIInfoCard';
 
 /** Format seconds into a compact label like "1 min" or "30 sec". */
@@ -298,6 +302,7 @@ const USER_LOCATION_REGION_DELTA = 0.01;
 const POI_REGION_DELTA = 0.01;
 const MAP_ANIMATION_DURATION_MS = 500;
 const POI_MARKER_Z_INDEX = 999;
+const SELECTED_POI_MARKER_Z_INDEX = 1999;
 // 150m captures near-campus border usage; 800m caps snapping to plausible campus buildings only.
 const BORDER_THRESHOLD_METERS = 150;
 const NEAREST_BUILDING_MAX_METERS = 800;
@@ -360,18 +365,10 @@ const NORMALIZED_CURRENT_LOCATION = normalizeLabel('Current location');
 const INDOOR_NO_PATH_ERROR = 'No indoor route found between the given points';
 
 const POI_MARKER_ICONS: Record<string, string> = {
-  restaurant: 'restaurant',
-  cafe: 'local-cafe',
-  pharmacy: 'local-pharmacy',
-  gym: 'fitness-center',
-  bank: 'account-balance',
-  supermarket: 'shopping-cart',
-  bar: 'local-bar',
-  hospital: 'local-hospital',
-  library: 'local-library',
-  parking: 'local-parking',
-  gas_station: 'local-gas-station',
-  hotel: 'hotel',
+  ...OUTDOOR_POI_CATEGORY_OPTIONS.reduce<Record<string, string>>((accumulator, category) => {
+    accumulator[category.type] = category.icon;
+    return accumulator;
+  }, {}),
   place: 'place',
 };
 
@@ -518,6 +515,9 @@ export default function MapScreen() {
   });
 
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+  const [selectedOutdoorPOICategories, setSelectedOutdoorPOICategories] = useState<
+    OutdoorPOICategory[]
+  >([]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -535,6 +535,7 @@ export default function MapScreen() {
     debouncedQuery,
     userLocation: poiSearchLocation,
     activeCampus,
+    selectedCategories: selectedOutdoorPOICategories,
   });
 
   const {
@@ -697,7 +698,7 @@ export default function MapScreen() {
       id: `poi-${poi.id}`,
       name: poi.name,
       address: poi.address,
-      code: poi.category.replace(/_/g, ' '),
+      code: getOutdoorPOICategoryLabel(poi.category),
       _poi: poi,
     }));
   }, [outdoorPOIResults]);
@@ -705,6 +706,31 @@ export default function MapScreen() {
   const mergedSearchResults = useMemo(() => {
     return [...roomSearchResults, ...searchResults, ...outdoorPOISearchResults];
   }, [roomSearchResults, searchResults, outdoorPOISearchResults]);
+
+  const orderedOutdoorPOIResults = useMemo(() => {
+    const sorted = [...outdoorPOIResults].sort((left, right) => {
+      if (left.id === selectedOutdoorPOI?.id) return 1;
+      if (right.id === selectedOutdoorPOI?.id) return -1;
+
+      if (left.coordinate.latitude !== right.coordinate.latitude) {
+        return left.coordinate.latitude - right.coordinate.latitude;
+      }
+
+      if (left.coordinate.longitude !== right.coordinate.longitude) {
+        return left.coordinate.longitude - right.coordinate.longitude;
+      }
+
+      return left.id.localeCompare(right.id);
+    });
+
+    return sorted.map((poi, index) => ({
+      poi,
+      zIndex:
+        poi.id === selectedOutdoorPOI?.id
+          ? SELECTED_POI_MARKER_Z_INDEX
+          : POI_MARKER_Z_INDEX + index,
+    }));
+  }, [outdoorPOIResults, selectedOutdoorPOI]);
 
   const handleSelectRoomResult = useCallback(
     (result: RoomSearchResult) => {
@@ -1328,6 +1354,18 @@ export default function MapScreen() {
     searchInputRef.current?.blur();
   };
 
+  const handleOutdoorPOICategoriesChange = useCallback(
+    (categories: OutdoorPOICategory[]) => {
+      clearSelectedPOI();
+      handleCloseCard();
+      setSearchQuery('');
+      setIsSearchFocused(false);
+      searchInputRef.current?.blur();
+      setSelectedOutdoorPOICategories(categories);
+    },
+    [clearSelectedPOI, handleCloseCard, setIsSearchFocused, setSearchQuery],
+  );
+
   const resolveInsideBuilding = useCallback(
     (coordinate: LatLng): ResolvedCampusBuilding | null => {
       const sgwMatch = findBuildingAtOrNearCoordinate(coordinate, sgwBuildings, 0);
@@ -1541,7 +1579,6 @@ export default function MapScreen() {
       ) {
         setPendingDestinationRef(nextClassPreview.indoorRoomRef);
         setPendingDestinationBuildingCode(destinationBuildingCode);
-        navigateToIndoorRoom(nextClassPreview.indoorRoomRef);
       } else {
         setPendingDestinationRef(null);
         setPendingDestinationBuildingCode(null);
@@ -1562,12 +1599,29 @@ export default function MapScreen() {
       'Unable to open directions',
       `Could not resolve the building from "${nextClassPreview.rawLocation}".`,
     );
+  }, [activeCampus, handleSelectCampus, nextClassPreview, openNavigationForResolvedDestination]);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return;
+    if (!pendingDestinationRef || !pendingDestinationBuildingCode) return;
+    if (!hasIndoorMap(pendingDestinationBuildingCode)) return;
+    if (
+      indoor.destinationRoom?.ref === pendingDestinationRef &&
+      indoor.activeBuildingCode === pendingDestinationBuildingCode &&
+      indoor.indoorRoute
+    ) {
+      return;
+    }
+
+    navigateToIndoorRoom(pendingDestinationRef);
   }, [
-    activeCampus,
-    handleSelectCampus,
+    indoor.activeBuildingCode,
+    indoor.destinationRoom,
+    indoor.indoorRoute,
+    isNavigationOpen,
     navigateToIndoorRoom,
-    nextClassPreview,
-    openNavigationForResolvedDestination,
+    pendingDestinationBuildingCode,
+    pendingDestinationRef,
   ]);
 
   const handleTransportModeChange = useCallback(
@@ -2246,13 +2300,13 @@ export default function MapScreen() {
             isColorBlind={isColorBlind}
           />
         )}
-        {outdoorPOIResults.map((poi) => (
+        {orderedOutdoorPOIResults.map(({ poi, zIndex }) => (
           <POIMarker
             key={`outdoor-poi-${poi.id}`}
             poi={poi}
             markerColor={poiMarkerColor}
             testID={`outdoor-poi-marker-${poi.id}`}
-            zIndex={POI_MARKER_Z_INDEX}
+            zIndex={zIndex}
             iconName={
               (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
             }
@@ -2560,6 +2614,8 @@ export default function MapScreen() {
           onClose={() => setIsMenuOpen(false)}
           visiblePoiAmenities={visiblePoiAmenities}
           onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
+          selectedOutdoorPOICategories={selectedOutdoorPOICategories}
+          onOutdoorPOICategoriesChange={handleOutdoorPOICategoriesChange}
         />
       )}
 

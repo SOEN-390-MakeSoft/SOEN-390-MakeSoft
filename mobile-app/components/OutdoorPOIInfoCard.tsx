@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTheme } from 'tamagui';
-import type { OutdoorPOI } from '../services/outdoorPOIService';
+import { getOutdoorPOICategoryLabel, type OutdoorPOI } from '../services/outdoorPOIService';
 import DirectionButton from './DirectionButton';
 
 interface OutdoorPOIInfoCardProps {
@@ -29,7 +29,7 @@ export default function OutdoorPOIInfoCard({
   const directionTextColor = isColorBlind ? colourBlindPrimary : '#fff';
   const directionButtonColor = isColorBlind ? colourBlindSecondary : brandRed;
 
-  const categoryLabel = poi.category.replace(/_/g, ' ');
+  const categoryLabel = getOutdoorPOICategoryLabel(poi.category);
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
