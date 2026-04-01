@@ -11,5 +11,8 @@ export function getIndoorOverlayColors(isColorBlind: boolean): IndoorOverlayColo
     roomSelectedStroke: isColorBlind ? 'rgba(178, 27, 44, 0.9)' : 'rgba(26, 115, 232, 0.9)',
     stairs: 'rgba(180, 120, 40, 0.75)',
     escalator: 'rgba(140, 100, 180, 0.75)',
+    escalatorFill: 'rgba(140, 100, 180, 0.2)',
+    escalatorFillMuted: 'rgba(140, 100, 180, 0.05)',
+    escalatorStrokeMuted: 'rgba(140, 100, 180, 0.2)',
   };
 }

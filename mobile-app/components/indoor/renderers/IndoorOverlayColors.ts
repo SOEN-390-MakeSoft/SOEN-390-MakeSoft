@@ -8,4 +8,7 @@ export type IndoorOverlayColors = {
   roomSelectedStroke: string;
   stairs: string;
   escalator: string;
+  escalatorFill: string;
+  escalatorFillMuted: string;
+  escalatorStrokeMuted: string;
 };

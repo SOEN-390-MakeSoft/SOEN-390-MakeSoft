@@ -32,8 +32,8 @@ export class VerticalTransportFeatureRenderer implements FeatureRenderer {
         <React.Fragment key={escalator.id}>
           <Polygon
             coordinates={escalator.polygon}
-            fillColor={isHighlighted ? 'rgba(140, 100, 180, 0.2)' : 'rgba(140, 100, 180, 0.05)'}
-            strokeColor={isHighlighted ? colors.escalator : 'rgba(140, 100, 180, 0.2)'}
+            fillColor={isHighlighted ? colors.escalatorFill : colors.escalatorFillMuted}
+            strokeColor={isHighlighted ? colors.escalator : colors.escalatorStrokeMuted}
             strokeWidth={1.5}
             zIndex={5}
             tappable={false}
