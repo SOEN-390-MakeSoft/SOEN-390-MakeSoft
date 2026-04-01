@@ -13,6 +13,7 @@ import type {
 import { categorizeIndoorFeatures } from '../components/indoor/renderers/featureBuckets';
 import {
   computeLevelCentroid,
+  getDisplayedElevators,
   getFilteredRooms,
   getRouteSegmentsOnLevel,
   toNormalizedLevelKey,
@@ -36,6 +37,22 @@ function makeRoom(id: string, ref: string | null, center: LatLng): IndoorRoom {
     raw: {},
     polygon: makeSquare(center),
     centroid: center,
+  };
+}
+
+function makeElevator(
+  id: string,
+  ref: string | null,
+  levels: string[],
+  position: LatLng,
+): IndoorElevator {
+  return {
+    id,
+    type: 'elevator',
+    levels,
+    ref,
+    raw: {},
+    position,
   };
 }
 
@@ -224,5 +241,44 @@ describe('indoor overlay rendering rules', () => {
       toNormalizedLevelKey(['B1', '1', '2']),
     );
     expect(toNormalizedLevelKey(['1', '2'])).toBe('1|2');
+  });
+
+  it('selects a single best elevator from grouped close duplicates on non-hall buildings', () => {
+    const near = makeElevator('e1', 'ELEV-A', ['2', '1'], { latitude: 45.5, longitude: -73.57 });
+    const closer = makeElevator('e2', 'ELEV-B', ['1', '2'], {
+      latitude: 45.50009,
+      longitude: -73.57009,
+    });
+
+    const displayed = getDisplayedElevators({
+      elevators: [near, closer],
+      rooms: [makeRoom('r1', 'FB-101', { latitude: 45.5002, longitude: -73.5702 })],
+      filteredRooms: [],
+      levelCentroid: { latitude: 45.5001, longitude: -73.5701 },
+    });
+
+    expect(displayed.map((elevator) => elevator.id)).toEqual(['e2']);
+  });
+
+  it('keeps all elevators for hall-building data and applies elevator-room polygon filtering', () => {
+    const hallElevatorInside = makeElevator('h1', 'H-ELEV-1', ['1', '2'], {
+      latitude: 45.5,
+      longitude: -73.57,
+    });
+    const hallElevatorOutside = makeElevator('h2', 'H-ELEV-2', ['1', '2'], {
+      latitude: 45.501,
+      longitude: -73.571,
+    });
+
+    const displayed = getDisplayedElevators({
+      elevators: [hallElevatorInside, hallElevatorOutside],
+      rooms: [makeRoom('hall-room', 'H-840', { latitude: 45.5, longitude: -73.57 })],
+      filteredRooms: [
+        makeRoom('elevator-zone', 'elevator-zone', { latitude: 45.5, longitude: -73.57 }),
+      ],
+      levelCentroid: { latitude: 45.5, longitude: -73.57 },
+    });
+
+    expect(displayed.map((elevator) => elevator.id)).toEqual(['h1']);
   });
 });
