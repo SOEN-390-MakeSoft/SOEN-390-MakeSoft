@@ -31,9 +31,7 @@ async function fetchShuttleSegment(
   destination: LatLng,
   mode: 'walking' | 'driving' = 'walking',
 ): Promise<{ polyline: LatLng[]; durationSec: number }> {
-  if (!apiKey) {
-    throw new Error('Missing Google Maps API key for shuttle directions');
-  }
+  if (!apiKey) return { polyline: [], durationSec: 0 };
 
   const o = `${origin.latitude},${origin.longitude}`;
   const d = `${destination.latitude},${destination.longitude}`;
@@ -41,7 +39,7 @@ async function fetchShuttleSegment(
 
   try {
     const res = await fetchImpl(url);
-    if (!res.ok) {
+    if (res.ok === false) {
       throw new Error(`Directions HTTP ${res.status}`);
     }
 
