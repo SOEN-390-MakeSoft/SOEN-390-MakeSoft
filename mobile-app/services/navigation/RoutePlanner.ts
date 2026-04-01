@@ -54,6 +54,9 @@ export class RoutePlanner {
     outdoorWalking: ModeRoute | null,
     tunnelWalking: ModeRoute | null,
   ): WalkingRouteVariant {
+    // Explicit fallback: when both walking routes are unavailable, default to outdoor.
+    if (!outdoorWalking && !tunnelWalking) return 'outdoor';
+
     if (outdoorWalking && tunnelWalking) {
       return tunnelWalking.durationSec <= outdoorWalking.durationSec ? 'tunnel' : 'outdoor';
     }

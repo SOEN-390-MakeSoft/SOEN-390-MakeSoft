@@ -81,6 +81,20 @@ describe('RoutePlanner', () => {
     expect(result.preferredWalkingVariant).toBe('outdoor');
   });
 
+  it('defaults to outdoor when both walking routes are unavailable', async () => {
+    const planner = new RoutePlanner([
+      new FakeStrategy('driving', makeRoute(900, 'Drive route')),
+      new FakeStrategy('outdoorWalking', null),
+      new FakeStrategy('tunnelWalking', null),
+    ]);
+
+    const result = await planner.plan(baseContext);
+
+    expect(result.outdoorWalking).toBeNull();
+    expect(result.tunnelWalking).toBeNull();
+    expect(result.preferredWalkingVariant).toBe('outdoor');
+  });
+
   it('throws when duplicate strategy keys are registered', () => {
     expect(
       () =>
