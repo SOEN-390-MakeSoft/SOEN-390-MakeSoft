@@ -170,15 +170,11 @@ export class PoiFeatureRenderer implements FeatureRenderer {
   render(params: IndoorFeatureRendererParams): React.ReactNode {
     const { isColorBlind, onPoiPress, pois, visiblePoiAmenities } = params;
 
-    const amenityCounters = new Map<string, number>();
-
     return (
       <>
         {pois.map((poi) => {
           const isHighlighted = !visiblePoiAmenities || visiblePoiAmenities.includes(poi.amenity);
-          const nextIndex = amenityCounters.get(poi.amenity) ?? 0;
-          amenityCounters.set(poi.amenity, nextIndex + 1);
-          const testID = `poi-${poi.amenity}-${nextIndex}`;
+          const testID = `poi-${poi.amenity}-${poi.id}`;
 
           return renderPoiFeature(
             poi,
