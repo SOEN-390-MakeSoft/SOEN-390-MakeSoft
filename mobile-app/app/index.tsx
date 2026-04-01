@@ -69,7 +69,15 @@ export default function WelcomeScreen() {
     let isMounted = true;
 
     async function loadOnboardingState() {
-      const completed = await hasCompletedOnboarding();
+      let completed = false;
+
+      try {
+        completed = await hasCompletedOnboarding();
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
 
       if (!isMounted) {
         return;
@@ -77,10 +85,7 @@ export default function WelcomeScreen() {
 
       if (completed) {
         router.replace('/(tabs)/Map');
-        return;
       }
-
-      setIsLoading(false);
     }
 
     void loadOnboardingState();
