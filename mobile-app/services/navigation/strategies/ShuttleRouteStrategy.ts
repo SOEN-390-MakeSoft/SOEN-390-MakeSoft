@@ -31,7 +31,9 @@ async function fetchShuttleSegment(
   destination: LatLng,
   mode: 'walking' | 'driving' = 'walking',
 ): Promise<{ polyline: LatLng[]; durationSec: number }> {
-  if (!apiKey) return { polyline: [], durationSec: 0 };
+  if (!apiKey) {
+    throw new Error('Missing Google Maps API key for shuttle directions');
+  }
 
   const o = `${origin.latitude},${origin.longitude}`;
   const d = `${destination.latitude},${destination.longitude}`;
@@ -39,8 +41,14 @@ async function fetchShuttleSegment(
 
   try {
     const res = await fetchImpl(url);
+    if (!res.ok) {
+      throw new Error(`Directions HTTP ${res.status}`);
+    }
+
     const data = await res.json();
-    if (data.status !== 'OK' || !data.routes?.length) return { polyline: [], durationSec: 0 };
+    if (data.status !== 'OK' || !data.routes?.length) {
+      throw new Error(`Directions API status ${data.status ?? 'UNKNOWN'}`);
+    }
 
     const leg = data.routes[0].legs?.[0];
     const points = data.routes[0].overview_polyline?.points;
@@ -48,8 +56,9 @@ async function fetchShuttleSegment(
       polyline: points ? decodePolyline(points) : [],
       durationSec: leg?.duration?.value ?? 0,
     };
-  } catch {
-    return { polyline: [], durationSec: 0 };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to fetch ${mode} shuttle segment: ${message}`);
   }
 }
 

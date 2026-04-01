@@ -31,6 +31,7 @@ describe('DefaultShuttleRouteStrategy', () => {
     });
 
     const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
       json: async () => makeDirectionsResponse(10 * 60),
     });
 
@@ -56,6 +57,7 @@ describe('DefaultShuttleRouteStrategy', () => {
     });
 
     const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
       json: async () => makeDirectionsResponse(10 * 60),
     });
 
@@ -70,5 +72,30 @@ describe('DefaultShuttleRouteStrategy', () => {
 
     expect(result).not.toBeNull();
     expect(result?.hasDirections).toBe(false);
+  });
+
+  it('propagates segment request failures instead of returning fallback segment data', async () => {
+    (getNextShuttles as jest.MockedFunction<typeof getNextShuttles>).mockResolvedValue({
+      threeNextShuttles: ['2026-03-29T10:30:00.000Z', null, null],
+      tripDuration: 30,
+    });
+
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ status: 'UNKNOWN_ERROR', routes: [] }),
+    });
+
+    const strategy = new DefaultShuttleRouteStrategy();
+
+    await expect(
+      strategy.execute({
+        origin: { latitude: 45.4972, longitude: -73.5789 },
+        destination: { latitude: 45.4584, longitude: -73.6387 },
+        currentTime: new Date('2026-03-29T10:00:00.000Z'),
+        googleMapsApiKey: 'test-key',
+        fetchImpl,
+      }),
+    ).rejects.toThrow('Failed to fetch walking shuttle segment: Directions HTTP 503');
   });
 });
