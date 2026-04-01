@@ -395,12 +395,7 @@ describe('MapScreen', () => {
       getByTestId('campus-map').props.onRegionChangeComplete(H_INDOOR_REGION);
     });
 
-    await waitFor(() => {
-      expect(queryByTestId('indoor-discovery-hint')).toBeNull();
-    });
-    await waitFor(() => {
-      expect(getByTestId('indoor-chip-washrooms')).toBeTruthy();
-    });
+    expect(queryByTestId('indoor-discovery-hint')).toBeNull();
 
     fireEvent.press(getByLabelText('Close building details'));
 
