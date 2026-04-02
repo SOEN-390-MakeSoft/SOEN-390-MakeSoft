@@ -232,7 +232,7 @@ function buildResolveRows(
     if (dashIdx > 0) {
       const code = c.rawName.slice(0, dashIdx).trim();
       const description = c.rawName.slice(dashIdx + 3).trim();
-      const isCode = /^[A-Z]{1,3}$/.test(code);
+      const isCode = code.length >= 1 && code.length <= 3 && code.toUpperCase() === code;
       if (isCode && description) {
         // Add code (e.g. "H") as an exact token and description as a substring
         exactTokens.push(normalizeLabel(code));
@@ -253,7 +253,7 @@ function buildResolveRows(
     if (lastOpenParen > 0 && c.rawName.endsWith(')')) {
       const description = c.rawName.slice(0, lastOpenParen).trim();
       const code = c.rawName.slice(lastOpenParen + 1, -1).trim();
-      const isCode = /^[A-Z]{1,3}$/.test(code);
+      const isCode = code.length >= 1 && code.length <= 3 && code.toUpperCase() === code;
       if (description && isCode) {
         // Add code (e.g. "H") as an exact token and description as a substring
         exactTokens.push(normalizeLabel(code));
