@@ -228,33 +228,43 @@ function buildResolveRows(
     const exactTokens: string[] = [normalizeLabel(c.rawName)];
     const substringTokens: string[] = [];
     // If candidate name is "CODE - Description"
-    const dashMatch = /^([A-Z]{1,3})\s*-\s*(.+)$/.exec(c.rawName);
-    if (dashMatch) {
-      // Add code (e.g. "H") as an exact token and description as a substring
-      exactTokens.push(normalizeLabel(dashMatch[1]));
-      substringTokens.push(normalizeLabel(dashMatch[2]));
-      // Also add aliases from the address dataset for this code, if any
-      const addr = addressMap.get(dashMatch[1].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        // Add all aliases as substrings, e.g. "webster", "webster library"
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
+    const dashIdx = c.rawName.indexOf(' - ');
+    if (dashIdx > 0) {
+      const code = c.rawName.slice(0, dashIdx).trim();
+      const description = c.rawName.slice(dashIdx + 3).trim();
+      const isCode = /^[A-Z]{1,3}$/.test(code);
+      if (isCode && description) {
+        // Add code (e.g. "H") as an exact token and description as a substring
+        exactTokens.push(normalizeLabel(code));
+        substringTokens.push(normalizeLabel(description));
+        // Also add aliases from the address dataset for this code, if any
+        const addr = addressMap.get(code.toUpperCase());
+        if (addr) {
+          substringTokens.push(normalizeLabel(addr.name));
+          // Add all aliases as substrings, e.g. "webster", "webster library"
+          for (const alias of addr.aliases ?? []) {
+            substringTokens.push(normalizeLabel(alias));
+          }
         }
       }
     }
     // If candidate name is "Description (CODE)"
-    const parenMatch = /^(.+?)\s*\(([A-Z]{1,3})\)$/.exec(c.rawName);
-    if (parenMatch) {
-      // Add code (e.g. "H") as an exact token and description as a substring
-      exactTokens.push(normalizeLabel(parenMatch[2]));
-      substringTokens.push(normalizeLabel(parenMatch[1]));
-      // Add address/aliases as above
-      const addr = addressMap.get(parenMatch[2].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
+    const lastOpenParen = c.rawName.lastIndexOf('(');
+    if (lastOpenParen > 0 && c.rawName.endsWith(')')) {
+      const description = c.rawName.slice(0, lastOpenParen).trim();
+      const code = c.rawName.slice(lastOpenParen + 1, -1).trim();
+      const isCode = /^[A-Z]{1,3}$/.test(code);
+      if (description && isCode) {
+        // Add code (e.g. "H") as an exact token and description as a substring
+        exactTokens.push(normalizeLabel(code));
+        substringTokens.push(normalizeLabel(description));
+        // Add address/aliases as above
+        const addr = addressMap.get(code.toUpperCase());
+        if (addr) {
+          substringTokens.push(normalizeLabel(addr.name));
+          for (const alias of addr.aliases ?? []) {
+            substringTokens.push(normalizeLabel(alias));
+          }
         }
       }
     }
