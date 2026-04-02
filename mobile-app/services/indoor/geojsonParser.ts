@@ -493,32 +493,64 @@ export function parseIndoorGeoJSON(collection: GeoJSONFeatureCollection): Indoor
   return mergePointRooms(features);
 }
 
+type RoomIndexEntry = {
+  room: IndoorRoom;
+  levels: Set<string>;
+};
+
+function buildPolygonRoomIndex(features: IndoorFeature[]): Map<string, RoomIndexEntry[]> {
+  const index = new Map<string, RoomIndexEntry[]>();
+  for (const f of features) {
+    if (f.type !== 'room') continue;
+    if (f.polygon.length === 0) continue;
+    if (!f.ref) continue;
+
+    const list = index.get(f.ref) ?? [];
+    list.push({ room: f, levels: new Set(f.levels) });
+    index.set(f.ref, list);
+  }
+  return index;
+}
+
+function hasLevelOverlap(levels: Set<string>, candidateLevels: string[]): boolean {
+  for (const level of candidateLevels) {
+    if (levels.has(level)) return true;
+  }
+  return false;
+}
+
+function mergePointRoomCentroids(
+  features: IndoorFeature[],
+  index: Map<string, RoomIndexEntry[]>,
+): Set<string> {
+  const mergedPointIds = new Set<string>();
+  for (const f of features) {
+    if (f.type !== 'room') continue;
+    if (f.polygon.length > 0) continue;
+    if (!f.ref) continue;
+
+    const candidates = index.get(f.ref);
+    if (!candidates) continue;
+
+    let matched = false;
+    for (const candidate of candidates) {
+      if (!hasLevelOverlap(candidate.levels, f.levels)) continue;
+      candidate.room.centroid = f.centroid;
+      matched = true;
+    }
+
+    if (matched) {
+      mergedPointIds.add(f.id);
+    }
+  }
+  return mergedPointIds;
+}
+
 function mergePointRooms(features: IndoorFeature[]): IndoorFeature[] {
   // Post-processing: Merge Point rooms into Polygon rooms when they share the same ref and level.
   // This ensures room labels appear exactly at the explicit GeoJSON node rather than the calculated geometric center.
-  const polygonRooms: IndoorRoom[] = [];
-  for (const f of features) {
-    if (f.type === 'room' && f.polygon.length > 0) {
-      polygonRooms.push(f);
-    }
-  }
-  const mergedPointIds = new Set<string>();
-
-  for (const f of features) {
-    if (f.type !== 'room') continue;
-    const room = f;
-    if (room.polygon.length === 0 && room.ref) {
-      const matches = polygonRooms.filter(
-        (p) => p.ref === room.ref && p.levels.some((l) => room.levels.includes(l)),
-      );
-      if (matches.length > 0) {
-        for (const match of matches) {
-          match.centroid = room.centroid;
-        }
-        mergedPointIds.add(room.id);
-      }
-    }
-  }
+  const index = buildPolygonRoomIndex(features);
+  const mergedPointIds = mergePointRoomCentroids(features, index);
 
   return features.filter((f) => !mergedPointIds.has(f.id));
 }

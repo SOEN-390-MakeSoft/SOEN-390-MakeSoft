@@ -70,7 +70,7 @@ export default function NextClassModal({
           </View>
           <View style={styles.summaryBox}>
             <Text style={styles.summaryText}>
-              {courseName} — {building} {room !== 'Unknown' ? `Rm ${room}` : ''} — {timeUntil}
+              {courseName} — {building} {room === 'Unknown' ? '' : `Rm ${room}`} — {timeUntil}
             </Text>
           </View>
           <Pressable style={styles.closeButton} onPress={onClose} accessibilityRole="button">
