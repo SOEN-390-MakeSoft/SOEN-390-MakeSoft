@@ -37,7 +37,7 @@ const makePOI = (id: string, name: string) => ({
   address: `${name} St`,
   coordinate: { latitude: 45.497, longitude: -73.578 },
   category: 'restaurant',
-  rating: 4.0,
+  rating: 4,
   openNow: true,
 });
 

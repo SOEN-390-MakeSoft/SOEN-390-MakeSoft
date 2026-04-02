@@ -108,7 +108,7 @@ export function getOutdoorPOICategoryLabel(category: string): string {
   const match = OUTDOOR_POI_CATEGORY_OPTIONS.find((option) => option.type === category);
   if (match) return match.label;
 
-  return category.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+  return category.replaceAll('_', ' ').replaceAll(/\b\w/g, (character) => character.toUpperCase());
 }
 
 /**

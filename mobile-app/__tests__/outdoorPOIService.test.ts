@@ -178,7 +178,7 @@ describe('fetchNearbyPOIs', () => {
       },
     ];
 
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', results: mockResults }),
     } as Response);
@@ -203,7 +203,7 @@ describe('fetchNearbyPOIs', () => {
       geometry: { location: { lat: 45.497 + i * 0.0001, lng: -73.578 } },
     }));
 
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', results: mockResults }),
     } as Response);
@@ -224,11 +224,11 @@ describe('fetchNearbyPOIs', () => {
         place_id: 'far',
         name: 'Far Place',
         vicinity: '100 Far St',
-        geometry: { location: { lat: 46.0, lng: -73.0 } },
+        geometry: { location: { lat: 46, lng: -73 } },
       },
     ];
 
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', results: mockResults }),
     } as Response);
@@ -239,7 +239,7 @@ describe('fetchNearbyPOIs', () => {
   });
 
   it('returns empty array on ZERO_RESULTS', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'ZERO_RESULTS', results: [] }),
     } as Response);
@@ -249,7 +249,7 @@ describe('fetchNearbyPOIs', () => {
   });
 
   it('returns empty array when response is not ok', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,
       json: async () => ({}),
     } as Response);
@@ -259,7 +259,7 @@ describe('fetchNearbyPOIs', () => {
   });
 
   it('returns empty array on API error status', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'REQUEST_DENIED', results: [] }),
     } as Response);
@@ -274,7 +274,7 @@ describe('fetchNearbyPOIs', () => {
   });
 
   it('constructs the correct URL', async () => {
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', results: [] }),
     } as Response);
@@ -290,7 +290,7 @@ describe('fetchNearbyPOIs', () => {
 
   it('passes AbortSignal to fetch when provided', async () => {
     const signal = new AbortController().signal;
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', results: [] }),
     } as Response);
@@ -311,7 +311,7 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('returns address, rating, and openNow from the API', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         status: 'OK',
@@ -330,7 +330,7 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('returns empty address when API response is not OK', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'NOT_FOUND' }),
     } as Response);
@@ -340,7 +340,7 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('returns empty address when fetch fails', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,
       json: async () => ({}),
     } as Response);
@@ -356,7 +356,7 @@ describe('fetchPlaceDetails', () => {
   });
 
   it('constructs the correct URL with place_id and fields', async () => {
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'OK', result: { formatted_address: 'Abc' } }),
     } as Response);
