@@ -91,18 +91,15 @@ function ModeChip({
   chipMutedColor: string;
   onPress: () => void;
 }>) {
+  let chipStyle = [styles.modeChipMuted, { backgroundColor: chipMutedColor }];
+  if (isDisabled) {
+    chipStyle = [styles.modeChipMuted, styles.modeChipLate, { backgroundColor: chipMutedColor }];
+  } else if (isSelected) {
+    chipStyle = [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }];
+  }
+
   return (
-    <Pressable
-      onPress={onPress}
-      testID={`mode-chip-${mode}`}
-      style={
-        isDisabled
-          ? [styles.modeChipMuted, styles.modeChipLate, { backgroundColor: chipMutedColor }]
-          : isSelected
-            ? [styles.modeChip, styles.modeChipSelected, { backgroundColor: chipColor }]
-            : [styles.modeChipMuted, { backgroundColor: chipMutedColor }]
-      }
-    >
+    <Pressable onPress={onPress} testID={`mode-chip-${mode}`} style={chipStyle}>
       <MaterialIcons name={icon} size={18} color="#fff" />
       <Text style={styles.modeText}>{label}</Text>
     </Pressable>
