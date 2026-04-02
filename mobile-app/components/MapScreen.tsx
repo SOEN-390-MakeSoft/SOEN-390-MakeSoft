@@ -1024,6 +1024,15 @@ export default function MapScreen() {
     setCalendarModalVisible(true);
   }, []);
 
+  const stripTrailingPunctuation = useCallback((value: string): string => {
+    let cleaned = value.trim();
+    const trailingChars = '),.;:';
+    while (cleaned.length > 0 && trailingChars.includes(cleaned[cleaned.length - 1])) {
+      cleaned = cleaned.slice(0, -1);
+    }
+    return cleaned;
+  }, []);
+
   const resolveNextClassIndoorRoomRef = useCallback(
     (rawLocation: string, resolvedBuildingCode: string | null | undefined): string | null => {
       const explicitIndoorDestination = detectIndoorDestination(rawLocation);
@@ -1034,7 +1043,7 @@ export default function MapScreen() {
       if (!resolvedBuildingCode || !hasIndoorMap(resolvedBuildingCode)) return null;
 
       const parsed = parseLocationString(rawLocation);
-      const cleanedRoomQuery = parsed.room?.trim().replaceAll(/[),.;:]+$/g, '');
+      const cleanedRoomQuery = parsed.room ? stripTrailingPunctuation(parsed.room) : '';
       if (!cleanedRoomQuery) return null;
 
       const buildingData = loadBuilding(resolvedBuildingCode);
@@ -1047,7 +1056,7 @@ export default function MapScreen() {
       );
       return resolvedRoom?.ref ?? null;
     },
-    [],
+    [stripTrailingPunctuation],
   );
 
   const handleDirectionsToNextClass = useCallback(() => {
