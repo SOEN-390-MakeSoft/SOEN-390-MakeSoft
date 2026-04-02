@@ -1,6 +1,20 @@
 import { isClassesCalendarValid } from '../utils/calendarValidation';
 
+const originalCalendarMode = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+
 describe('calendarValidation', () => {
+  beforeEach(() => {
+    delete process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+  });
+
+  afterEach(() => {
+    if (originalCalendarMode === undefined) {
+      delete process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+      return;
+    }
+    process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE = originalCalendarMode;
+  });
+
   describe('isClassesCalendarValid', () => {
     it('returns true when calendar is connected (happy path)', () => {
       // Arrange
