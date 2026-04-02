@@ -10,9 +10,6 @@ spring:
   application:
     name: makesoft-backend
 
-  config:
-    import: optional:file:.env[.properties] # Look for a .env to import, its optional so if you dont have one itll be fine.
-
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -23,3 +20,10 @@ spring:
       ddl-auto: validate
 
     show-sql: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+    import: optional:file:.env[.properties] # Load .env for non-test profiles only.
