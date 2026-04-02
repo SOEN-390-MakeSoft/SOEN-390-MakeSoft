@@ -2,20 +2,20 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CalendarEvent } from '../hooks/usePublicCalendar';
 
-type NextClassModalProps = {
+type NextClassModalProps = Readonly<{
   visible: boolean;
   isCalendarConnected: boolean;
   nextEvent: CalendarEvent | null;
   onClose: () => void;
   onOpenCalendarConnect: () => void;
-};
+}>;
 
 const parseLocation = (location?: string): { building: string; room: string } => {
   if (!location) return { building: 'Unknown', room: 'Unknown' };
   const trimmed = location.trim();
-  const match1 = trimmed.match(/^(.+?)\s+(?:Rm\s+)?(\d+)$/i);
+  const match1 = /^(.+?)\s+(?:Rm\s+)?(\d+)$/i.exec(trimmed);
   if (match1) return { building: match1[1].trim(), room: match1[2] };
-  const match2 = trimmed.match(/^([A-Z]+)-(\d+)$/i);
+  const match2 = /^([A-Z]+)-(\d+)$/i.exec(trimmed);
   if (match2) return { building: match2[1], room: match2[2] };
   return { building: trimmed, room: 'Unknown' };
 };
@@ -42,77 +42,78 @@ export default function NextClassModal({
   onClose,
   onOpenCalendarConnect,
 }: NextClassModalProps) {
+  let content: React.ReactNode;
+
+  if (isCalendarConnected) {
+    if (nextEvent) {
+      const { building, room } = parseLocation(nextEvent.location);
+      const timeUntil = getTimeUntilStart(nextEvent.start.dateTime ?? nextEvent.start.date);
+      const courseName = nextEvent.summary || 'Unknown Course';
+      content = (
+        <>
+          <Text style={styles.modalTitle}>Next Class</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Course:</Text>
+            <Text style={styles.value}>{courseName}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Building:</Text>
+            <Text style={styles.value}>{building}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Room:</Text>
+            <Text style={styles.value}>{room}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Time:</Text>
+            <Text style={styles.value}>{timeUntil}</Text>
+          </View>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryText}>
+              {courseName} — {building} {room !== 'Unknown' ? `Rm ${room}` : ''} — {timeUntil}
+            </Text>
+          </View>
+          <Pressable style={styles.closeButton} onPress={onClose} accessibilityRole="button">
+            <Text style={styles.closeButtonText}>Close</Text>
+          </Pressable>
+        </>
+      );
+    } else {
+      content = (
+        <>
+          <Text style={styles.modalTitle}>No Upcoming Class</Text>
+          <Text style={styles.summaryText}>
+            We could not find any current or upcoming timed classes in your calendar.
+          </Text>
+          <Pressable style={styles.closeButton} onPress={onClose} accessibilityRole="button">
+            <Text style={styles.closeButtonText}>Close</Text>
+          </Pressable>
+        </>
+      );
+    }
+  } else {
+    content = (
+      <>
+        <Text style={styles.modalTitle}>Calendar Not Connected</Text>
+        <Text style={styles.summaryText}>
+          Connect your Google Calendar first to view your next class details.
+        </Text>
+        <Pressable
+          style={styles.closeButton}
+          onPress={onOpenCalendarConnect}
+          accessibilityRole="button"
+        >
+          <Text style={styles.closeButtonText}>Connect Calendar</Text>
+        </Pressable>
+      </>
+    );
+  }
+
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
-        <View style={styles.modalContent}>
-          {!isCalendarConnected ? (
-            <>
-              <Text style={styles.modalTitle}>Calendar Not Connected</Text>
-              <Text style={styles.summaryText}>
-                Connect your Google Calendar first to view your next class details.
-              </Text>
-              <Pressable
-                style={styles.closeButton}
-                onPress={onOpenCalendarConnect}
-                accessibilityRole="button"
-              >
-                <Text style={styles.closeButtonText}>Connect Calendar</Text>
-              </Pressable>
-            </>
-          ) : !nextEvent ? (
-            <>
-              <Text style={styles.modalTitle}>No Upcoming Class</Text>
-              <Text style={styles.summaryText}>
-                We could not find any current or upcoming timed classes in your calendar.
-              </Text>
-              <Pressable style={styles.closeButton} onPress={onClose} accessibilityRole="button">
-                <Text style={styles.closeButtonText}>Close</Text>
-              </Pressable>
-            </>
-          ) : (
-            (() => {
-              const { building, room } = parseLocation(nextEvent.location);
-              const timeUntil = getTimeUntilStart(nextEvent.start.dateTime ?? nextEvent.start.date);
-              const courseName = nextEvent.summary || 'Unknown Course';
-              return (
-                <>
-                  <Text style={styles.modalTitle}>Next Class</Text>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Course:</Text>
-                    <Text style={styles.value}>{courseName}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Building:</Text>
-                    <Text style={styles.value}>{building}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Room:</Text>
-                    <Text style={styles.value}>{room}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.label}>Time:</Text>
-                    <Text style={styles.value}>{timeUntil}</Text>
-                  </View>
-                  <View style={styles.summaryBox}>
-                    <Text style={styles.summaryText}>
-                      {courseName} — {building} {room !== 'Unknown' ? `Rm ${room}` : ''} —{' '}
-                      {timeUntil}
-                    </Text>
-                  </View>
-                  <Pressable
-                    style={styles.closeButton}
-                    onPress={onClose}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.closeButtonText}>Close</Text>
-                  </Pressable>
-                </>
-              );
-            })()
-          )}
-        </View>
+        <View style={styles.modalContent}>{content}</View>
       </View>
     </Modal>
   );

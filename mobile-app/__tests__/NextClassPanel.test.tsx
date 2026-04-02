@@ -7,8 +7,6 @@ import type { CalendarEvent } from '../hooks/usePublicCalendar';
 
 jest.mock('../components/NextClassModal', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const React = require('react');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Pressable, Text, View } = require('react-native');
   return function MockNextClassModal({
     visible,
