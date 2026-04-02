@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Pressable,
   Linking,
-  Alert,
   Modal,
   TouchableOpacity,
 } from 'react-native';
@@ -52,15 +51,6 @@ export default function GoogleCalendarInstructionsScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalImage, setModalImage] = useState<any>(null);
-
-  const handleCopy = (text: string) => {
-    if (navigator && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      Alert.alert('Copied!', 'Link copied to clipboard.');
-    } else {
-      Alert.alert('Copy not supported', 'Please copy the link manually.');
-    }
-  };
 
   const openImage = (img: any) => {
     setModalImage(img);
