@@ -1,5 +1,5 @@
 // app.config.js — expose REACT_NATIVE_PACKAGER_HOSTNAME (or EXPO_PUBLIC_PC_IP) to Expo runtime
-module.exports = ({ config }) => {
+function appConfig({ config }) {
   const existingPlugins = config.plugins || [];
   const withDetoxPlugin = './plugins/withDetoxAndroid';
 
@@ -30,4 +30,6 @@ module.exports = ({ config }) => {
       ? existingPlugins
       : [...existingPlugins, withDetoxPlugin],
   };
-};
+}
+
+module.exports = appConfig;
