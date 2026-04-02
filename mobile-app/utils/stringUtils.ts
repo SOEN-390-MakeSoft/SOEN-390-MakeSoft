@@ -47,6 +47,34 @@ export interface ParsedLocation {
   room: string | null;
 }
 
+function tokenizeWhitespace(value: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  for (const ch of value) {
+    if (ch.trim() === '') {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+function stripRoomPrefix(token: string): string | null {
+  const lower = token.toLowerCase();
+  if (lower.startsWith('rm') && token.length > 2) {
+    return token.slice(2);
+  }
+  if (lower.startsWith('room') && token.length > 4) {
+    return token.slice(4);
+  }
+  return null;
+}
+
 /**
  * Parses a location string in the format:
  * "<Campus Name> - <Building Name> [Rm|Room] <RoomNumber>"
@@ -99,15 +127,32 @@ export function parseLocationString(location: string): ParsedLocation {
   remainder = remainder.trim();
 
   // Extract optional room number: matches "Rm 535", "Room 535", "Rm535", "Room535"
-  const roomMatch = /\s*\b(?:Rm|Room)\s*(\S+)\s*$/i.exec(remainder);
   let room: string | null = null;
   let building: string | null = null;
 
-  if (roomMatch) {
-    // If a room match is found, extract and remove it from the building string
-    room = roomMatch[1];
-    building = remainder.slice(0, roomMatch.index).trim() || null;
-  } else {
+  const tokens = tokenizeWhitespace(remainder);
+  if (tokens.length >= 2) {
+    const last = tokens[tokens.length - 1];
+    const prev = tokens[tokens.length - 2];
+    if (prev.toLowerCase() === 'rm' || prev.toLowerCase() === 'room') {
+      room = last;
+      building = tokens.slice(0, -2).join(' ') || null;
+    } else {
+      const inlineRoom = stripRoomPrefix(last);
+      if (inlineRoom) {
+        room = inlineRoom;
+        building = tokens.slice(0, -1).join(' ') || null;
+      }
+    }
+  } else if (tokens.length === 1) {
+    const inlineRoom = stripRoomPrefix(tokens[0]);
+    if (inlineRoom) {
+      room = inlineRoom;
+      building = null;
+    }
+  }
+
+  if (!room) {
     // No explicit room, use the whole remainder as a building name
     building = remainder || null;
   }
