@@ -40,6 +40,25 @@ function haversine(a: LatLng, b: LatLng): number {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+function getEdgeWeight(
+  edge: { weight: number; edgeType: IndoorNavStep['edgeType']; isLevelChange: boolean },
+  options: PathfinderOptions,
+): number | null {
+  if (options.avoidStairs && edge.edgeType === 'stairs') return null;
+  if (options.avoidEscalators && edge.edgeType === 'escalator') return null;
+
+  let weight = edge.weight;
+  if (
+    options.preferElevator &&
+    edge.isLevelChange &&
+    (edge.edgeType === 'stairs' || edge.edgeType === 'escalator')
+  ) {
+    weight *= 3; // Heavy penalty to discourage stairs when elevator preferred
+  }
+
+  return weight;
+}
+
 // ---------------------------------------------------------------------------
 // Min-heap (priority queue)
 // ---------------------------------------------------------------------------
@@ -148,17 +167,8 @@ export function findPath(
 
       if (closed.has(neighbourId)) continue;
 
-      // Apply preference penalties
-      let edgeWeight = edge.weight;
-      if (options.avoidStairs && edge.edgeType === 'stairs') continue;
-      if (options.avoidEscalators && edge.edgeType === 'escalator') continue;
-      if (
-        options.preferElevator &&
-        edge.isLevelChange &&
-        (edge.edgeType === 'stairs' || edge.edgeType === 'escalator')
-      ) {
-        edgeWeight *= 3; // Heavy penalty to discourage stairs when elevator preferred
-      }
+      const edgeWeight = getEdgeWeight(edge, options);
+      if (edgeWeight == null) continue;
 
       const tentativeG = currentG + edgeWeight;
       const prevG = gScore.get(neighbourId) ?? Infinity;
@@ -247,8 +257,8 @@ function reconstructRoute(
       // skipping it would lose intermediate waypoints.
       for (let p = 0; p < geom.length; p++) {
         if (p === 0 && polyline.length > 0) {
-          const last = polyline[polyline.length - 1];
-          if (haversine(last, geom[p]) < 1) continue;
+          const last = polyline.at(-1);
+          if (last && haversine(last, geom[p]) < 1) continue;
         }
         polyline.push(geom[p]);
         segmentPath.push(geom[p]);
@@ -266,7 +276,8 @@ function reconstructRoute(
   }
 
   const startNode = graph.nodes.get(nodeIds[0])!;
-  const endNode = graph.nodes.get(nodeIds[nodeIds.length - 1])!;
+  const endNodeId = nodeIds.at(-1) ?? endId;
+  const endNode = graph.nodes.get(endNodeId)!;
 
   const totalEstimatedSeconds = steps.reduce((sum, s) => sum + s.estimatedSeconds, 0);
 

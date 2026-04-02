@@ -225,12 +225,10 @@ export function loadTunnelGraph(networkCode: 'SGW'): IndoorGraph | null {
   if (tunnelGraphCache.has(code)) return tunnelGraphCache.get(code)!;
 
   let assetKey: keyof typeof ASSET_LOADERS;
-  switch (code) {
-    case 'SGW':
-      assetKey = 'SGW_Tunnel_Network';
-      break;
-    default:
-      return null;
+  if (code === 'SGW') {
+    assetKey = 'SGW_Tunnel_Network';
+  } else {
+    return null;
   }
 
   const loader = ASSET_LOADERS[assetKey];
@@ -277,7 +275,7 @@ export function detectIndoorDestination(
   query: string,
 ): { buildingCode: string; roomRef: string } | null {
   // Pattern: optional building name, then building-code + optional separator + room number
-  const match = query.match(/\b([A-Z]{1,3})[\s\-]?(\d{1,4}(?:\.\d+)?)\b/i);
+  const match = /\b([A-Z]{1,3})[\s-]?(\d{1,4}(?:\.\d+)?)\b/i.exec(query);
   if (!match) return null;
 
   const code = match[1].toUpperCase();

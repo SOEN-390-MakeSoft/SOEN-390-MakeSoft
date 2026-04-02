@@ -30,7 +30,7 @@ export function buildRoomIndex(features: IndoorFeature[]): Map<string, ResolvedR
 
   for (const f of features) {
     if (f.type !== 'room') continue;
-    const room = f as IndoorRoom;
+    const room = f;
     if (!room.ref) continue;
 
     // Index by exact ref and also by a normalized version (uppercase, trimmed)
@@ -76,9 +76,9 @@ export function resolveRoom(
   }
 
   // 3. Fuzzy: strip all non-alphanumeric and try substring match
-  const stripped = normalized.replace(/[^A-Z0-9]/g, '');
+  const stripped = normalized.replaceAll(/[^A-Z0-9]/g, '');
   for (const [key, value] of roomIndex) {
-    const keyStripped = key.replace(/[^A-Z0-9]/g, '');
+    const keyStripped = key.replaceAll(/[^A-Z0-9]/g, '');
     if (keyStripped === stripped) return value;
   }
 
@@ -158,17 +158,17 @@ export function searchRooms(
   if (!query.trim()) return [];
 
   const normalized = normalizeRef(query);
-  const stripped = normalized.replace(/[^A-Z0-9]/g, '');
+  const stripped = normalized.replaceAll(/[^A-Z0-9]/g, '');
 
   // Also try with building-code prefix (e.g. "840" → "H-840")
   const withCode = buildingCode ? normalizeRef(`${buildingCode}-${query}`) : null;
-  const strippedWithCode = withCode?.replace(/[^A-Z0-9]/g, '') ?? null;
+  const strippedWithCode = withCode?.replaceAll(/[^A-Z0-9]/g, '') ?? null;
 
   const prefixMatches: ResolvedRoom[] = [];
   const substringMatches: ResolvedRoom[] = [];
 
   for (const [key, room] of roomIndex) {
-    const keyStripped = key.replace(/[^A-Z0-9]/g, '');
+    const keyStripped = key.replaceAll(/[^A-Z0-9]/g, '');
 
     // Exact prefix match (best)
     if (
@@ -219,7 +219,7 @@ export function findRoomAtCoordinate(
 ): IndoorRoom | null {
   for (const feature of features) {
     if (feature.type === 'room' && feature.levels.includes(level)) {
-      const room = feature as IndoorRoom;
+      const room = feature;
       if (room.polygon && room.polygon.length >= 3) {
         if (pointInPolygon(coord, room.polygon)) {
           return room;
@@ -235,7 +235,7 @@ export function findRoomAtCoordinate(
 // ---------------------------------------------------------------------------
 
 function normalizeRef(ref: string): string {
-  return ref.trim().toUpperCase().replace(/\s+/g, '-');
+  return ref.trim().toUpperCase().replaceAll(/\s+/g, '-');
 }
 
 function getFeaturePosition(f: IndoorFeature): LatLng | null {

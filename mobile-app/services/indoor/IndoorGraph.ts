@@ -104,34 +104,17 @@ export class IndoorGraph {
 
     // Pre-index room polygons by level so corridors that extend into rooms
     // can be trimmed at the polygon boundary (prevents wall-clipping routes).
-    const roomPolysByLevel = new Map<string, LatLng[][]>();
-    for (const r of rooms) {
-      if (r.polygon.length < 3) continue;
-      for (const level of r.levels) {
-        if (!roomPolysByLevel.has(level)) roomPolysByLevel.set(level, []);
-        roomPolysByLevel.get(level)!.push(r.polygon);
-      }
-    }
+    const roomPolysByLevel = IndoorGraph.indexRoomPolysByLevel(rooms);
 
     // Pre-index doors by level so transition features can route through them.
-    const doorsByLevel = new Map<string, IndoorDoor[]>();
-    for (const d of doors) {
-      for (const level of d.levels) {
-        if (!doorsByLevel.has(level)) doorsByLevel.set(level, []);
-        doorsByLevel.get(level)!.push(d);
-      }
-    }
+    const doorsByLevel = IndoorGraph.indexDoorsByLevel(doors);
 
     // Phase 0: pre-seed door positions as graph nodes so that corridor
     // endpoints within SNAP_DISTANCE_METERS of a door snap to the door
     // node.  This makes every doorway a natural waypoint in the corridor
     // network — the generated path will pass through actual doorways
     // instead of cutting across walls.
-    for (const d of doors) {
-      for (const level of d.levels) {
-        graph.getOrCreateNode(d.position, level, d.id);
-      }
-    }
+    IndoorGraph.seedDoorNodes(graph, doors);
 
     // Phase 1: corridors → nodes + walk edges (trimmed at room boundaries)
     for (const c of corridors) {
@@ -159,6 +142,37 @@ export class IndoorGraph {
     }
 
     return graph;
+  }
+
+  private static indexRoomPolysByLevel(rooms: IndoorRoom[]): Map<string, LatLng[][]> {
+    const roomPolysByLevel = new Map<string, LatLng[][]>();
+    for (const room of rooms) {
+      if (room.polygon.length < 3) continue;
+      for (const level of room.levels) {
+        if (!roomPolysByLevel.has(level)) roomPolysByLevel.set(level, []);
+        roomPolysByLevel.get(level)!.push(room.polygon);
+      }
+    }
+    return roomPolysByLevel;
+  }
+
+  private static indexDoorsByLevel(doors: IndoorDoor[]): Map<string, IndoorDoor[]> {
+    const doorsByLevel = new Map<string, IndoorDoor[]>();
+    for (const door of doors) {
+      for (const level of door.levels) {
+        if (!doorsByLevel.has(level)) doorsByLevel.set(level, []);
+        doorsByLevel.get(level)!.push(door);
+      }
+    }
+    return doorsByLevel;
+  }
+
+  private static seedDoorNodes(graph: IndoorGraph, doors: IndoorDoor[]): void {
+    for (const door of doors) {
+      for (const level of door.levels) {
+        graph.getOrCreateNode(door.position, level, door.id);
+      }
+    }
   }
 
   /** Get all neighbours of a node (for pathfinding). */
@@ -278,63 +292,38 @@ export class IndoorGraph {
     if (stairs.path.length < 2 && stairs.polygon.length === 0) return;
 
     // Use the path endpoints (or polygon centroid) as the transition points
+    const lastStairsPoint = stairs.path.at(-1);
     const points =
-      stairs.path.length >= 2
-        ? [stairs.path[0], stairs.path[stairs.path.length - 1]]
+      stairs.path.length >= 2 && lastStairsPoint
+        ? [stairs.path[0], lastStairsPoint]
         : [centroid(stairs.polygon), centroid(stairs.polygon)];
 
     const sortedLevels = [...stairs.levels].sort((a, b) => Number(a) - Number(b));
 
-    // Track one transition node per level to avoid duplicates
     const transitionNodeByLevel = new Map<string, string>();
+    const toPosition = points.length > 1 ? points[1] : points[0];
 
-    // Connect each consecutive pair of levels
     for (let i = 0; i < sortedLevels.length - 1; i++) {
       const fromLevel = sortedLevels[i];
       const toLevel = sortedLevels[i + 1];
 
-      let fromNode = transitionNodeByLevel.get(fromLevel);
-      if (!fromNode) {
-        fromNode = this.forceCreateNode(points[0], fromLevel, stairs.id);
-        transitionNodeByLevel.set(fromLevel, fromNode);
-        this.connectTransitionThroughDoor(fromNode, points[0], fromLevel, stairs.id, doorsByLevel);
-      }
-
-      const toPosition = points.length > 1 ? points[1] : points[0];
-      let toNode = transitionNodeByLevel.get(toLevel);
-      if (!toNode) {
-        toNode = this.forceCreateNode(toPosition, toLevel, stairs.id);
-        transitionNodeByLevel.set(toLevel, toNode);
-        this.connectTransitionThroughDoor(toNode, toPosition, toLevel, stairs.id, doorsByLevel);
-      }
+      const fromNode = this.ensureTransitionNode(
+        transitionNodeByLevel,
+        fromLevel,
+        points[0],
+        stairs.id,
+        doorsByLevel,
+      );
+      const toNode = this.ensureTransitionNode(
+        transitionNodeByLevel,
+        toLevel,
+        toPosition,
+        stairs.id,
+        doorsByLevel,
+      );
 
       const weight = STAIRS_PENALTY_METERS * Math.abs(Number(toLevel) - Number(fromLevel));
-
-      if (stairs.oneway === 'up') {
-        this.addDirectedEdge({
-          from: fromNode,
-          to: toNode,
-          weight,
-          isLevelChange: true,
-          edgeType: 'stairs',
-        });
-      } else if (stairs.oneway === 'down') {
-        this.addDirectedEdge({
-          from: toNode,
-          to: fromNode,
-          weight,
-          isLevelChange: true,
-          edgeType: 'stairs',
-        });
-      } else {
-        this.addEdge({
-          from: fromNode,
-          to: toNode,
-          weight,
-          isLevelChange: true,
-          edgeType: 'stairs',
-        });
-      }
+      this.addLevelChangeEdge(stairs.oneway, fromNode, toNode, weight, 'stairs');
     }
   }
 
@@ -378,77 +367,96 @@ export class IndoorGraph {
   private addEscalator(escalator: IndoorEscalator, doorsByLevel: Map<string, IndoorDoor[]>): void {
     if (escalator.levels.length < 2) return;
 
+    const lastEscalatorPoint = escalator.path.at(-1);
     const points =
-      escalator.path.length >= 2
-        ? [escalator.path[0], escalator.path[escalator.path.length - 1]]
+      escalator.path.length >= 2 && lastEscalatorPoint
+        ? [escalator.path[0], lastEscalatorPoint]
         : [centroid(escalator.polygon), centroid(escalator.polygon)];
 
     const sortedLevels = [...escalator.levels].sort((a, b) => Number(a) - Number(b));
 
-    // Track one transition node per level to avoid duplicates
     const transitionNodeByLevel = new Map<string, string>();
+    const toPosition = points[1] ?? points[0];
+    const edgeType = escalator.isElevator ? 'elevator' : 'escalator';
 
     for (let i = 0; i < sortedLevels.length - 1; i++) {
       const fromLevel = sortedLevels[i];
       const toLevel = sortedLevels[i + 1];
 
-      let fromNode = transitionNodeByLevel.get(fromLevel);
-      if (!fromNode) {
-        fromNode = this.forceCreateNode(points[0], fromLevel, escalator.id);
-        transitionNodeByLevel.set(fromLevel, fromNode);
-        this.connectTransitionThroughDoor(
-          fromNode,
-          points[0],
-          fromLevel,
-          escalator.id,
-          doorsByLevel,
-        );
-      }
-
-      let toNode = transitionNodeByLevel.get(toLevel);
-      if (!toNode) {
-        toNode = this.forceCreateNode(points[1] ?? points[0], toLevel, escalator.id);
-        transitionNodeByLevel.set(toLevel, toNode);
-        this.connectTransitionThroughDoor(
-          toNode,
-          points[1] ?? points[0],
-          toLevel,
-          escalator.id,
-          doorsByLevel,
-        );
-      }
+      const fromNode = this.ensureTransitionNode(
+        transitionNodeByLevel,
+        fromLevel,
+        points[0],
+        escalator.id,
+        doorsByLevel,
+      );
+      const toNode = this.ensureTransitionNode(
+        transitionNodeByLevel,
+        toLevel,
+        toPosition,
+        escalator.id,
+        doorsByLevel,
+      );
 
       const levelDiff = Math.abs(Number(toLevel) - Number(fromLevel));
       const weight = escalator.isElevator
         ? ELEVATOR_BASE_PENALTY_METERS + ELEVATOR_FLOOR_PENALTY_METERS * levelDiff
         : ESCALATOR_PENALTY_METERS * levelDiff;
 
-      if (escalator.oneway === 'up') {
-        this.addDirectedEdge({
-          from: fromNode,
-          to: toNode,
-          weight,
-          isLevelChange: true,
-          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
-        });
-      } else if (escalator.oneway === 'down') {
-        this.addDirectedEdge({
-          from: toNode,
-          to: fromNode,
-          weight,
-          isLevelChange: true,
-          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
-        });
-      } else {
-        this.addEdge({
-          from: fromNode,
-          to: toNode,
-          weight,
-          isLevelChange: true,
-          edgeType: escalator.isElevator ? 'elevator' : 'escalator',
-        });
-      }
+      this.addLevelChangeEdge(escalator.oneway, fromNode, toNode, weight, edgeType);
     }
+  }
+
+  private ensureTransitionNode(
+    transitionNodeByLevel: Map<string, string>,
+    level: string,
+    position: LatLng,
+    featureId: string,
+    doorsByLevel: Map<string, IndoorDoor[]>,
+  ): string {
+    const existing = transitionNodeByLevel.get(level);
+    if (existing) return existing;
+
+    const nodeId = this.forceCreateNode(position, level, featureId);
+    transitionNodeByLevel.set(level, nodeId);
+    this.connectTransitionThroughDoor(nodeId, position, level, featureId, doorsByLevel);
+    return nodeId;
+  }
+
+  private addLevelChangeEdge(
+    oneway: 'up' | 'down' | null,
+    fromNode: string,
+    toNode: string,
+    weight: number,
+    edgeType: GraphEdge['edgeType'],
+  ): void {
+    if (oneway === 'up') {
+      this.addDirectedEdge({
+        from: fromNode,
+        to: toNode,
+        weight,
+        isLevelChange: true,
+        edgeType,
+      });
+      return;
+    }
+    if (oneway === 'down') {
+      this.addDirectedEdge({
+        from: toNode,
+        to: fromNode,
+        weight,
+        isLevelChange: true,
+        edgeType,
+      });
+      return;
+    }
+    this.addEdge({
+      from: fromNode,
+      to: toNode,
+      weight,
+      isLevelChange: true,
+      edgeType,
+    });
   }
 
   private connectRoom(room: IndoorRoom): void {
@@ -521,73 +529,104 @@ export class IndoorGraph {
     doorsByLevel: Map<string, IndoorDoor[]>,
   ): void {
     const levelDoors = doorsByLevel.get(level) ?? [];
+    const bestDoor = this.findClosestDoor(levelDoors, transitionPosition);
 
-    // Find the closest door to the transition feature on this level
+    if (!bestDoor) {
+      this.connectTransitionToNearestCorridor(transitionNodeId, transitionPosition, level);
+      return;
+    }
+
+    const { doorNodeId, wasNewDoorNode } = this.connectTransitionToDoor(
+      transitionNodeId,
+      transitionPosition,
+      bestDoor,
+      level,
+    );
+    if (wasNewDoorNode) {
+      this.connectDoorToNearestCorridor(doorNodeId, transitionNodeId, bestDoor.position, level);
+    }
+  }
+
+  private findClosestDoor(doors: IndoorDoor[], position: LatLng): IndoorDoor | null {
     let bestDoor: IndoorDoor | null = null;
     let bestDist = Infinity;
-    for (const d of levelDoors) {
-      const dist = haversine(transitionPosition, d.position);
+    for (const door of doors) {
+      const dist = haversine(position, door.position);
       if (dist < DOOR_SEARCH_RADIUS_METERS && dist < bestDist) {
         bestDist = dist;
-        bestDoor = d;
+        bestDoor = door;
       }
     }
+    return bestDoor;
+  }
 
-    if (bestDoor) {
-      // Create/snap a node at the door position (may merge with a corridor endpoint)
-      const countBefore = this.nodes.size;
-      const doorNodeId = this.getOrCreateNode(bestDoor.position, level, bestDoor.id);
-      const wasNewDoorNode = this.nodes.size > countBefore;
+  private connectTransitionToDoor(
+    transitionNodeId: string,
+    transitionPosition: LatLng,
+    door: IndoorDoor,
+    level: string,
+  ): { doorNodeId: string; wasNewDoorNode: boolean } {
+    const countBefore = this.nodes.size;
+    const doorNodeId = this.getOrCreateNode(door.position, level, door.id);
+    const wasNewDoorNode = this.nodes.size > countBefore;
 
-      if (doorNodeId !== transitionNodeId) {
-        this.addEdge({
-          from: transitionNodeId,
-          to: doorNodeId,
-          weight: haversine(transitionPosition, bestDoor.position),
-          isLevelChange: false,
-          edgeType: 'walk',
-          path: [transitionPosition, bestDoor.position],
-        });
-      }
-
-      // If the door node was newly created (didn't snap to an existing
-      // corridor node), connect it to the nearest corridor node so the
-      // transition is reachable from the corridor network.
-      if (wasNewDoorNode) {
-        const nearest = this.findClosestNodeExcluding(
-          bestDoor.position,
-          level,
-          new Set([transitionNodeId, doorNodeId]),
-        );
-        if (nearest && haversine(bestDoor.position, nearest.position) < ROOM_CONNECT_MAX_METERS) {
-          this.addEdge({
-            from: doorNodeId,
-            to: nearest.id,
-            weight: haversine(bestDoor.position, nearest.position),
-            isLevelChange: false,
-            edgeType: 'walk',
-            path: [bestDoor.position, nearest.position],
-          });
-        }
-      }
-    } else {
-      // Fallback: no door nearby — connect directly to the nearest corridor node
-      const nearest = this.findClosestNodeExcluding(
-        transitionPosition,
-        level,
-        new Set([transitionNodeId]),
-      );
-      if (nearest) {
-        this.addEdge({
-          from: transitionNodeId,
-          to: nearest.id,
-          weight: haversine(transitionPosition, nearest.position),
-          isLevelChange: false,
-          edgeType: 'walk',
-          path: [transitionPosition, nearest.position],
-        });
-      }
+    if (doorNodeId !== transitionNodeId) {
+      this.addEdge({
+        from: transitionNodeId,
+        to: doorNodeId,
+        weight: haversine(transitionPosition, door.position),
+        isLevelChange: false,
+        edgeType: 'walk',
+        path: [transitionPosition, door.position],
+      });
     }
+
+    return { doorNodeId, wasNewDoorNode };
+  }
+
+  private connectDoorToNearestCorridor(
+    doorNodeId: string,
+    transitionNodeId: string,
+    doorPosition: LatLng,
+    level: string,
+  ): void {
+    const nearest = this.findClosestNodeExcluding(
+      doorPosition,
+      level,
+      new Set([transitionNodeId, doorNodeId]),
+    );
+    if (!nearest || haversine(doorPosition, nearest.position) >= ROOM_CONNECT_MAX_METERS) {
+      return;
+    }
+    this.addEdge({
+      from: doorNodeId,
+      to: nearest.id,
+      weight: haversine(doorPosition, nearest.position),
+      isLevelChange: false,
+      edgeType: 'walk',
+      path: [doorPosition, nearest.position],
+    });
+  }
+
+  private connectTransitionToNearestCorridor(
+    transitionNodeId: string,
+    transitionPosition: LatLng,
+    level: string,
+  ): void {
+    const nearest = this.findClosestNodeExcluding(
+      transitionPosition,
+      level,
+      new Set([transitionNodeId]),
+    );
+    if (!nearest) return;
+    this.addEdge({
+      from: transitionNodeId,
+      to: nearest.id,
+      weight: haversine(transitionPosition, nearest.position),
+      isLevelChange: false,
+      edgeType: 'walk',
+      path: [transitionPosition, nearest.position],
+    });
   }
 
   /** Find the closest node on a level, excluding specific node IDs. Prefer non-transition (walkable corridor) nodes. */
@@ -788,23 +827,39 @@ function trimPathAtRoomBoundaries(
     return null;
   });
 
-  // Trim from start: find last consecutive index inside a room
-  let startTrim = -1;
-  for (let i = 0; i < path.length; i++) {
-    if (enclosing[i]) startTrim = i;
-    else break;
-  }
-
-  // Trim from end: find first consecutive index inside a room
-  let endTrim = path.length;
-  for (let i = path.length - 1; i >= 0; i--) {
-    if (enclosing[i]) endTrim = i;
-    else break;
-  }
+  const startTrim = findStartTrim(enclosing);
+  const endTrim = findEndTrim(enclosing);
 
   // Whole path inside rooms → nothing useful to keep
   if (startTrim >= endTrim) return [];
 
+  return buildTrimmedPath(path, enclosing, startTrim, endTrim);
+}
+
+function findStartTrim(enclosing: (LatLng[] | null)[]): number {
+  let startTrim = -1;
+  for (let i = 0; i < enclosing.length; i++) {
+    if (enclosing[i]) startTrim = i;
+    else break;
+  }
+  return startTrim;
+}
+
+function findEndTrim(enclosing: (LatLng[] | null)[]): number {
+  let endTrim = enclosing.length;
+  for (let i = enclosing.length - 1; i >= 0; i--) {
+    if (enclosing[i]) endTrim = i;
+    else break;
+  }
+  return endTrim;
+}
+
+function buildTrimmedPath(
+  path: LatLng[],
+  enclosing: (LatLng[] | null)[],
+  startTrim: number,
+  endTrim: number,
+): LatLng[] {
   const result: LatLng[] = [];
 
   // Insert a point on the room polygon boundary at the start
