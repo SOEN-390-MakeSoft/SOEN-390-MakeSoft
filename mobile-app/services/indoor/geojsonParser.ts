@@ -519,27 +519,43 @@ function hasLevelOverlap(levels: Set<string>, candidateLevels: string[]): boolea
   return false;
 }
 
+function isPointRoom(feature: IndoorFeature): feature is IndoorRoom {
+  return feature.type === 'room' && feature.polygon.length === 0;
+}
+
+function getCandidateRooms(
+  index: Map<string, RoomIndexEntry[]>,
+  ref: string | null | undefined,
+): RoomIndexEntry[] | null {
+  if (!ref) return null;
+  return index.get(ref) ?? null;
+}
+
+function applyCentroidMatches(
+  candidates: RoomIndexEntry[],
+  levels: string[],
+  centroid: LatLng,
+): boolean {
+  let matched = false;
+  for (const candidate of candidates) {
+    if (!hasLevelOverlap(candidate.levels, levels)) continue;
+    candidate.room.centroid = centroid;
+    matched = true;
+  }
+  return matched;
+}
+
 function mergePointRoomCentroids(
   features: IndoorFeature[],
   index: Map<string, RoomIndexEntry[]>,
 ): Set<string> {
   const mergedPointIds = new Set<string>();
   for (const f of features) {
-    if (f.type !== 'room') continue;
-    if (f.polygon.length > 0) continue;
-    if (!f.ref) continue;
-
-    const candidates = index.get(f.ref);
+    if (!isPointRoom(f)) continue;
+    const candidates = getCandidateRooms(index, f.ref);
     if (!candidates) continue;
 
-    let matched = false;
-    for (const candidate of candidates) {
-      if (!hasLevelOverlap(candidate.levels, f.levels)) continue;
-      candidate.room.centroid = f.centroid;
-      matched = true;
-    }
-
-    if (matched) {
+    if (applyCentroidMatches(candidates, f.levels, f.centroid)) {
       mergedPointIds.add(f.id);
     }
   }
