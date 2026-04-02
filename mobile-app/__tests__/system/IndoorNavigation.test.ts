@@ -26,7 +26,7 @@ import {
   loadBuilding,
   clearCache,
 } from '../../services/indoor/buildingRegistry';
-import type { IndoorFeature, IndoorRoute } from '../../services/indoor/types';
+import type { IndoorFeature } from '../../services/indoor/types';
 import sgwTunnelNetwork from '../../assets/geo/SGW_Tunnel_Network.geojson';
 
 // ---------------------------------------------------------------------------

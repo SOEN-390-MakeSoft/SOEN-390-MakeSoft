@@ -425,7 +425,7 @@ describe('mapUtils', () => {
     });
 
     it('returns null for a point outside both campus bounds (edge case)', () => {
-      const outsidePoint: LatLng = { latitude: 46.0, longitude: -74.0 };
+      const outsidePoint: LatLng = { latitude: 46, longitude: -74 };
       expect(getCampusFromCoordinate(outsidePoint)).toBeNull();
     });
   });

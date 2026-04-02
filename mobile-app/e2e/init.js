@@ -7,6 +7,6 @@ try {
   require('dotenv').config({ path: path.resolve(__dirname, '..', '.env.local') });
 } catch {}
 
-global.beforeEach(async () => {
+globalThis.beforeEach(async () => {
   await device.launchApp({ newInstance: true });
 });
