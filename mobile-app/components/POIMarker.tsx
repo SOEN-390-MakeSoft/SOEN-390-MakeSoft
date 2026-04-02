@@ -1,18 +1,17 @@
-import React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { type LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { OutdoorPOI } from '../services/outdoorPOIService';
 
-type Props = {
+type Props = Readonly<{
   poi: OutdoorPOI;
   iconName?: keyof typeof MaterialIcons.glyphMap;
   onPress?: () => void;
   testID?: string;
   zIndex?: number;
   markerColor?: string;
-};
+}>;
 
 export default function POIMarker({
   poi,

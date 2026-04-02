@@ -1,13 +1,13 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 
-interface IndoorStartPromptModalProps {
+type IndoorStartPromptModalProps = Readonly<{
   visible: boolean;
   buildingCode: string;
   levels: string[];
   onSelectLevel: (level: string) => void;
   onCancel: () => void;
-}
+}>;
 
 function getFloorLabel(level: string): string {
   const n = Number(level);
