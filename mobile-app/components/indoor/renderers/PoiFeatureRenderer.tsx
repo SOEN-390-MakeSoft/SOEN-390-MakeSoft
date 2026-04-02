@@ -101,7 +101,7 @@ function renderPointPoi(
       testID={testID}
       accessibilityLabel={testID ? `POI ${poi.amenity}` : undefined}
     >
-      <Image source={imageSource} style={indoorMarkerStyles.poiIconImage} />
+      <Image source={imageSource} style={indoorMarkerStyles.poiIconImage} fadeDuration={0} />
     </PoiMarker>
   );
 }
@@ -140,7 +140,7 @@ function renderPolygonPoi(
           testID={testID}
           accessibilityLabel={testID ? `POI ${poi.amenity}` : undefined}
         >
-          <Image source={imageSource} style={indoorMarkerStyles.poiIconImage} />
+          <Image source={imageSource} style={indoorMarkerStyles.poiIconImage} fadeDuration={0} />
         </PoiMarker>
       )}
     </React.Fragment>

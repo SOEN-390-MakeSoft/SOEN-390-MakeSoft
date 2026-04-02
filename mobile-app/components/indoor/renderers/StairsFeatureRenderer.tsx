@@ -28,6 +28,7 @@ export class StairsFeatureRenderer implements FeatureRenderer {
                 <Image
                   source={require('../../../assets/images/stairs.png')}
                   style={indoorMarkerStyles.iconImage}
+                  fadeDuration={0}
                 />
               </IconMarker>
             </React.Fragment>

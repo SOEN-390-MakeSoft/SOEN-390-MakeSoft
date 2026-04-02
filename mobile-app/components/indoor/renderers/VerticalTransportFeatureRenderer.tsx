@@ -50,6 +50,7 @@ export class VerticalTransportFeatureRenderer implements FeatureRenderer {
             <Image
               source={require('../../../assets/images/escalator.png')}
               style={indoorMarkerStyles.iconImage}
+              fadeDuration={0}
             />
           </IconMarker>
         </React.Fragment>
@@ -75,6 +76,7 @@ export class VerticalTransportFeatureRenderer implements FeatureRenderer {
           <Image
             source={require('../../../assets/images/elevator.png')}
             style={indoorMarkerStyles.iconImage}
+            fadeDuration={0}
           />
         </IconMarker>
       );
