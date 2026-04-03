@@ -1027,7 +1027,7 @@ export default function MapScreen() {
   const stripTrailingPunctuation = useCallback((value: string): string => {
     let cleaned = value.trim();
     const trailingChars = '),.;:';
-    while (cleaned.length > 0 && trailingChars.includes(cleaned[cleaned.length - 1])) {
+    while (cleaned.length > 0 && trailingChars.includes(cleaned.at(-1) ?? '')) {
       cleaned = cleaned.slice(0, -1);
     }
     return cleaned;
