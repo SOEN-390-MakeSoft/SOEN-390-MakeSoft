@@ -2,10 +2,10 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-interface LocationButtonProps {
+type LocationButtonProps = Readonly<{
   isLocating: boolean;
   onPress: () => void;
-}
+}>;
 
 /**
  * Button component for navigating to user's current location

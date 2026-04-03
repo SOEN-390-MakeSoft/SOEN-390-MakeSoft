@@ -2,6 +2,9 @@ import { BUILDING_ADDRESSES } from '../data/building-addresses';
 import { BUILDING_POLYGONS } from '../data/buildingPolygons';
 import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 
+// SGW = Sir George Williams, Loyola = Loyola campus
+export type Campus = 'SGW' | 'Loyola';
+
 /**
  * Normalizes a label by removing accents and special characters for comparison
  *  - Uses String normalization (NFD) to split accents from letters
@@ -14,9 +17,9 @@ import { LOYOLA_BUILDING_POLYGONS } from '../data/buildingPolygonsLoyola';
 export function normalizeLabel(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replaceAll(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+    .replaceAll(/[^a-z0-9]/g, '');
 }
 
 /**
@@ -27,21 +30,99 @@ export function normalizeLabel(value: string): string {
  */
 export function extractCodeFromName(name: string): string | null {
   // Try for prefix with dash, e.g., "H - Hall Building"
-  const dashMatch = name.match(/^([A-Z]{1,3})\s*-/);
+  const dashMatch = /^([A-Z]{1,3})\s*-/.exec(name);
   if (dashMatch) return dashMatch[1];
 
   // Try for name wrapped in parentheses at end, e.g., "Hall Building (H)"
-  const parenMatch = name.match(/\(([A-Z]{1,3})\)\s*$/);
+  const parenMatch = /\(([A-Z]{1,3})\)\s*$/.exec(name);
   if (parenMatch) return parenMatch[1];
   // Try for code alone at the end, e.g., "MB"
-  const trailingMatch = name.match(/(?:^|\s)([A-Z]{1,3})\s*$/);
+  const trailingMatch = /(?:^|\s)([A-Z]{1,3})\s*$/.exec(name);
   return trailingMatch ? trailingMatch[1] : null;
 }
 
 export interface ParsedLocation {
-  campus: 'SGW' | 'Loyola' | null;
+  campus: Campus | null;
   building: string | null;
   room: string | null;
+}
+
+function tokenizeWhitespace(value: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  for (const ch of value) {
+    if (ch.trim() === '') {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+function stripRoomPrefix(token: string): string | null {
+  const lower = token.toLowerCase();
+  if (lower.startsWith('rm') && token.length > 2) {
+    return token.slice(2);
+  }
+  if (lower.startsWith('room') && token.length > 4) {
+    return token.slice(4);
+  }
+  return null;
+}
+
+function parseCampusAndRemainder(trimmed: string): {
+  campus: ParsedLocation['campus'];
+  remainder: string;
+} {
+  if (/sir george williams campus/i.test(trimmed)) {
+    return {
+      campus: 'SGW',
+      remainder: trimmed.replace(/sir george williams campus\s*-?\s*/i, ''),
+    };
+  }
+  if (/loyola campus/i.test(trimmed)) {
+    return {
+      campus: 'Loyola',
+      remainder: trimmed.replace(/loyola campus\s*-?\s*/i, ''),
+    };
+  }
+
+  const dashIdx = trimmed.indexOf(' - ');
+  if (dashIdx !== -1) {
+    return { campus: null, remainder: trimmed.slice(dashIdx + 3) };
+  }
+
+  return { campus: null, remainder: trimmed };
+}
+
+function parseRoomAndBuilding(remainder: string): { room: string | null; building: string | null } {
+  const tokens = tokenizeWhitespace(remainder);
+  if (tokens.length === 0) return { room: null, building: null };
+
+  if (tokens.length >= 2) {
+    const last = tokens.at(-1)!;
+    const prev = tokens.at(-2)!;
+    if (prev.toLowerCase() === 'rm' || prev.toLowerCase() === 'room') {
+      return { room: last, building: tokens.slice(0, -2).join(' ') || null };
+    }
+
+    const inlineRoom = stripRoomPrefix(last);
+    if (inlineRoom) {
+      return { room: inlineRoom, building: tokens.slice(0, -1).join(' ') || null };
+    }
+  } else {
+    const inlineRoom = stripRoomPrefix(tokens[0]);
+    if (inlineRoom) {
+      return { room: inlineRoom, building: null };
+    }
+  }
+
+  return { room: null, building: remainder || null };
 }
 
 /**
@@ -68,46 +149,11 @@ export interface ParsedLocation {
  * // → { campus: 'SGW', building: 'John Molson School of Business', room: null }
  */
 export function parseLocationString(location: string): ParsedLocation {
-  if (!location || !location.trim()) {
-    // If the location is missing or empty, return all nulls
-    return { campus: null, building: null, room: null };
-  }
+  if (!location?.trim()) return { campus: null, building: null, room: null };
 
   const trimmed = location.trim();
-
-  // Try to determine campus from location string prefix
-  let campus: ParsedLocation['campus'] = null;
-  let remainder = trimmed;
-
-  if (/sir george williams campus/i.test(trimmed)) {
-    campus = 'SGW';
-    remainder = trimmed.replace(/sir george williams campus\s*-?\s*/i, '');
-  } else if (/loyola campus/i.test(trimmed)) {
-    campus = 'Loyola';
-    remainder = trimmed.replace(/loyola campus\s*-?\s*/i, '');
-  } else {
-    // No recognised campus prefix — try splitting on " - "
-    const dashIdx = trimmed.indexOf(' - ');
-    if (dashIdx !== -1) {
-      remainder = trimmed.slice(dashIdx + 3);
-    }
-  }
-
-  remainder = remainder.trim();
-
-  // Extract optional room number: matches "Rm 535", "Room 535", "Rm535", "Room535"
-  const roomMatch = remainder.match(/\s*\b(?:Rm|Room)\s*(\S+)\s*$/i);
-  let room: string | null = null;
-  let building: string | null = null;
-
-  if (roomMatch) {
-    // If a room match is found, extract and remove it from the building string
-    room = roomMatch[1];
-    building = remainder.slice(0, roomMatch.index).trim() || null;
-  } else {
-    // No explicit room, use the whole remainder as a building name
-    building = remainder || null;
-  }
+  const { campus, remainder } = parseCampusAndRemainder(trimmed);
+  const { room, building } = parseRoomAndBuilding(remainder.trim());
 
   return { campus, building, room };
 }
@@ -130,7 +176,7 @@ type BUILDING_ADDRESSES_TYPE = (typeof BUILDING_ADDRESSES)[number];
 type ResolveCandidate = {
   id: string; // Polygon or address id
   rawName: string; // Name as shown in the dataset
-  campus: 'SGW' | 'Loyola';
+  campus: Campus;
 };
 
 // Row data for matching, expanded with search tokens for matching by name/code/alias
@@ -140,13 +186,93 @@ type ResolveRow = {
   substringTokens: string[]; // For relaxed (partial) matches
 };
 
+function isLikelyBuildingCode(code: string): boolean {
+  return code.length >= 1 && code.length <= 3 && code.toUpperCase() === code;
+}
+
+function addAddressTokens(
+  substringTokens: string[],
+  addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
+  code: string,
+): void {
+  const addr = addressMap.get(code.toUpperCase());
+  if (!addr) return;
+  substringTokens.push(normalizeLabel(addr.name));
+  for (const alias of addr.aliases ?? []) {
+    substringTokens.push(normalizeLabel(alias));
+  }
+}
+
+function addTokensFromCodeDescription(
+  exactTokens: string[],
+  substringTokens: string[],
+  code: string,
+  description: string,
+  addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
+): void {
+  if (!description || !isLikelyBuildingCode(code)) return;
+  exactTokens.push(normalizeLabel(code));
+  substringTokens.push(normalizeLabel(description));
+  addAddressTokens(substringTokens, addressMap, code);
+}
+
+function getDashPattern(rawName: string): { code: string; description: string } | null {
+  const dashIdx = rawName.indexOf(' - ');
+  if (dashIdx <= 0) return null;
+  const code = rawName.slice(0, dashIdx).trim();
+  const description = rawName.slice(dashIdx + 3).trim();
+  if (!code || !description) return null;
+  return { code, description };
+}
+
+function getParenPattern(rawName: string): { code: string; description: string } | null {
+  const lastOpenParen = rawName.lastIndexOf('(');
+  if (lastOpenParen <= 0 || !rawName.endsWith(')')) return null;
+  const description = rawName.slice(0, lastOpenParen).trim();
+  const code = rawName.slice(lastOpenParen + 1, -1).trim();
+  if (!code || !description) return null;
+  return { code, description };
+}
+
+function buildResolveRow(
+  candidate: ResolveCandidate,
+  addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
+): ResolveRow {
+  const exactTokens: string[] = [normalizeLabel(candidate.rawName)];
+  const substringTokens: string[] = [];
+
+  const dashMatch = getDashPattern(candidate.rawName);
+  if (dashMatch) {
+    addTokensFromCodeDescription(
+      exactTokens,
+      substringTokens,
+      dashMatch.code,
+      dashMatch.description,
+      addressMap,
+    );
+  }
+
+  const parenMatch = getParenPattern(candidate.rawName);
+  if (parenMatch) {
+    addTokensFromCodeDescription(
+      exactTokens,
+      substringTokens,
+      parenMatch.code,
+      parenMatch.description,
+      addressMap,
+    );
+  }
+
+  return { candidate, exactTokens, substringTokens };
+}
+
 /**
  * Gathers all possible building candidates (polygon entries) from the polygon datasets,
  * filtered by campus if requested.
  * @param campus Build a candidate list for a specific campus, or both if not provided
  * @returns List of candidates, one per known building
  */
-function getResolveCandidates(campus?: 'SGW' | 'Loyola' | null): ResolveCandidate[] {
+function getResolveCandidates(campus?: Campus | null): ResolveCandidate[] {
   const candidates: ResolveCandidate[] = [];
   // For SGW campus, add all SGW buildings
   if (!campus || campus === 'SGW') {
@@ -176,43 +302,7 @@ function buildResolveRows(
   candidates: ResolveCandidate[],
   addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
 ): ResolveRow[] {
-  return candidates.map((c) => {
-    const exactTokens: string[] = [normalizeLabel(c.rawName)];
-    const substringTokens: string[] = [];
-    // If candidate name is "CODE - Description"
-    const dashMatch = c.rawName.match(/^([A-Z]{1,3})\s*-\s*(.+)$/);
-    if (dashMatch) {
-      // Add code (e.g. "H") as an exact token and description as a substring
-      exactTokens.push(normalizeLabel(dashMatch[1]));
-      substringTokens.push(normalizeLabel(dashMatch[2]));
-      // Also add aliases from the address dataset for this code, if any
-      const addr = addressMap.get(dashMatch[1].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        // Add all aliases as substrings, e.g. "webster", "webster library"
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
-        }
-      }
-    }
-    // If candidate name is "Description (CODE)"
-    const parenMatch = c.rawName.match(/^(.+?)\s*\(([A-Z]{1,3})\)$/);
-    if (parenMatch) {
-      // Add code (e.g. "H") as an exact token and description as a substring
-      exactTokens.push(normalizeLabel(parenMatch[2]));
-      substringTokens.push(normalizeLabel(parenMatch[1]));
-      // Add address/aliases as above
-      const addr = addressMap.get(parenMatch[2].toUpperCase());
-      if (addr) {
-        substringTokens.push(normalizeLabel(addr.name));
-        for (const alias of addr.aliases ?? []) {
-          substringTokens.push(normalizeLabel(alias));
-        }
-      }
-    }
-    // Could repeat for other patterns if needed (currently handles main two forms)
-    return { candidate: c, exactTokens, substringTokens };
-  });
+  return candidates.map((candidate) => buildResolveRow(candidate, addressMap));
 }
 
 /**
@@ -226,7 +316,7 @@ function buildResolveRows(
 function findExactMatch(rows: ResolveRow[], needle: string): ResolveCandidate | null {
   for (const { candidate, exactTokens, substringTokens } of rows) {
     const all = [...exactTokens, ...substringTokens];
-    if (all.some((t) => t === needle)) return candidate;
+    if (all.includes(needle)) return candidate;
   }
   return null;
 }
@@ -270,7 +360,7 @@ function findSubstringMatch(rows: ResolveRow[], needle: string): ResolveCandidat
  */
 export function resolveBuilding(
   buildingName: string | null | undefined,
-  campus?: 'SGW' | 'Loyola' | null,
+  campus?: Campus | null,
 ): ResolvedBuilding | null {
   if (!buildingName?.trim()) return null;
 
@@ -286,8 +376,8 @@ export function resolveBuilding(
   }
 
   // Step 2: Special case - handle Hingston Building A/B/C variations robustly
-  const hingstonMatch = buildingName.match(
-    /hingston\s*(?:hall\s*)?([abc])\s*(?:building|bldg|hall)?/i,
+  const hingstonMatch = /hingston\s*(?:hall\s*)?([abc])\s*(?:building|bldg|hall)?/i.exec(
+    buildingName,
   );
   if (hingstonMatch) {
     const forcedCode = `H${hingstonMatch[1].toUpperCase()}`;
@@ -321,9 +411,6 @@ export function resolveBuilding(
 // ---------------------------------------------------------------------------
 // Location conflict resolution
 // ---------------------------------------------------------------------------
-
-// SGW = Sir George Williams, Loyola = Loyola campus
-export type Campus = 'SGW' | 'Loyola';
 
 // Enumerates possible sources of conflict or mismatch between raw location
 // and datasets/runtime info
@@ -457,8 +544,8 @@ function buildResult(
   addressMap: Map<string, BUILDING_ADDRESSES_TYPE>,
 ): ResolvedBuilding {
   // Extract code from "CODE - Description" or "Description (CODE)"
-  const dashMatch = candidate.rawName.match(/^([A-Z]{1,3})\s*-/);
-  const parenMatch = candidate.rawName.match(/\(([A-Z]{1,3})\)$/);
+  const dashMatch = /^([A-Z]{1,3})\s*-/.exec(candidate.rawName);
+  const parenMatch = /\(([A-Z]{1,3})\)$/.exec(candidate.rawName);
   const code = dashMatch?.[1] ?? parenMatch?.[1] ?? null;
 
   // Find the official address from BUILDING_ADDRESSES if code is present

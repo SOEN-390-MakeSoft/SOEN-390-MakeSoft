@@ -27,7 +27,7 @@ import {
   detectIndoorDestination,
   findBuildingAtCoordinate,
 } from '../services/indoor/buildingRegistry';
-import type { IndoorFeature, IndoorRoom, IndoorCorridor } from '../services/indoor/types';
+import type { IndoorRoom } from '../services/indoor/types';
 
 // ---------------------------------------------------------------------------
 // Test GeoJSON fixtures
@@ -329,8 +329,10 @@ describe('pathfinder', () => {
     const level1Nodes = [...graph.nodes.values()].filter((n) => n.level === '1');
     expect(level1Nodes.length).toBeGreaterThanOrEqual(2);
 
-    const route = findPath(graph, level1Nodes[0].id, level1Nodes[level1Nodes.length - 1].id);
-    if (level1Nodes[0].id !== level1Nodes[level1Nodes.length - 1].id) {
+    const lastLevel1Node = level1Nodes.at(-1);
+    expect(lastLevel1Node).toBeDefined();
+    const route = findPath(graph, level1Nodes[0].id, lastLevel1Node!.id);
+    if (level1Nodes[0].id !== lastLevel1Node!.id) {
       expect(route).not.toBeNull();
       expect(route!.polyline.length).toBeGreaterThan(0);
       expect(route!.steps.length).toBeGreaterThan(0);

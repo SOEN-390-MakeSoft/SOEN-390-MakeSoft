@@ -90,13 +90,10 @@ describe('CalendarModal', () => {
     expect(getByText('All-Day Workshop')).toBeTruthy();
   });
 
-  it('does NOT render event descriptions (deferred – see TODO)', () => {
-    const { queryByText } = render(
-      <CalendarModal {...baseProps} isConnected events={mockEvents} />,
-    );
-    // Descriptions exist in the data but should NOT appear in the UI yet
-    expect(queryByText('Daily sync with the dev team')).toBeNull();
-    expect(queryByText('End-of-sprint demo and retrospective')).toBeNull();
+  it('renders event descriptions when provided', () => {
+    const { getByText } = render(<CalendarModal {...baseProps} isConnected events={mockEvents} />);
+    expect(getByText('Daily sync with the dev team')).toBeTruthy();
+    expect(getByText('End-of-sprint demo and retrospective')).toBeTruthy();
   });
 
   it('renders location when provided', () => {

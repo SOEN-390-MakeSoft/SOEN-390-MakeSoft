@@ -10,14 +10,6 @@ const USER_AGENT = 'MakeSoft-Overpass/1.0';
 const RELATION_ID = 19962197;
 
 async function fetchRelation() {
-  const query = `
-    [out:json][timeout:60];
-    relation(${RELATION_ID});
-    out body;
-    >;
-    out skel qt;
-  `;
-
   throw new Error('Overpass failed on all endpoints');
 }
 
@@ -112,7 +104,7 @@ async function extractPolygons(data) {
     if (member.type !== 'way') return;
 
     const way = ways.get(member.ref);
-    if (!way || !way.nodes) return;
+    if (!way?.nodes) return;
 
     const polygon = getPolygonFromWay(way);
     let tags = await getWayTagsWithCache(way);

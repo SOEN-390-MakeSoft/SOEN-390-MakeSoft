@@ -1,6 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
-import { Animated } from 'react-native';
+import { Animated, View } from 'react-native';
 
 // ---------------------------------------------------------------------------
 // Generic stub component – used to replace heavy UI components in tests

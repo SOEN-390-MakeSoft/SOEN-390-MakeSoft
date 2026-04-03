@@ -20,7 +20,7 @@ const DEFAULT_REGION = {
  * @returns Center coordinate of the polygon
  */
 export function polygonCentroid(points: readonly LatLng[]): LatLng {
-  if (!points || points.length === 0) return DEFAULT_REGION;
+  if (!points?.length) return DEFAULT_REGION;
 
   const validPoints = points.filter((p) => p?.latitude != null && p?.longitude != null);
   if (validPoints.length === 0) return DEFAULT_REGION;
@@ -59,7 +59,7 @@ export function formatAddress(record: {
  */
 export function pointInPolygon(point: LatLng, polygon: readonly LatLng[]): boolean {
   if (point?.latitude == null || point?.longitude == null) return false;
-  if (!polygon || polygon.length === 0) return false;
+  if (!polygon?.length) return false;
 
   const { latitude: y, longitude: x } = point;
   let inside = false;
@@ -174,7 +174,7 @@ export function findBuildingAtOrNearCoordinate(
   maxDistanceMeters: number,
 ): BuildingWithPolygon | null {
   if (point?.latitude == null || point?.longitude == null) return null;
-  if (!buildings || buildings.length === 0) return null;
+  if (!buildings?.length) return null;
 
   // Filter buildings with valid polygons
   const validBuildings = buildings.filter(

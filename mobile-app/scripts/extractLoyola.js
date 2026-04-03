@@ -80,19 +80,6 @@ const LOYOLA_BUILDING_CODES = [
 ];
 
 async function fetchLoyolaBuildings() {
-  // Fetch BOTH ways and relations tagged as buildings
-  const query = `
-    [out:json][timeout:${OVERPASS_TIMEOUT}];
-    (
-        way["building"]
-          (${LOYOLA_BBOX.south},${LOYOLA_BBOX.west},${LOYOLA_BBOX.north},${LOYOLA_BBOX.east});
-        relation["building"]
-          (${LOYOLA_BBOX.south},${LOYOLA_BBOX.west},${LOYOLA_BBOX.north},${LOYOLA_BBOX.east});
-    );
-    (._;>;);
-    out body qt;
-  `;
-
   throw new Error('Overpass failed on all endpoints');
 }
 
@@ -153,6 +140,71 @@ function canonicalizeName(name) {
   return null; // not an allowed building
 }
 
+// Get all way IDs referenced by any relation
+function getWaysInRelations(relationsMap) {
+  const wayIds = new Set();
+  for (const [, rel] of relationsMap) {
+    rel.members?.forEach((member) => {
+      if (member.type === 'way') wayIds.add(member.ref);
+    });
+  }
+  return wayIds;
+}
+
+// Helper for creating result record and logging
+function addPolygonResult(result, key, sourceType, tags, polygon) {
+  result[key] = {
+    name: key,
+    street: tags['addr:street'] || null,
+    housenumber: tags['addr:housenumber'] || null,
+    polygon,
+  };
+  console.log(`  ✅ ${sourceType}: "${key}" (${polygon.length} points)`);
+}
+
+// Extract polygons from relations
+function processRelations(relationsMap, waysMap, nodesMap, result, canonicalize) {
+  for (const [, rel] of relationsMap) {
+    const tags = rel.tags || {};
+    if (!tags.name) continue;
+
+    const canonical = canonicalize(tags.name);
+    if (!canonical) {
+      console.log(`  ⏭️  Skipped relation "${tags.name}" — not in allowed list`);
+      continue;
+    }
+
+    const polygon = resolveRelation(rel, waysMap, nodesMap);
+    if (!polygon) continue;
+
+    addPolygonResult(result, canonical, 'Relation', tags, polygon);
+  }
+}
+
+// Extract standalone way polygons (not referenced by relations)
+function processStandaloneWays(waysMap, nodesMap, result, canonicalize, waysInRelationsSet) {
+  for (const [id, way] of waysMap) {
+    if (waysInRelationsSet.has(id)) continue;
+
+    const tags = way.tags || {};
+    if (!tags.name) continue;
+
+    const canonical = canonicalize(tags.name);
+    if (!canonical) {
+      console.log(`  ⏭️  Skipped way "${tags.name}" — not in allowed list`);
+      continue;
+    }
+
+    // Don't overwrite a relation result
+    if (result[canonical]) continue;
+
+    const polygon = resolveWay(way, nodesMap);
+    if (!polygon) continue;
+
+    addPolygonResult(result, canonical, 'Way', tags, polygon);
+  }
+}
+
 function extractPolygons(data) {
   const nodes = new Map();
   const ways = new Map();
@@ -164,71 +216,7 @@ function extractPolygons(data) {
     if (el.type === 'relation') relations.set(el.id, el);
   }
 
-  // Get all way IDs referenced by any relation
-  function getWaysInRelations(relationsMap) {
-    const wayIds = new Set();
-    for (const [, rel] of relationsMap) {
-      rel.members?.forEach((member) => {
-        if (member.type === 'way') wayIds.add(member.ref);
-      });
-    }
-    return wayIds;
-  }
   const waysInRelations = getWaysInRelations(relations);
-
-  // Helper for creating result record and logging
-  function addPolygonResult(result, key, sourceType, tags, polygon) {
-    result[key] = {
-      name: key,
-      street: tags['addr:street'] || null,
-      housenumber: tags['addr:housenumber'] || null,
-      polygon,
-    };
-    console.log(`  ✅ ${sourceType}: "${key}" (${polygon.length} points)`);
-  }
-
-  // Extract polygons from relations
-  function processRelations(relationsMap, waysMap, nodesMap, result, canonicalize) {
-    for (const [, rel] of relationsMap) {
-      const tags = rel.tags || {};
-      if (!tags.name) continue;
-
-      const canonical = canonicalize(tags.name);
-      if (!canonical) {
-        console.log(`  ⏭️  Skipped relation "${tags.name}" — not in allowed list`);
-        continue;
-      }
-
-      const polygon = resolveRelation(rel, waysMap, nodesMap);
-      if (!polygon) continue;
-
-      addPolygonResult(result, canonical, 'Relation', tags, polygon);
-    }
-  }
-
-  // Extract standalone way polygons (not referenced by relations)
-  function processStandaloneWays(waysMap, nodesMap, result, canonicalize, waysInRelationsSet) {
-    for (const [id, way] of waysMap) {
-      if (waysInRelationsSet.has(id)) continue;
-
-      const tags = way.tags || {};
-      if (!tags.name) continue;
-
-      const canonical = canonicalize(tags.name);
-      if (!canonical) {
-        console.log(`  ⏭️  Skipped way "${tags.name}" — not in allowed list`);
-        continue;
-      }
-
-      // Don't overwrite a relation result
-      if (result[canonical]) continue;
-
-      const polygon = resolveWay(way, nodesMap);
-      if (!polygon) continue;
-
-      addPolygonResult(result, canonical, 'Way', tags, polygon);
-    }
-  }
 
   const result = {};
 

@@ -178,7 +178,8 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
       }
     } catch (e) {
       if (!isCancelled) {
-        setError((prev) => prev ?? 'Failed to load indoor map data');
+        const errorMessage = e instanceof Error ? e.message : 'Failed to load indoor map data';
+        setError((prev) => prev ?? errorMessage);
       }
     } finally {
       setIsLoading(false);
@@ -206,10 +207,7 @@ export function useIndoorNavigation(): UseIndoorNavigationReturn {
 
   // Floor plan image for the current level
   const floorPlanImage = useMemo<ImageRequireSource | null>(
-    () =>
-      activeBuildingCode
-        ? (getFloorPlanImage(activeBuildingCode, activeLevel) as ImageRequireSource | null)
-        : null,
+    () => (activeBuildingCode ? getFloorPlanImage(activeBuildingCode, activeLevel) : null),
     [activeBuildingCode, activeLevel],
   );
 

@@ -8,7 +8,6 @@ import {
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline, type Region } from 'react-native-maps';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -111,28 +110,12 @@ function formatIndoorTime(seconds: number): string {
 function addSecondsToLabel(label: string, extraSeconds: number): string {
   // Parse hours/minutes without regex to avoid backtracking hotspots.
   const tokens = label.toLowerCase().split(/\s+/).filter(Boolean);
-  let hoursFromLabel = 0;
-  let minsFromLabel = 0;
-
-  for (let i = 0; i < tokens.length - 1; i += 1) {
-    const value = Number.parseInt(tokens[i], 10);
-    if (Number.isNaN(value)) continue;
-
-    const unit = tokens[i + 1];
-    if (unit.startsWith('hour')) {
-      hoursFromLabel = value;
-      continue;
-    }
-    if (unit.startsWith('min')) {
-      minsFromLabel = value;
-    }
-  }
-
-  let totalSec = hoursFromLabel * 3600 + minsFromLabel * 60;
+  const { hours: parsedHours, minutes: parsedMinutes } = parseHoursMinutes(tokens);
+  let totalSec = parsedHours * 3600 + parsedMinutes * 60;
   // If neither unit matched, try bare number ("5" -> 5 min)
-  if (hoursFromLabel === 0 && minsFromLabel === 0) {
-    const bare = Number.parseInt(label, 10);
-    if (Number.isNaN(bare) === false) totalSec = bare * 60;
+  if (parsedHours === 0 && parsedMinutes === 0) {
+    const bareMinutes = parseBareMinutes(label);
+    if (bareMinutes != null) totalSec = bareMinutes * 60;
   }
   totalSec += extraSeconds;
   const hours = Math.floor(totalSec / 3600);
@@ -143,6 +126,32 @@ function addSecondsToLabel(label: string, extraSeconds: number): string {
   if (hours > 0)
     return mins > 0 ? `${hours} ${hourLabel} ${mins} ${minLabel}` : `${hours} ${hourLabel}`;
   return `${mins} ${minLabel}`;
+}
+
+function parseHoursMinutes(tokens: string[]): { hours: number; minutes: number } {
+  let hours = 0;
+  let minutes = 0;
+
+  for (let i = 0; i < tokens.length - 1; i += 1) {
+    const value = Number.parseInt(tokens[i], 10);
+    if (Number.isNaN(value)) continue;
+
+    const unit = tokens[i + 1];
+    if (unit.startsWith('hour')) {
+      hours = value;
+      continue;
+    }
+    if (unit.startsWith('min')) {
+      minutes = value;
+    }
+  }
+
+  return { hours, minutes };
+}
+
+function parseBareMinutes(label: string): number | null {
+  const bare = Number.parseInt(label, 10);
+  return Number.isNaN(bare) ? null : bare;
 }
 
 /**
@@ -1015,6 +1024,15 @@ export default function MapScreen() {
     setCalendarModalVisible(true);
   }, []);
 
+  const stripTrailingPunctuation = useCallback((value: string): string => {
+    let cleaned = value.trim();
+    const trailingChars = '),.;:';
+    while (cleaned.length > 0 && trailingChars.includes(cleaned.at(-1) ?? '')) {
+      cleaned = cleaned.slice(0, -1);
+    }
+    return cleaned;
+  }, []);
+
   const resolveNextClassIndoorRoomRef = useCallback(
     (rawLocation: string, resolvedBuildingCode: string | null | undefined): string | null => {
       const explicitIndoorDestination = detectIndoorDestination(rawLocation);
@@ -1025,7 +1043,7 @@ export default function MapScreen() {
       if (!resolvedBuildingCode || !hasIndoorMap(resolvedBuildingCode)) return null;
 
       const parsed = parseLocationString(rawLocation);
-      const cleanedRoomQuery = parsed.room?.trim().replace(/[),.;:]+$/g, '');
+      const cleanedRoomQuery = parsed.room ? stripTrailingPunctuation(parsed.room) : '';
       if (!cleanedRoomQuery) return null;
 
       const buildingData = loadBuilding(resolvedBuildingCode);
@@ -1038,7 +1056,7 @@ export default function MapScreen() {
       );
       return resolvedRoom?.ref ?? null;
     },
-    [],
+    [stripTrailingPunctuation],
   );
 
   const handleDirectionsToNextClass = useCallback(() => {
@@ -1706,16 +1724,18 @@ export default function MapScreen() {
 
     if (indoor.indoorRoute && indoor.destinationRoom?.ref !== 'Exit') {
       const entrance = indoor.buildingMeta?.entrances?.[0];
-      combinedSteps.push({
-        instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
-        distanceText: '',
-        durationText: '',
-        maneuver: 'enter-building' as const,
-        focusCoordinate: entrance,
-        _indoorLevel: indoor.indoorRoute.startLevel,
-        _indoorBuildingCode: indoor.activeBuildingCode ?? undefined,
-      });
-      combinedSteps.push(...destinationIndoorSteps);
+      combinedSteps.push(
+        {
+          instruction: `Enter ${indoor.buildingMeta?.name ?? 'the building'}`,
+          distanceText: '',
+          durationText: '',
+          maneuver: 'enter-building' as const,
+          focusCoordinate: entrance,
+          _indoorLevel: indoor.indoorRoute.startLevel,
+          _indoorBuildingCode: indoor.activeBuildingCode ?? undefined,
+        },
+        ...destinationIndoorSteps,
+      );
     }
 
     return combinedSteps;

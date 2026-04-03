@@ -10,6 +10,8 @@ import { useSearch } from '../hooks/useSearch';
 // Import component
 import MapScreen from '../components/MapScreen';
 
+const originalCalendarMode = process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+
 // Create mock function for animateToRegion
 const mockAnimateToRegion = jest.fn();
 let mockTheme: any = { cred: { get: () => '#912338' } };
@@ -206,6 +208,18 @@ const renderWithProviders = (component: React.ReactElement) => {
 };
 
 describe('MapScreen', () => {
+  beforeEach(() => {
+    delete process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+  });
+
+  afterEach(() => {
+    if (originalCalendarMode === undefined) {
+      delete process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE;
+      return;
+    }
+    process.env.EXPO_PUBLIC_E2E_CALENDAR_MODE = originalCalendarMode;
+  });
+
   describe('Route Preview Screen', () => {
     it('should render RoutePreviewScreen when isRoutePreviewOpen is true', () => {
       // Simulate state where preview is open

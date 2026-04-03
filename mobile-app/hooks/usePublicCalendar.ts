@@ -80,13 +80,13 @@ export function extractCalendarInfo(input: string): CalendarInfo | null {
     }
 
     // Secret iCal URL: /calendar/ical/{ID}/private-{secret}/basic.ics
-    const secretIcalMatch = url.pathname.match(/\/calendar\/ical\/[^/]+\/private-[^/]+\//);
+    const secretIcalMatch = /\/calendar\/ical\/[^/]+\/private-[^/]+\//.exec(url.pathname);
     if (secretIcalMatch) {
       return { type: 'ical', icalUrl: trimmed };
     }
 
     // Public iCal URL: /calendar/ical/{ID}/public/basic.ics
-    const publicIcalMatch = url.pathname.match(/\/calendar\/ical\/([^/]+)\/public\//);
+    const publicIcalMatch = /\/calendar\/ical\/([^/]+)\/public\//.exec(url.pathname);
     if (publicIcalMatch) {
       return { type: 'public', calendarId: decodeURIComponent(publicIcalMatch[1]) };
     }

@@ -67,6 +67,11 @@ function CalendarEventRow({ event }: Readonly<CalendarEventRowProps>) {
         <Text style={styles.eventTime} numberOfLines={1}>
           {formatEventTime(event)}
         </Text>
+        {event.description ? (
+          <Text style={styles.eventDescription} numberOfLines={2}>
+            {event.description}
+          </Text>
+        ) : null}
         {event.location ? (
           <Text style={styles.eventLocation} numberOfLines={1}>
             📍 {event.location}
@@ -109,6 +114,8 @@ export default function CalendarModal({
   onDisconnect,
 }: Readonly<CalendarModalProps>) {
   const [link, setLink] = useState('');
+  const isDisconnected = !isConnected;
+  const showConnectedContent = isConnected && !loading;
 
   const handleConnect = async () => {
     Keyboard.dismiss();
@@ -121,7 +128,7 @@ export default function CalendarModal({
   };
 
   let connectedEventsContent: React.ReactNode = null;
-  if (isConnected && !loading) {
+  if (showConnectedContent) {
     if (events.length === 0) {
       connectedEventsContent = (
         <View style={styles.centered}>
@@ -136,8 +143,6 @@ export default function CalendarModal({
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
-          // TODO: Display event description (item.description) and allow tapping
-          // to view full event details. Currently only titles are rendered as placeholders.
           renderItem={({ item }) => <CalendarEventRow event={item} />}
           ItemSeparatorComponent={CalendarListSeparator}
         />
@@ -171,7 +176,7 @@ export default function CalendarModal({
               ) : null}
 
               {/* Not connected — show paste input */}
-              {!isConnected ? (
+              {isDisconnected ? (
                 <ScrollView
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.connectSection}
@@ -388,6 +393,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 3,
+  },
+  eventDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
   eventLocation: {
     fontSize: 13,

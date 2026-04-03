@@ -2,8 +2,8 @@ import { parseIndoorGeoJSON } from '../services/indoor/geojsonParser';
 import { IndoorGraph } from '../services/indoor/IndoorGraph';
 import { findPath } from '../services/indoor/pathfinder';
 import { buildRoomIndex, resolveRoom } from '../services/indoor/roomResolver';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 describe('Indoor Routing Regressions', () => {
   let graph: IndoorGraph;

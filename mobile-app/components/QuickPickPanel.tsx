@@ -80,11 +80,10 @@ export default function QuickPickPanel({
       },
       onPanResponderRelease: (_evt, gestureState) => {
         const SWIPE_THRESHOLD = 30;
-        if (gestureState.dy > SWIPE_THRESHOLD && isQuickPickOpenRef.current) {
-          // Swipe down → collapse
-          onToggleOpenRef.current();
-        } else if (gestureState.dy < -SWIPE_THRESHOLD && !isQuickPickOpenRef.current) {
-          // Swipe up → expand
+        const shouldToggle =
+          (gestureState.dy > SWIPE_THRESHOLD && isQuickPickOpenRef.current) ||
+          (gestureState.dy < -SWIPE_THRESHOLD && !isQuickPickOpenRef.current);
+        if (shouldToggle) {
           onToggleOpenRef.current();
         }
       },
@@ -92,100 +91,98 @@ export default function QuickPickPanel({
   ).current;
 
   return (
-    <>
-      <View
-        style={styles.quickPickWrapper}
-        pointerEvents="auto"
-        testID="quick-pick-panel"
-        {...panResponder.panHandlers}
+    <View
+      style={styles.quickPickWrapper}
+      pointerEvents="auto"
+      testID="quick-pick-panel"
+      {...panResponder.panHandlers}
+    >
+      {/* Directions-to-next-class button — floats above top-left of panel */}
+      <Pressable
+        testID="directions-to-next-class-button"
+        style={styles.directionsToNextClassButton}
+        onPress={onDirectionsToNextClassPress ?? (() => {})}
+        accessibilityLabel="Directions to my next class"
       >
-        {/* Directions-to-next-class button — floats above top-left of panel */}
-        <Pressable
-          testID="directions-to-next-class-button"
-          style={styles.directionsToNextClassButton}
-          onPress={onDirectionsToNextClassPress ?? (() => {})}
-          accessibilityLabel="Directions to my next class"
-        >
-          <View style={styles.directionsToNextClassIcon}>
-            <MaterialIcons name="directions-walk" size={28} color="#c41230" />
-            <View style={styles.directionsToNextClassIconRight}>
-              <MaterialIcons name="event" size={20} color="#c41230" />
-              <MaterialIcons name="place" size={20} color="#c41230" />
-            </View>
+        <View style={styles.directionsToNextClassIcon}>
+          <MaterialIcons name="directions-walk" size={28} color="#c41230" />
+          <View style={styles.directionsToNextClassIconRight}>
+            <MaterialIcons name="event" size={20} color="#c41230" />
+            <MaterialIcons name="place" size={20} color="#c41230" />
           </View>
-        </Pressable>
-        {/* Next class info button — floats above panel, left of location */}
-        {showNextClassInfo && onNextClassInfoPress ? (
-          <Pressable
-            testID="next-class-info-button"
-            style={styles.courseInfoButton}
-            onPress={onNextClassInfoPress}
-            accessibilityLabel="Show next class information"
-          >
-            <Entypo name="info-with-circle" color="#c41230" size={24} />
-          </Pressable>
-        ) : null}
-        {/* Location button — floats above top-right of panel */}
+        </View>
+      </Pressable>
+      {/* Next class info button — floats above panel, left of location */}
+      {showNextClassInfo && onNextClassInfoPress ? (
         <Pressable
-          testID="location-button"
-          style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
-          onPress={onLocationPress}
-          disabled={isLocating}
-          accessibilityLabel="Go to my location"
+          testID="next-class-info-button"
+          style={styles.courseInfoButton}
+          onPress={onNextClassInfoPress}
+          accessibilityLabel="Show next class information"
         >
-          {isLocating ? (
-            <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
-          ) : (
-            <MaterialIcons name="my-location" size={32} color="#c41230" />
-          )}
+          <Entypo name="info-with-circle" color="#c41230" size={24} />
         </Pressable>
+      ) : null}
+      {/* Location button — floats above top-right of panel */}
+      <Pressable
+        testID="location-button"
+        style={[styles.recenterButton, { opacity: isLocating ? 0.85 : 1 }]}
+        onPress={onLocationPress}
+        disabled={isLocating}
+        accessibilityLabel="Go to my location"
+      >
+        {isLocating ? (
+          <ActivityIndicator testID="activity-indicator" size="small" color="#c41230" />
+        ) : (
+          <MaterialIcons name="my-location" size={32} color="#c41230" />
+        )}
+      </Pressable>
 
-        {/* Drag handle indicator */}
-        <View style={styles.dragHandle} />
+      {/* Drag handle indicator */}
+      <View style={styles.dragHandle} />
 
-        <Pressable style={styles.quickPickHeader} onPress={onToggleOpen}>
-          <Text style={styles.quickPickTitle} testID="campus-label">
-            {activeCampus === 'loyola' ? 'LOYOLA' : 'SGW'}
-          </Text>
-        </Pressable>
-        <Animated.View
-          style={[
-            styles.quickPickGridWrapper,
-            quickPickContentHeight ? { height: quickPickVisibleHeight } : null,
-          ]}
+      <Pressable style={styles.quickPickHeader} onPress={onToggleOpen}>
+        <Text style={styles.quickPickTitle} testID="campus-label">
+          {activeCampus === 'loyola' ? 'LOYOLA' : 'SGW'}
+        </Text>
+      </Pressable>
+      <Animated.View
+        style={[
+          styles.quickPickGridWrapper,
+          quickPickContentHeight ? { height: quickPickVisibleHeight } : null,
+        ]}
+      >
+        <View
+          style={styles.quickPickGrid}
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            if (height > 0 && height !== quickPickContentHeight) {
+              onHeightChange(height);
+            }
+          }}
         >
-          <View
-            style={styles.quickPickGrid}
-            onLayout={(event) => {
-              const height = event.nativeEvent.layout.height;
-              if (height > 0 && height !== quickPickContentHeight) {
-                onHeightChange(height);
-              }
-            }}
-          >
-            {featuredBuildings.map((pick) => {
-              const cardBackground = isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
-              const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : '#fff';
-              return (
-                <Pressable
-                  key={pick.label}
-                  style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
-                  onPress={() => onQuickPick(pick)}
-                  testID={`quick-pick-${pick.code}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Quick pick ${pick.label.replace(/\n/g, ' ')}`}
-                >
-                  <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
-                  <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
-                    {pick.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Animated.View>
-      </View>
-    </>
+          {featuredBuildings.map((pick) => {
+            const cardBackground = isColorBlind && pick.colorBlind ? pick.colorBlind : pick.color;
+            const cardTextColor = isColorBlind ? COLOR_BLIND_CARD_TEXT : '#fff';
+            return (
+              <Pressable
+                key={pick.label}
+                style={[styles.quickPickCard, { backgroundColor: cardBackground }]}
+                onPress={() => onQuickPick(pick)}
+                testID={`quick-pick-${pick.code}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Quick pick ${pick.label.replaceAll('\n', ' ')}`}
+              >
+                <MaterialIcons name={pick.icon} size={21} color={cardTextColor} />
+                <Text style={[styles.quickPickLabel, { color: cardTextColor }]} numberOfLines={3}>
+                  {pick.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 

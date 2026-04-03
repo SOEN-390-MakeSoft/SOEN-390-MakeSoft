@@ -10,7 +10,9 @@ type SettingsContextValue = {
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
 
-export function SettingsProvider({ children }: { children: React.ReactNode }) {
+type SettingsProviderProps = Readonly<{ children: React.ReactNode }>;
+
+export function SettingsProvider({ children }: SettingsProviderProps) {
   const [colourBlindMode, setColourBlindMode] = useState(false);
   const [simulatedNow, setSimulatedNow] = useState<Date | null>(null);
 

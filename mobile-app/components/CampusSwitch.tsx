@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Pressable, Text, StyleSheet } from 'react-native';
 import { useTheme } from 'tamagui';
 
-interface CampusSwitchProps {
+type CampusSwitchProps = Readonly<{
   selectedCampus: 'SGW' | 'Loyola';
   onCampusChange: (campus: 'SGW' | 'Loyola') => void;
-}
+}>;
 
 export default function CampusSwitch({ selectedCampus, onCampusChange }: CampusSwitchProps) {
   const theme = useTheme();
