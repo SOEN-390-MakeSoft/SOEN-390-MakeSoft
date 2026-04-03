@@ -193,7 +193,6 @@ function processNeighbours(
   options: PathfinderOptions,
   state: PathfinderState,
 ): void {
-  const currentG = state.gScore.get(currentNodeId) ?? Infinity;
   const edgeIndices = graph.adjacency.get(currentNodeId) ?? [];
 
   for (const edgeIdx of edgeIndices) {

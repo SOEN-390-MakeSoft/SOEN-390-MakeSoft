@@ -199,6 +199,14 @@ type NextClassPreview = {
   conflict: LocationConflict | null;
 };
 
+function getNextClassLocationLabel(preview: NextClassPreview | null): string {
+  if (!preview) return 'Location unavailable';
+  if (preview.building && preview.indoorRoomRef) {
+    return `${preview.building.name} - ${preview.indoorRoomRef}`;
+  }
+  return preview.building?.name ?? preview.event.location ?? 'Location unavailable';
+}
+
 const POLYGON_STROKE = 'rgba(178, 27, 44, 0.9)';
 const POLYGON_FILL = 'rgba(178, 27, 44, 0.25)';
 const POLYGON_FILL_SELECTED = 'rgba(178, 27, 44, 0.7)';
@@ -2023,12 +2031,7 @@ export default function MapScreen() {
     !hasDismissedCalendarRequired && !isClassesCalendarValid(isCalendarConnected);
   const nextClassTime = nextClassPreview ? formatEventTimeRange(nextClassPreview.event) : '';
   const nextClassTitle = nextClassPreview?.event.summary ?? '';
-  const nextClassLocationLabel =
-    nextClassPreview?.building && nextClassPreview.indoorRoomRef
-      ? `${nextClassPreview.building.name} - ${nextClassPreview.indoorRoomRef}`
-      : (nextClassPreview?.building?.name ??
-        nextClassPreview?.event.location ??
-        'Location unavailable');
+  const nextClassLocationLabel = getNextClassLocationLabel(nextClassPreview);
 
   const handleFloorSelected = useCallback(
     (floor: string) => {
@@ -2197,6 +2200,11 @@ export default function MapScreen() {
       const isIndoorBuilding =
         indoor.isIndoorActive &&
         building.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase();
+      const shouldShowMarker = isIndoorBuilding === false;
+      const handlePress = () => {
+        handleMapBuildingPress(building.id);
+      };
+      const polygonOnPress = shouldShowMarker ? handlePress : undefined;
       return (
         <React.Fragment key={building.id}>
           <Polygon
@@ -2205,20 +2213,12 @@ export default function MapScreen() {
             fillColor={isSelected ? polygonFillSelected : polygonFill}
             strokeWidth={2}
             tappable={!isIndoorBuilding}
-            onPress={
-              isIndoorBuilding
-                ? undefined
-                : () => {
-                    handleMapBuildingPress(building.id);
-                  }
-            }
+            onPress={polygonOnPress}
           />
-          {!isIndoorBuilding ? (
+          {shouldShowMarker ? (
             <Marker
               coordinate={centroid}
-              onPress={() => {
-                handleMapBuildingPress(building.id);
-              }}
+              onPress={handlePress}
               anchor={{ x: 0.5, y: 0.5 }}
               opacity={0}
             />
@@ -2284,6 +2284,20 @@ export default function MapScreen() {
     </>
   );
 
+  const resetPoiPressedRef = useCallback(() => {
+    poiPressedRef.current = false;
+  }, []);
+
+  const handleOutdoorPoiPress = useCallback(
+    (poi: OutdoorPOI) => {
+      poiPressedRef.current = true;
+      requestAnimationFrame(resetPoiPressedRef);
+      handleCloseCard();
+      selectPOI(poi);
+    },
+    [handleCloseCard, resetPoiPressedRef, selectPOI],
+  );
+
   const renderOutdoorPoiMarkers = () =>
     orderedOutdoorPOIResults.map(({ poi, zIndex }) => (
       <POIMarker
@@ -2295,14 +2309,7 @@ export default function MapScreen() {
         iconName={
           (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
         }
-        onPress={() => {
-          poiPressedRef.current = true;
-          requestAnimationFrame(() => {
-            poiPressedRef.current = false;
-          });
-          handleCloseCard();
-          selectPOI(poi);
-        }}
+        onPress={() => handleOutdoorPoiPress(poi)}
       />
     ));
 
