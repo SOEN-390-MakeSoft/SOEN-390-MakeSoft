@@ -11,6 +11,7 @@
  */
 
 import { IndoorGraph } from './IndoorGraph';
+import { haversineMeters } from './geoUtils';
 import type { GraphEdge, GraphNode, IndoorNavStep, IndoorRoute, LatLng } from './types';
 
 // ---------------------------------------------------------------------------
@@ -24,20 +25,6 @@ export interface PathfinderOptions {
   avoidStairs?: boolean;
   /** If true, exclude escalator edges entirely (wheelchair mode). */
   avoidEscalators?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Haversine (admissible heuristic)
-// ---------------------------------------------------------------------------
-
-function haversine(a: LatLng, b: LatLng): number {
-  const R = 6_371_000;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
 function getEdgeWeight(
@@ -173,7 +160,7 @@ function initPathfinderState(
   const open = new MinHeap();
 
   gScore.set(startNodeId, 0);
-  open.push({ nodeId: startNodeId, f: haversine(startPosition, endPosition) });
+  open.push({ nodeId: startNodeId, f: haversineMeters(startPosition, endPosition) });
 
   return { gScore, cameFrom, closed, open };
 }
@@ -224,7 +211,7 @@ function relaxEdge(
   state.gScore.set(neighbourId, tentativeG);
   state.cameFrom.set(neighbourId, { nodeId: currentNodeId, edgeIdx });
   const neighbourNode = graph.nodes.get(neighbourId)!;
-  const h = haversine(neighbourNode.position, endPosition);
+  const h = haversineMeters(neighbourNode.position, endPosition);
   state.open.push({ nodeId: neighbourId, f: tentativeG + h });
 }
 
@@ -306,7 +293,7 @@ function appendEdgeGeometry(
     for (let p = 0; p < geom.length; p++) {
       if (p === 0 && state.polyline.length > 0) {
         const last = state.polyline.at(-1);
-        if (last && haversine(last, geom[p]) < 1) continue;
+        if (last && haversineMeters(last, geom[p]) < 1) continue;
       }
       state.polyline.push(geom[p]);
       state.segmentPath.push(geom[p]);
@@ -433,7 +420,7 @@ function buildStep(
 ): IndoorNavStep {
   let distanceMeters = 0;
   for (let i = 1; i < path.length; i++) {
-    distanceMeters += haversine(path[i - 1], path[i]);
+    distanceMeters += haversineMeters(path[i - 1], path[i]);
   }
 
   const estimatedSeconds = estimateStepSeconds(edgeType, fromLevel, toLevel, distanceMeters);

@@ -11,6 +11,7 @@
 import type { IndoorBuildingMeta, IndoorFeature, LatLng } from './types';
 import type { GeoJSONFeatureCollection } from './geojsonParser';
 import { parseIndoorGeoJSON, extractLevels, resetIdCounter } from './geojsonParser';
+import { haversineMeters } from './geoUtils';
 import { IndoorGraph } from './IndoorGraph';
 import { buildRoomIndex, type ResolvedRoom } from './roomResolver';
 
@@ -254,7 +255,7 @@ export function findBuildingAtCoordinate(point: LatLng): IndoorBuildingMeta | nu
       ...(meta.tunnelEntrances ?? []).map((entrance) => entrance.position),
     ];
     for (const entrance of entrances) {
-      const d = haversine(point, entrance);
+      const d = haversineMeters(point, entrance);
       if (d < closestDist) {
         closestDist = d;
         closest = meta;
@@ -341,20 +342,6 @@ function loadBuildingFeatures(meta: IndoorBuildingMeta): IndoorFeature[] | null 
   return features;
 }
 
-// ---------------------------------------------------------------------------
-// Haversine
-// ---------------------------------------------------------------------------
-
-function haversine(a: LatLng, b: LatLng): number {
-  const R = 6_371_000;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
 const TUNNEL_CONNECT_MAX_METERS = 80;
 
 function buildTunnelConnectorFeatures(
@@ -369,7 +356,8 @@ function buildTunnelConnectorFeatures(
   for (const entrance of meta.tunnelEntrances ?? []) {
     const nearestNode = baseGraph.findClosestNode(entrance.position, entrance.level);
     if (!nearestNode) continue;
-    if (haversine(entrance.position, nearestNode.position) > TUNNEL_CONNECT_MAX_METERS) continue;
+    if (haversineMeters(entrance.position, nearestNode.position) > TUNNEL_CONNECT_MAX_METERS)
+      continue;
 
     connectorCollection.features.push({
       type: 'Feature',

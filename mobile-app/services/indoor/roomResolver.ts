@@ -6,6 +6,7 @@
  * which are built on top of the same parsed feature set.
  */
 
+import { haversineMeters } from './geoUtils';
 import type { IndoorFeature, IndoorPOI, LatLng } from './types';
 
 // ---------------------------------------------------------------------------
@@ -64,22 +65,25 @@ export function resolveRoom(
   roomIndex: Map<string, ResolvedRoom>,
   buildingCode?: string,
 ): ResolvedRoom | null {
-  const normalized = normalizeRef(query);
+  const { normalized, stripped, normalizedWithCode, strippedWithCode } = normalizeRoomQuery(
+    query,
+    buildingCode,
+  );
 
   // 1. Exact match
   if (roomIndex.has(normalized)) return roomIndex.get(normalized)!;
 
   // 2. Try prepending the building code (e.g. "840" → "H-840")
-  if (buildingCode) {
-    const withCode = normalizeRef(`${buildingCode}-${query}`);
-    if (roomIndex.has(withCode)) return roomIndex.get(withCode)!;
+  if (normalizedWithCode && roomIndex.has(normalizedWithCode)) {
+    return roomIndex.get(normalizedWithCode)!;
   }
 
   // 3. Fuzzy: strip all non-alphanumeric and try substring match
-  const stripped = normalized.replaceAll(/[^A-Z0-9]/g, '');
   for (const [key, value] of roomIndex) {
-    const keyStripped = key.replaceAll(/[^A-Z0-9]/g, '');
-    if (keyStripped === stripped) return value;
+    const keyStripped = stripRoomRef(key);
+    if (keyStripped === stripped || (strippedWithCode && keyStripped === strippedWithCode)) {
+      return value;
+    }
   }
 
   return null;
@@ -132,7 +136,7 @@ export function findNearestPOI(
     const pos = getFeaturePosition(f);
     if (!pos) continue;
 
-    const dist = haversine(from, pos);
+    const dist = haversineMeters(from, pos);
     const level = f.levels[0] ?? '__none__';
 
     if (!best || dist < best.distanceMeters) {
@@ -161,18 +165,13 @@ export function searchRooms(
 ): ResolvedRoom[] {
   if (!query.trim()) return [];
 
-  const normalized = normalizeRef(query);
-  const stripped = normalized.replaceAll(/[^A-Z0-9]/g, '');
-
-  // Also try with building-code prefix (e.g. "840" → "H-840")
-  const withCode = buildingCode ? normalizeRef(`${buildingCode}-${query}`) : null;
-  const strippedWithCode = withCode?.replaceAll(/[^A-Z0-9]/g, '') ?? null;
+  const { stripped, strippedWithCode } = normalizeRoomQuery(query, buildingCode);
 
   const prefixMatches: ResolvedRoom[] = [];
   const substringMatches: ResolvedRoom[] = [];
 
   for (const [key, room] of roomIndex) {
-    const keyStripped = key.replaceAll(/[^A-Z0-9]/g, '');
+    const keyStripped = stripRoomRef(key);
 
     // Exact prefix match (best)
     if (
@@ -242,6 +241,28 @@ function normalizeRef(ref: string): string {
   return ref.trim().toUpperCase().replaceAll(/\s+/g, '-');
 }
 
+const ROOM_REF_STRIP_REGEX = /[^A-Z0-9]/g;
+
+function stripRoomRef(ref: string): string {
+  return ref.replaceAll(ROOM_REF_STRIP_REGEX, '');
+}
+
+function normalizeRoomQuery(
+  query: string,
+  buildingCode?: string,
+): {
+  normalized: string;
+  stripped: string;
+  normalizedWithCode: string | null;
+  strippedWithCode: string | null;
+} {
+  const normalized = normalizeRef(query);
+  const stripped = stripRoomRef(normalized);
+  const normalizedWithCode = buildingCode ? normalizeRef(`${buildingCode}-${query}`) : null;
+  const strippedWithCode = normalizedWithCode ? stripRoomRef(normalizedWithCode) : null;
+  return { normalized, stripped, normalizedWithCode, strippedWithCode };
+}
+
 function getFeaturePosition(f: IndoorFeature): LatLng | null {
   switch (f.type) {
     case 'room':
@@ -268,14 +289,4 @@ function getFeaturePosition(f: IndoorFeature): LatLng | null {
     default:
       return null;
   }
-}
-
-function haversine(a: LatLng, b: LatLng): number {
-  const R = 6_371_000;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }

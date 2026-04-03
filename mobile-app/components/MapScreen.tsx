@@ -396,6 +396,12 @@ const HIDE_POIS_MAP_STYLE = [
   { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 ];
 
+const INDOOR_CATEGORY_CHIPS = [
+  { key: 'washrooms', icon: 'wc', testId: 'indoor-chip-washrooms' },
+  { key: 'elevators', icon: 'elevator', testId: 'indoor-chip-elevators' },
+  { key: 'water_fountains', icon: 'water-drop', testId: 'indoor-chip-water-fountains' },
+] as const;
+
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const userPositionRef = useRef<{ latitude: number; longitude: number } | null>(null);
@@ -2378,59 +2384,20 @@ export default function MapScreen() {
     if (!indoor.isIndoorActive || isNavigationOpen || isMenuOpen || isSearchFocused) return null;
     return (
       <View style={styles.indoorCategoryChips} pointerEvents="auto">
-        <Pressable
-          testID="indoor-chip-washrooms"
-          style={[
-            styles.categoryChip,
-            indoorCategoryFilter === 'washrooms' && {
-              backgroundColor: brandRed,
-            },
-          ]}
-          onPress={() => handleCategoryChipPress('washrooms')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialIcons
-            name="wc"
-            size={24}
-            color={indoorCategoryFilter === 'washrooms' ? '#fff' : '#666'}
-          />
-        </Pressable>
-
-        <Pressable
-          testID="indoor-chip-elevators"
-          style={[
-            styles.categoryChip,
-            indoorCategoryFilter === 'elevators' && {
-              backgroundColor: brandRed,
-            },
-          ]}
-          onPress={() => handleCategoryChipPress('elevators')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialIcons
-            name="elevator"
-            size={24}
-            color={indoorCategoryFilter === 'elevators' ? '#fff' : '#666'}
-          />
-        </Pressable>
-
-        <Pressable
-          testID="indoor-chip-water-fountains"
-          style={[
-            styles.categoryChip,
-            indoorCategoryFilter === 'water_fountains' && {
-              backgroundColor: brandRed,
-            },
-          ]}
-          onPress={() => handleCategoryChipPress('water_fountains')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialIcons
-            name="water-drop"
-            size={24}
-            color={indoorCategoryFilter === 'water_fountains' ? '#fff' : '#666'}
-          />
-        </Pressable>
+        {INDOOR_CATEGORY_CHIPS.map((chip) => {
+          const isSelected = indoorCategoryFilter === chip.key;
+          return (
+            <Pressable
+              key={chip.key}
+              testID={chip.testId}
+              style={[styles.categoryChip, isSelected && { backgroundColor: brandRed }]}
+              onPress={() => handleCategoryChipPress(chip.key)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name={chip.icon} size={24} color={isSelected ? '#fff' : '#666'} />
+            </Pressable>
+          );
+        })}
       </View>
     );
   };
