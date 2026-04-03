@@ -6,7 +6,7 @@
  * which are built on top of the same parsed feature set.
  */
 
-import type { IndoorFeature, IndoorPOI, IndoorRoom, LatLng } from './types';
+import type { IndoorFeature, IndoorPOI, LatLng } from './types';
 
 // ---------------------------------------------------------------------------
 // Room resolver
@@ -91,13 +91,17 @@ export function resolveRoom(
 
 export type POICategory = 'washroom' | 'cafe' | 'elevator' | 'stairs' | 'any';
 
+function isPoiFeature(feature: IndoorFeature): feature is IndoorPOI {
+  return feature.type === 'poi';
+}
+
 /** Map user-facing POI category names to indoor feature tags. */
 const POI_TAG_MAP: Record<POICategory, (f: IndoorFeature) => boolean> = {
   washroom: (f) => f.type === 'room' && /bath|wash|wc|toilet|restroom/i.test(f.ref ?? ''),
-  cafe: (f) => f.type === 'poi' && (f as IndoorPOI).amenity === 'cafe',
+  cafe: (f) => isPoiFeature(f) && f.amenity === 'cafe',
   elevator: (f) => f.type === 'elevator',
   stairs: (f) => f.type === 'stairs',
-  any: (f) => f.type === 'poi',
+  any: isPoiFeature,
 };
 
 export interface NearestPOIResult {
@@ -241,18 +245,19 @@ function normalizeRef(ref: string): string {
 function getFeaturePosition(f: IndoorFeature): LatLng | null {
   switch (f.type) {
     case 'room':
-      return (f as IndoorRoom).centroid;
+      return f.centroid;
     case 'door':
     case 'elevator':
+      return f.position;
     case 'poi':
-      return (f as { position: LatLng }).position;
+      return f.position ?? f.centroid ?? null;
     case 'corridor':
-      return (f as { path: LatLng[] }).path[0] ?? null;
+      return f.path[0] ?? null;
     case 'stairs':
     case 'escalator':
     case 'area':
     case 'level_outline': {
-      const poly = (f as { polygon: LatLng[] }).polygon;
+      const poly = f.polygon;
       if (poly.length === 0) return null;
       const sum = poly.reduce(
         (a, p) => ({ latitude: a.latitude + p.latitude, longitude: a.longitude + p.longitude }),

@@ -11,7 +11,7 @@
  */
 
 import { IndoorGraph } from './IndoorGraph';
-import type { IndoorNavStep, IndoorRoute, LatLng } from './types';
+import type { GraphEdge, GraphNode, IndoorNavStep, IndoorRoute, LatLng } from './types';
 
 // ---------------------------------------------------------------------------
 // Options
@@ -134,53 +134,17 @@ export function findPath(
   const endNode = graph.nodes.get(endNodeId);
   if (!startNode || !endNode) return null;
 
-  const gScore = new Map<string, number>();
-  const cameFrom = new Map<string, { nodeId: string; edgeIdx: number }>();
-  const closed = new Set<string>();
+  const state = initPathfinderState(startNodeId, startNode.position, endNode.position);
 
-  gScore.set(startNodeId, 0);
-
-  const open = new MinHeap();
-  open.push({ nodeId: startNodeId, f: haversine(startNode.position, endNode.position) });
-
-  while (open.size > 0) {
-    const current = open.pop()!;
+  while (state.open.size > 0) {
+    const current = state.open.pop()!;
     if (current.nodeId === endNodeId) {
-      return reconstructRoute(graph, cameFrom, startNodeId, endNodeId, gScore);
+      return reconstructRoute(graph, state.cameFrom, startNodeId, endNodeId, state.gScore);
     }
 
-    if (closed.has(current.nodeId)) continue;
-    closed.add(current.nodeId);
-
-    const currentG = gScore.get(current.nodeId) ?? Infinity;
-
-    const edgeIndices = graph.adjacency.get(current.nodeId) ?? [];
-    for (const edgeIdx of edgeIndices) {
-      const edge = graph.edges[edgeIdx];
-
-      // Determine the neighbour – edges are stored from/to but we can traverse bidirectional ones in both directions
-      const neighbourId = edge.from === current.nodeId ? edge.to : edge.from;
-
-      // For directed edges where current is NOT the `from`, skip
-      // (This handles oneway stairs/escalators)
-      if (neighbourId === current.nodeId) continue;
-
-      if (closed.has(neighbourId)) continue;
-
-      const edgeWeight = getEdgeWeight(edge, options);
-      if (edgeWeight == null) continue;
-
-      const tentativeG = currentG + edgeWeight;
-      const prevG = gScore.get(neighbourId) ?? Infinity;
-
-      if (tentativeG < prevG) {
-        gScore.set(neighbourId, tentativeG);
-        cameFrom.set(neighbourId, { nodeId: current.nodeId, edgeIdx });
-        const neighbourNode = graph.nodes.get(neighbourId)!;
-        const h = haversine(neighbourNode.position, endNode.position);
-        open.push({ nodeId: neighbourId, f: tentativeG + h });
-      }
-    }
+    if (state.closed.has(current.nodeId)) continue;
+    state.closed.add(current.nodeId);
+    processNeighbours(graph, current.nodeId, endNode, options, state);
   }
 
   // No path found
@@ -191,14 +155,94 @@ export function findPath(
 // Route reconstruction
 // ---------------------------------------------------------------------------
 
-function reconstructRoute(
+type PathfinderState = {
+  gScore: Map<string, number>;
+  cameFrom: Map<string, { nodeId: string; edgeIdx: number }>;
+  closed: Set<string>;
+  open: MinHeap;
+};
+
+function initPathfinderState(
+  startNodeId: string,
+  startPosition: LatLng,
+  endPosition: LatLng,
+): PathfinderState {
+  const gScore = new Map<string, number>();
+  const cameFrom = new Map<string, { nodeId: string; edgeIdx: number }>();
+  const closed = new Set<string>();
+  const open = new MinHeap();
+
+  gScore.set(startNodeId, 0);
+  open.push({ nodeId: startNodeId, f: haversine(startPosition, endPosition) });
+
+  return { gScore, cameFrom, closed, open };
+}
+
+function getNeighbourId(edge: GraphEdge, currentNodeId: string): string | null {
+  const neighbourId = edge.from === currentNodeId ? edge.to : edge.from;
+  // For directed edges where current is NOT the `from`, skip
+  // (This handles oneway stairs/escalators)
+  if (neighbourId === currentNodeId) return null;
+  return neighbourId;
+}
+
+function processNeighbours(
   graph: IndoorGraph,
+  currentNodeId: string,
+  endNode: GraphNode,
+  options: PathfinderOptions,
+  state: PathfinderState,
+): void {
+  const currentG = state.gScore.get(currentNodeId) ?? Infinity;
+  const edgeIndices = graph.adjacency.get(currentNodeId) ?? [];
+
+  for (const edgeIdx of edgeIndices) {
+    const edge = graph.edges[edgeIdx];
+    const neighbourId = getNeighbourId(edge, currentNodeId);
+    if (!neighbourId || state.closed.has(neighbourId)) continue;
+
+    const edgeWeight = getEdgeWeight(edge, options);
+    if (edgeWeight == null) continue;
+
+    relaxEdge(state, graph, neighbourId, currentNodeId, edgeIdx, edgeWeight, endNode.position);
+  }
+}
+
+function relaxEdge(
+  state: PathfinderState,
+  graph: IndoorGraph,
+  neighbourId: string,
+  currentNodeId: string,
+  edgeIdx: number,
+  edgeWeight: number,
+  endPosition: LatLng,
+): void {
+  const currentG = state.gScore.get(currentNodeId) ?? Infinity;
+  const tentativeG = currentG + edgeWeight;
+  const prevG = state.gScore.get(neighbourId) ?? Infinity;
+  if (tentativeG >= prevG) return;
+
+  state.gScore.set(neighbourId, tentativeG);
+  state.cameFrom.set(neighbourId, { nodeId: currentNodeId, edgeIdx });
+  const neighbourNode = graph.nodes.get(neighbourId)!;
+  const h = haversine(neighbourNode.position, endPosition);
+  state.open.push({ nodeId: neighbourId, f: tentativeG + h });
+}
+
+type RouteBuildState = {
+  polyline: LatLng[];
+  steps: IndoorNavStep[];
+  currentLevel: string;
+  segmentPath: LatLng[];
+  segmentType: IndoorNavStep['edgeType'];
+  segmentStartLevel: string;
+};
+
+function buildNodePath(
   cameFrom: Map<string, { nodeId: string; edgeIdx: number }>,
   startId: string,
   endId: string,
-  gScore: Map<string, number>,
-): IndoorRoute {
-  // Rebuild the node path
+): string[] {
   const nodeIds: string[] = [endId];
   let current = endId;
   while (current !== startId) {
@@ -207,15 +251,91 @@ function reconstructRoute(
     nodeIds.unshift(prev.nodeId);
     current = prev.nodeId;
   }
+  return nodeIds;
+}
 
-  // Build the polyline and step-by-step instructions
-  const polyline: LatLng[] = [graph.nodes.get(nodeIds[0])!.position];
-  const steps: IndoorNavStep[] = [];
+function initRouteBuildState(graph: IndoorGraph, nodeIds: string[]): RouteBuildState {
+  const startNode = graph.nodes.get(nodeIds[0])!;
+  const startLevel = startNode.level ?? '0';
+  return {
+    polyline: [startNode.position],
+    steps: [],
+    currentLevel: startLevel,
+    segmentPath: [startNode.position],
+    segmentType: 'walk',
+    segmentStartLevel: startLevel,
+  };
+}
 
-  let currentLevel = graph.nodes.get(nodeIds[0])?.level ?? '0';
-  let segmentPath: LatLng[] = [graph.nodes.get(nodeIds[0])!.position];
-  let segmentType: IndoorNavStep['edgeType'] = 'walk';
-  let segmentStartLevel = currentLevel;
+function shouldStartNewSegment(
+  edgeType: IndoorNavStep['edgeType'],
+  edge: GraphEdge | null,
+  nodeLevel: string,
+  currentLevel: string,
+  segmentType: IndoorNavStep['edgeType'],
+): boolean {
+  return edgeType !== segmentType || (edge?.isLevelChange && nodeLevel !== currentLevel);
+}
+
+function isVerticalTransition(edgeType: IndoorNavStep['edgeType']): boolean {
+  return edgeType === 'elevator' || edgeType === 'stairs' || edgeType === 'escalator';
+}
+
+function resetSegmentAfterFlush(
+  state: RouteBuildState,
+  graph: IndoorGraph,
+  nodeIds: string[],
+  nodeIndex: number,
+  edgeType: IndoorNavStep['edgeType'],
+): void {
+  const prevWasLevelChange = isVerticalTransition(state.segmentType);
+  const prevNode = graph.nodes.get(nodeIds[nodeIndex - 1])!;
+  state.segmentPath = prevWasLevelChange ? [] : [prevNode.position];
+  state.segmentType = edgeType;
+  state.segmentStartLevel = state.currentLevel;
+}
+
+function appendEdgeGeometry(
+  state: RouteBuildState,
+  node: GraphNode,
+  edge: GraphEdge | null,
+  prevNodeId: string | null,
+): void {
+  if (edge?.path && edge.path.length >= 2 && prevNodeId) {
+    const isForward = prevNodeId === edge.from;
+    const geom = isForward ? edge.path : [...edge.path].reverse();
+    for (let p = 0; p < geom.length; p++) {
+      if (p === 0 && state.polyline.length > 0) {
+        const last = state.polyline.at(-1);
+        if (last && haversine(last, geom[p]) < 1) continue;
+      }
+      state.polyline.push(geom[p]);
+      state.segmentPath.push(geom[p]);
+    }
+    return;
+  }
+
+  state.segmentPath.push(node.position);
+  state.polyline.push(node.position);
+}
+
+function flushSegment(state: RouteBuildState, endLevel: string, minPoints: number): void {
+  if (state.segmentPath.length < minPoints) return;
+  state.steps.push(
+    buildStep(state.segmentType, state.segmentStartLevel, endLevel, state.segmentPath),
+  );
+}
+
+function reconstructRoute(
+  graph: IndoorGraph,
+  cameFrom: Map<string, { nodeId: string; edgeIdx: number }>,
+  startId: string,
+  endId: string,
+  gScore: Map<string, number>,
+): IndoorRoute {
+  const nodeIds = buildNodePath(cameFrom, startId, endId);
+
+  const state = initRouteBuildState(graph, nodeIds);
 
   for (let i = 1; i < nodeIds.length; i++) {
     const node = graph.nodes.get(nodeIds[i])!;
@@ -224,69 +344,32 @@ function reconstructRoute(
     const edgeType = edge?.edgeType ?? 'walk';
 
     // If the edge type or level changes, flush the current segment
-    if (edgeType !== segmentType || (edge?.isLevelChange && node.level !== currentLevel)) {
-      if (segmentPath.length > 0) {
-        steps.push(buildStep(segmentType, segmentStartLevel, currentLevel, segmentPath));
-      }
-      // After a level-change step (elevator/stairs/escalator), the
-      // transition node may have snapped inside a room polygon (e.g.
-      // elevator node inside a bathroom).  Starting with an empty
-      // segment lets the first walk edge's geometry supply the anchor
-      // point — the existing < 1 m dedup will skip the near-duplicate
-      // of the transition node while keeping the corridor boundary
-      // coordinate, so the polyline starts on the walkway.
-      const prevWasLevelChange =
-        segmentType === 'elevator' || segmentType === 'stairs' || segmentType === 'escalator';
-      segmentPath = prevWasLevelChange ? [] : [graph.nodes.get(nodeIds[i - 1])!.position];
-      segmentType = edgeType;
-      segmentStartLevel = currentLevel;
+    if (shouldStartNewSegment(edgeType, edge, node.level, state.currentLevel, state.segmentType)) {
+      flushSegment(state, state.currentLevel, 1);
+      resetSegmentAfterFlush(state, graph, nodeIds, i, edgeType);
     }
 
     // Use the edge's original corridor geometry when available so the
     // polyline follows actual walkways instead of cutting through walls.
-    if (edge?.path && edge.path.length >= 2) {
-      // Determine traversal direction: the edge stores geometry from→to.
-      // If we arrived at this node from edge.from, traverse forward;
-      // otherwise reverse the path.
-      const isForward = prev!.nodeId === edge.from;
-      const geom = isForward ? edge.path : [...edge.path].reverse();
-      // Include all path points.  Skip the first only when it is
-      // essentially identical to the last polyline point (< 1 m apart).
-      // With snap-merging the original corridor coordinate can be up to
-      // SNAP_DISTANCE_METERS away from the node position, so blindly
-      // skipping it would lose intermediate waypoints.
-      for (let p = 0; p < geom.length; p++) {
-        if (p === 0 && polyline.length > 0) {
-          const last = polyline.at(-1);
-          if (last && haversine(last, geom[p]) < 1) continue;
-        }
-        polyline.push(geom[p]);
-        segmentPath.push(geom[p]);
-      }
-    } else {
-      segmentPath.push(node.position);
-      polyline.push(node.position);
-    }
-    currentLevel = node.level;
+    appendEdgeGeometry(state, node, edge, prev?.nodeId ?? null);
+    state.currentLevel = node.level;
   }
 
   // Flush last segment
-  if (segmentPath.length > 1) {
-    steps.push(buildStep(segmentType, segmentStartLevel, currentLevel, segmentPath));
-  }
+  flushSegment(state, state.currentLevel, 2);
 
   const startNode = graph.nodes.get(nodeIds[0])!;
   const endNodeId = nodeIds.at(-1) ?? endId;
   const endNode = graph.nodes.get(endNodeId)!;
 
-  const totalEstimatedSeconds = steps.reduce((sum, s) => sum + s.estimatedSeconds, 0);
+  const totalEstimatedSeconds = state.steps.reduce((sum, s) => sum + s.estimatedSeconds, 0);
 
   return {
     totalDistanceMeters: gScore.get(endId) ?? 0,
     totalEstimatedSeconds,
     nodeIds,
-    polyline,
-    steps,
+    polyline: state.polyline,
+    steps: state.steps,
     startLevel: startNode.level,
     endLevel: endNode.level,
   };

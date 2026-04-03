@@ -369,7 +369,7 @@ export function useNavigationBetweenBuildings({
   const [modeDurations, setModeDurations] = useState<ModeDurations>({});
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<RouteMode>('driving');
-  const [navigationActiveField, setNavigationActiveFieldState] = useState<
+  const [navigationActiveField, setNavigationActiveField] = useState<
     'start' | 'destination' | null
   >(null);
   const [isDestinationLocked, setIsDestinationLocked] = useState(false);
@@ -445,10 +445,10 @@ export function useNavigationBetweenBuildings({
     return name.includes(`(${code})`) ? name : `${name} (${code})`;
   }, []);
 
-  const setNavigationActiveField = useCallback(
+  const setNavigationActiveFieldSafe = useCallback(
     (field: 'start' | 'destination' | null) => {
       if (isDestinationLocked && field === 'destination') return;
-      setNavigationActiveFieldState(field);
+      setNavigationActiveField(field);
     },
     [isDestinationLocked],
   );
@@ -737,7 +737,7 @@ export function useNavigationBetweenBuildings({
       setNavigationDestination(destinationLabel);
       setNavigationDestinationCoord(destCentroid);
       setTapMarkerCoordinate(destCentroid);
-      setNavigationActiveFieldState(null);
+      setNavigationActiveField(null);
       setActiveMode('driving');
       setIsDestinationLocked(true);
       resetRouteState();
@@ -753,7 +753,7 @@ export function useNavigationBetweenBuildings({
       setNavigationStart(startLabel ?? 'Building entrance');
       setNavigationOrigin(null);
       setNavigationDestinationCoord(null);
-      setNavigationActiveFieldState(null);
+      setNavigationActiveField(null);
       setIsDestinationLocked(false);
       setTapMarkerCoordinate(null);
       resetRouteState();
@@ -910,7 +910,7 @@ export function useNavigationBetweenBuildings({
     setNavigationOrigin(null);
     setNavigationDestination('');
     setNavigationDestinationCoord(null);
-    setNavigationActiveFieldState(null);
+    setNavigationActiveField(null);
     setTapMarkerCoordinate(null);
     setRouteSummary(null);
     setAllModeRoutes({});
@@ -965,7 +965,7 @@ export function useNavigationBetweenBuildings({
     isRouteLoading,
     directionsError,
     isGetDirectionsDisabled,
-    setNavigationActiveField,
+    setNavigationActiveField: setNavigationActiveFieldSafe,
     setActiveMode,
     openNavigationForBuilding,
     openNavigationForResolvedDestination,

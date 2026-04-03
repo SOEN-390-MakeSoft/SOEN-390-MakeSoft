@@ -2131,90 +2131,42 @@ export default function MapScreen() {
     ],
   );
 
-  return (
-    <View style={styles.container} testID="map-screen">
-      {showCalendarRequired ? (
-        <ClassesCalendarRequired
-          onConnectCalendar={() => setCalendarModalVisible(true)}
-          onContinueAsGuest={() => setHasDismissedCalendarRequired(true)}
+  const renderCalendarRequired = () =>
+    showCalendarRequired ? (
+      <ClassesCalendarRequired
+        onConnectCalendar={() => setCalendarModalVisible(true)}
+        onContinueAsGuest={() => setHasDismissedCalendarRequired(true)}
+      />
+    ) : null;
+
+  const renderTapMarker = () =>
+    tapMarkerCoordinate ? (
+      <Marker coordinate={tapMarkerCoordinate} testID="map-tap-marker" pinColor={brandRed} />
+    ) : null;
+
+  const renderRoutePolylines = () => (
+    <>
+      {routePolyline.length > 0 && selectedTransportMode === 'driving' ? (
+        <Polyline
+          key="route-driving"
+          testID="route-driving-polyline"
+          coordinates={routePolyline}
+          strokeColor="#4A89F3"
+          strokeWidth={5}
         />
       ) : null}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider="google"
-        initialRegion={DEFAULT_REGION}
-        testID="campus-map"
-        showsUserLocation
-        showsCompass={false}
-        showsMyLocationButton={false}
-        showsPointsOfInterest={!indoor.isIndoorActive && outdoorPOIResults.length === 0}
-        customMapStyle={
-          indoor.isIndoorActive || outdoorPOIResults.length > 0 ? HIDE_POIS_MAP_STYLE : []
-        }
-        onUserLocationChange={(e) => {
-          const c = e.nativeEvent.coordinate;
-          if (!c) return;
-
-          const nextCoordinate = { latitude: c.latitude, longitude: c.longitude };
-          userPositionRef.current = nextCoordinate;
-          setPoiSearchLocation(nextCoordinate);
-        }}
-        onRegionChangeComplete={handleRegionChange}
-        onPoiClick={(e) => {
-          const { placeId, name, coordinate } = e.nativeEvent;
-          if (!coordinate || !name) return;
-          handleCloseCard();
-          selectPOIFromMap({
-            id: placeId ?? `map-poi-${Date.now()}`,
-            name,
-            address: '',
-            coordinate: { latitude: coordinate.latitude, longitude: coordinate.longitude },
-            category: 'place',
-          });
-        }}
-        onPress={(e) => {
-          if (isSearchFocused) {
-            Keyboard.dismiss();
-            setIsSearchFocused(false);
-          }
-
-          if (!poiPressedRef.current) clearSelectedPOI();
-          const coordinate = e.nativeEvent?.coordinate;
-          if (coordinate?.latitude != null && coordinate?.longitude != null) {
-            if (indoor.isIndoorActive) {
-              if (!roomPressedRef.current) indoor.selectRoom(null);
-              return;
-            }
-            if (!poiPressedRef.current) handleMapCoordinatePress(coordinate);
-          }
-        }}
-      >
-        {tapMarkerCoordinate && (
-          <Marker coordinate={tapMarkerCoordinate} testID="map-tap-marker" pinColor={brandRed} />
-        )}
-        {routePolyline.length > 0 && selectedTransportMode === 'driving' && (
-          <Polyline
-            key="route-driving"
-            testID="route-driving-polyline"
-            coordinates={routePolyline}
-            strokeColor="#4A89F3"
-            strokeWidth={5}
-          />
-        )}
-        {routePolyline.length > 0 && selectedTransportMode === 'walking' && (
-          <Polyline
-            key="route-walking"
-            testID="route-walking-polyline"
-            coordinates={routePolyline}
-            strokeColor={routeColor}
-            strokeWidth={5}
-            lineDashPattern={[10, 6]}
-          />
-        )}
-        {/* Shuttle mode: render each segment with appropriate style */}
-        {selectedTransportMode === 'shuttle' &&
-          routeSegments.map((seg, i) => {
+      {routePolyline.length > 0 && selectedTransportMode === 'walking' ? (
+        <Polyline
+          key="route-walking"
+          testID="route-walking-polyline"
+          coordinates={routePolyline}
+          strokeColor={routeColor}
+          strokeWidth={5}
+          lineDashPattern={[10, 6]}
+        />
+      ) : null}
+      {selectedTransportMode === 'shuttle'
+        ? routeSegments.map((seg, i) => {
             if (seg.polyline.length === 0) return null;
             const isShuttleSegment = seg.kind === 'shuttle';
             const segmentColor = isShuttleSegment
@@ -2231,268 +2183,359 @@ export default function MapScreen() {
                 {...(dashPattern ? { lineDashPattern: dashPattern } : {})}
               />
             );
-          })}
-        {buildings.map((building) => {
-          const centroid = polygonCentroid(building.polygon);
-          const isSelected = building.id === selectedBuildingId;
-          // When indoor mode is active for this building, disable the polygon/marker
-          // tap so that room markers underneath can receive the press events.
-          const isIndoorBuilding =
-            indoor.isIndoorActive &&
-            building.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase();
-          return (
-            <React.Fragment key={building.id}>
-              <Polygon
-                coordinates={[...building.polygon]}
-                strokeColor={polygonStroke}
-                fillColor={isSelected ? polygonFillSelected : polygonFill}
-                strokeWidth={2}
-                tappable={!isIndoorBuilding}
-                onPress={
-                  isIndoorBuilding
-                    ? undefined
-                    : () => {
-                        handleMapBuildingPress(building.id);
-                      }
-                }
-              />
-              {!isIndoorBuilding && (
-                <Marker
-                  coordinate={centroid}
-                  onPress={() => {
+          })
+        : null}
+    </>
+  );
+
+  const renderBuildingPolygons = () =>
+    buildings.map((building) => {
+      const centroid = polygonCentroid(building.polygon);
+      const isSelected = building.id === selectedBuildingId;
+      // When indoor mode is active for this building, disable the polygon/marker
+      // tap so that room markers underneath can receive the press events.
+      const isIndoorBuilding =
+        indoor.isIndoorActive &&
+        building.code?.toUpperCase() === indoor.activeBuildingCode?.toUpperCase();
+      return (
+        <React.Fragment key={building.id}>
+          <Polygon
+            coordinates={[...building.polygon]}
+            strokeColor={polygonStroke}
+            fillColor={isSelected ? polygonFillSelected : polygonFill}
+            strokeWidth={2}
+            tappable={!isIndoorBuilding}
+            onPress={
+              isIndoorBuilding
+                ? undefined
+                : () => {
                     handleMapBuildingPress(building.id);
-                  }}
-                  anchor={{ x: 0.5, y: 0.5 }}
-                  opacity={0}
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
-        {visibleBuildingLabels.map((label) => (
-          <Marker
-            key={`building-label-${label.id}`}
-            coordinate={label.coordinate}
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={30}
-            tappable={false}
-          >
-            <View
-              style={[
-                styles.buildingLabel,
-                { backgroundColor: buildingLabelBackground, borderColor: buildingLabelBorderColor },
-                label.isSelected && styles.buildingLabelSelected,
-              ]}
-              accessible
-              accessibilityRole="text"
-              accessibilityLabel={`Building ${label.code}`}
-            >
-              <Text style={[styles.buildingLabelText, { color: buildingLabelTextColor }]}>
-                {label.code}
-              </Text>
-            </View>
-          </Marker>
-        ))}
-        {/* Indoor floor plan overlay — GeoJSON-based (no image alignment needed) */}
-        {(startIndoor.isIndoorActive || startIndoor.indoorRoute) &&
-          startIndoor.activeBuildingCode !== indoor.activeBuildingCode && (
-            <IndoorMapOverlay
-              activeLevelFeatures={startIndoor.activeLevelFeatures}
-              route={startIndoor.indoorRoute}
-              activeLevel={startIndoor.activeLevel}
-              destinationRoom={startIndoor.destinationRoom}
-              routeColor={routeColor}
-              isColorBlind={isColorBlind}
-            />
-          )}
-        {(indoor.isIndoorActive || indoor.indoorRoute) && (
-          <IndoorMapOverlay
-            activeLevelFeatures={indoor.activeLevelFeatures}
-            route={indoor.indoorRoute}
-            activeLevel={indoor.activeLevel}
-            destinationRoom={indoor.destinationRoom}
-            selectedRoom={indoor.selectedRoom}
-            onRoomPress={handleRoomMarkerPress}
-            onPoiPress={handlePoiPress}
-            routeColor={routeColor}
-            visiblePoiAmenities={visiblePoiAmenities}
-            categoryFilter={indoorCategoryFilter}
-            isColorBlind={isColorBlind}
-          />
-        )}
-        {orderedOutdoorPOIResults.map(({ poi, zIndex }) => (
-          <POIMarker
-            key={`outdoor-poi-${poi.id}`}
-            poi={poi}
-            markerColor={poiMarkerColor}
-            testID={`outdoor-poi-marker-${poi.id}`}
-            zIndex={zIndex}
-            iconName={
-              (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
-            }
-            onPress={() => {
-              poiPressedRef.current = true;
-              requestAnimationFrame(() => {
-                poiPressedRef.current = false;
-              });
-              handleCloseCard();
-              selectPOI(poi);
-            }}
-          />
-        ))}
-      </MapView>
-
-      {/* Category filter chips */}
-      {indoor.isIndoorActive && !isNavigationOpen && !isMenuOpen && !isSearchFocused && (
-        <View style={styles.indoorCategoryChips} pointerEvents="auto">
-          <Pressable
-            testID="indoor-chip-washrooms"
-            style={[
-              styles.categoryChip,
-              indoorCategoryFilter === 'washrooms' && {
-                backgroundColor: brandRed,
-              },
-            ]}
-            onPress={() => handleCategoryChipPress('washrooms')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialIcons
-              name="wc"
-              size={24}
-              color={indoorCategoryFilter === 'washrooms' ? '#fff' : '#666'}
-            />
-          </Pressable>
-
-          <Pressable
-            testID="indoor-chip-elevators"
-            style={[
-              styles.categoryChip,
-              indoorCategoryFilter === 'elevators' && {
-                backgroundColor: brandRed,
-              },
-            ]}
-            onPress={() => handleCategoryChipPress('elevators')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialIcons
-              name="elevator"
-              size={24}
-              color={indoorCategoryFilter === 'elevators' ? '#fff' : '#666'}
-            />
-          </Pressable>
-
-          <Pressable
-            testID="indoor-chip-water-fountains"
-            style={[
-              styles.categoryChip,
-              indoorCategoryFilter === 'water_fountains' && {
-                backgroundColor: brandRed,
-              },
-            ]}
-            onPress={() => handleCategoryChipPress('water_fountains')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialIcons
-              name="water-drop"
-              size={24}
-              color={indoorCategoryFilter === 'water_fountains' ? '#fff' : '#666'}
-            />
-          </Pressable>
-        </View>
-      )}
-
-      {/* Indoor floor selector pill — visible during navigation so users can switch floors */}
-      {(indoor.isIndoorActive || startIndoor.isIndoorActive) &&
-        !isRoutePreviewOpen &&
-        !isDirectionsModeOpen &&
-        !isMenuOpen &&
-        !isSearchFocused && (
-          <FloorSelector
-            levels={floorSelectorLevels}
-            activeLevel={floorSelectorActiveLevel}
-            onSelectLevel={handleFloorSelect}
-            accentColor={brandRed}
-          />
-        )}
-
-      {/* Room info bubble — appears when a room is tapped or selected from search */}
-      {indoor.isIndoorActive && indoor.selectedRoom && !isMenuOpen && !isSearchFocused && (
-        <RoomInfoBubble
-          room={indoor.selectedRoom}
-          buildingName={indoor.buildingMeta?.name}
-          onNavigate={handleRoomNavigate}
-          onClose={() => indoor.selectRoom(null)}
-          estimatedTimeText={selectedRoomTimeText}
-          accentColor={brandRed}
-          bottomOffset={isQuickPickOpen ? 320 : 160}
-        />
-      )}
-
-      {/* POI info bubble — appears when a POI polygon is tapped */}
-      {indoor.isIndoorActive && selectedPoi && !isMenuOpen && !isSearchFocused && (
-        <PoiInfoBubble
-          poiTitle={getPoiTitle(selectedPoi)}
-          level={indoor.activeLevel}
-          buildingName={indoor.buildingMeta?.name}
-          onClose={() => setSelectedPoi(null)}
-          accentColor={brandRed}
-          bottomOffset={isQuickPickOpen ? 320 : 160}
-        />
-      )}
-
-      {/* Top Controls: Search, Menu, Brand Badge */}
-      {!isRoutePreviewOpen && !isDirectionsModeOpen && (
-        <View
-          style={[styles.topControls, { top: menuTop, paddingHorizontal: menuLeft }]}
-          pointerEvents="box-none"
-        >
-          <SearchBar
-            searchQuery={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmit={() => {
-              // Try indoor destination first (e.g. "H-840"); fall back to normal building search
-              if (!handleIndoorSearchQuery(searchQuery)) {
-                if (isSupportedPOICategory(searchQuery)) {
-                  if (mergedSearchResults.length > 0) {
-                    handleSelectMergedResult(mergedSearchResults[0]);
                   }
-                  return;
-                }
-                handleSearchSubmit();
-              }
-            }}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            isSearchFocused={isSearchFocused}
-            isSearchDisabled={isSearchDisabled}
-            searchResults={mergedSearchResults}
-            onSelectResult={handleSelectMergedResult}
-            onOpenMenu={() => setIsMenuOpen(true)}
-            inputRef={searchInputRef}
-            brandColor={brandRed}
-            logoSource={require('../assets/images/Concordia_icon.png')}
-            onLogoPress={handleLogoPress}
-            blurOnSubmit={!isSupportedPOICategory(searchQuery)}
-            isLoading={isOutdoorPOILoading}
+            }
           />
-          <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
-            <CampusSwitch
-              selectedCampus={activeCampus === 'sgw' ? 'SGW' : 'Loyola'}
-              onCampusChange={(campus) => handleCampusChange(campus === 'SGW' ? 'sgw' : 'loyola')}
+          {!isIndoorBuilding ? (
+            <Marker
+              coordinate={centroid}
+              onPress={() => {
+                handleMapBuildingPress(building.id);
+              }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              opacity={0}
             />
-          </View>
-        </View>
-      )}
+          ) : null}
+        </React.Fragment>
+      );
+    });
 
-      {/* Building Info Card */}
-      {/* Indoor error toast */}
-      {indoor.error ? (
-        <View style={styles.indoorErrorToast} testID="indoor-error-toast">
-          <Text style={styles.toastText}>{indoor.error}</Text>
+  const renderBuildingLabels = () =>
+    visibleBuildingLabels.map((label) => (
+      <Marker
+        key={`building-label-${label.id}`}
+        coordinate={label.coordinate}
+        anchor={{ x: 0.5, y: 0.5 }}
+        zIndex={30}
+        tappable={false}
+      >
+        <View
+          style={[
+            styles.buildingLabel,
+            { backgroundColor: buildingLabelBackground, borderColor: buildingLabelBorderColor },
+            label.isSelected && styles.buildingLabelSelected,
+          ]}
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={`Building ${label.code}`}
+        >
+          <Text style={[styles.buildingLabelText, { color: buildingLabelTextColor }]}>
+            {label.code}
+          </Text>
         </View>
+      </Marker>
+    ));
+
+  const renderIndoorOverlays = () => (
+    <>
+      {(startIndoor.isIndoorActive || startIndoor.indoorRoute) &&
+      startIndoor.activeBuildingCode !== indoor.activeBuildingCode ? (
+        <IndoorMapOverlay
+          activeLevelFeatures={startIndoor.activeLevelFeatures}
+          route={startIndoor.indoorRoute}
+          activeLevel={startIndoor.activeLevel}
+          destinationRoom={startIndoor.destinationRoom}
+          routeColor={routeColor}
+          isColorBlind={isColorBlind}
+        />
       ) : null}
+      {indoor.isIndoorActive || indoor.indoorRoute ? (
+        <IndoorMapOverlay
+          activeLevelFeatures={indoor.activeLevelFeatures}
+          route={indoor.indoorRoute}
+          activeLevel={indoor.activeLevel}
+          destinationRoom={indoor.destinationRoom}
+          selectedRoom={indoor.selectedRoom}
+          onRoomPress={handleRoomMarkerPress}
+          onPoiPress={handlePoiPress}
+          routeColor={routeColor}
+          visiblePoiAmenities={visiblePoiAmenities}
+          categoryFilter={indoorCategoryFilter}
+          isColorBlind={isColorBlind}
+        />
+      ) : null}
+    </>
+  );
 
-      {/* Building Info Card — hidden while the navigation sheet is open */}
+  const renderOutdoorPoiMarkers = () =>
+    orderedOutdoorPOIResults.map(({ poi, zIndex }) => (
+      <POIMarker
+        key={`outdoor-poi-${poi.id}`}
+        poi={poi}
+        markerColor={poiMarkerColor}
+        testID={`outdoor-poi-marker-${poi.id}`}
+        zIndex={zIndex}
+        iconName={
+          (POI_MARKER_ICONS[poi.category] ?? 'place') as keyof typeof MaterialIcons.glyphMap
+        }
+        onPress={() => {
+          poiPressedRef.current = true;
+          requestAnimationFrame(() => {
+            poiPressedRef.current = false;
+          });
+          handleCloseCard();
+          selectPOI(poi);
+        }}
+      />
+    ));
+
+  const renderMapView = () => (
+    <MapView
+      ref={mapRef}
+      style={styles.map}
+      provider="google"
+      initialRegion={DEFAULT_REGION}
+      testID="campus-map"
+      showsUserLocation
+      showsCompass={false}
+      showsMyLocationButton={false}
+      showsPointsOfInterest={!indoor.isIndoorActive && outdoorPOIResults.length === 0}
+      customMapStyle={
+        indoor.isIndoorActive || outdoorPOIResults.length > 0 ? HIDE_POIS_MAP_STYLE : []
+      }
+      onUserLocationChange={(e) => {
+        const c = e.nativeEvent.coordinate;
+        if (!c) return;
+
+        const nextCoordinate = { latitude: c.latitude, longitude: c.longitude };
+        userPositionRef.current = nextCoordinate;
+        setPoiSearchLocation(nextCoordinate);
+      }}
+      onRegionChangeComplete={handleRegionChange}
+      onPoiClick={(e) => {
+        const { placeId, name, coordinate } = e.nativeEvent;
+        if (!coordinate || !name) return;
+        handleCloseCard();
+        selectPOIFromMap({
+          id: placeId ?? `map-poi-${Date.now()}`,
+          name,
+          address: '',
+          coordinate: { latitude: coordinate.latitude, longitude: coordinate.longitude },
+          category: 'place',
+        });
+      }}
+      onPress={(e) => {
+        if (isSearchFocused) {
+          Keyboard.dismiss();
+          setIsSearchFocused(false);
+        }
+
+        if (!poiPressedRef.current) clearSelectedPOI();
+        const coordinate = e.nativeEvent?.coordinate;
+        if (coordinate?.latitude != null && coordinate?.longitude != null) {
+          if (indoor.isIndoorActive) {
+            if (!roomPressedRef.current) indoor.selectRoom(null);
+            return;
+          }
+          if (!poiPressedRef.current) handleMapCoordinatePress(coordinate);
+        }
+      }}
+    >
+      {renderTapMarker()}
+      {renderRoutePolylines()}
+      {renderBuildingPolygons()}
+      {renderBuildingLabels()}
+      {renderIndoorOverlays()}
+      {renderOutdoorPoiMarkers()}
+    </MapView>
+  );
+
+  const renderIndoorCategoryChips = () => {
+    if (!indoor.isIndoorActive || isNavigationOpen || isMenuOpen || isSearchFocused) return null;
+    return (
+      <View style={styles.indoorCategoryChips} pointerEvents="auto">
+        <Pressable
+          testID="indoor-chip-washrooms"
+          style={[
+            styles.categoryChip,
+            indoorCategoryFilter === 'washrooms' && {
+              backgroundColor: brandRed,
+            },
+          ]}
+          onPress={() => handleCategoryChipPress('washrooms')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons
+            name="wc"
+            size={24}
+            color={indoorCategoryFilter === 'washrooms' ? '#fff' : '#666'}
+          />
+        </Pressable>
+
+        <Pressable
+          testID="indoor-chip-elevators"
+          style={[
+            styles.categoryChip,
+            indoorCategoryFilter === 'elevators' && {
+              backgroundColor: brandRed,
+            },
+          ]}
+          onPress={() => handleCategoryChipPress('elevators')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons
+            name="elevator"
+            size={24}
+            color={indoorCategoryFilter === 'elevators' ? '#fff' : '#666'}
+          />
+        </Pressable>
+
+        <Pressable
+          testID="indoor-chip-water-fountains"
+          style={[
+            styles.categoryChip,
+            indoorCategoryFilter === 'water_fountains' && {
+              backgroundColor: brandRed,
+            },
+          ]}
+          onPress={() => handleCategoryChipPress('water_fountains')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons
+            name="water-drop"
+            size={24}
+            color={indoorCategoryFilter === 'water_fountains' ? '#fff' : '#666'}
+          />
+        </Pressable>
+      </View>
+    );
+  };
+
+  const renderFloorSelector = () => {
+    if (
+      !(indoor.isIndoorActive || startIndoor.isIndoorActive) ||
+      isRoutePreviewOpen ||
+      isDirectionsModeOpen ||
+      isMenuOpen ||
+      isSearchFocused
+    ) {
+      return null;
+    }
+    return (
+      <FloorSelector
+        levels={floorSelectorLevels}
+        activeLevel={floorSelectorActiveLevel}
+        onSelectLevel={handleFloorSelect}
+        accentColor={brandRed}
+      />
+    );
+  };
+
+  const renderRoomInfoBubble = () => {
+    if (!indoor.isIndoorActive || !indoor.selectedRoom || isMenuOpen || isSearchFocused) {
+      return null;
+    }
+    return (
+      <RoomInfoBubble
+        room={indoor.selectedRoom}
+        buildingName={indoor.buildingMeta?.name}
+        onNavigate={handleRoomNavigate}
+        onClose={() => indoor.selectRoom(null)}
+        estimatedTimeText={selectedRoomTimeText}
+        accentColor={brandRed}
+        bottomOffset={isQuickPickOpen ? 320 : 160}
+      />
+    );
+  };
+
+  const renderPoiInfoBubble = () => {
+    if (!indoor.isIndoorActive || !selectedPoi || isMenuOpen || isSearchFocused) {
+      return null;
+    }
+    return (
+      <PoiInfoBubble
+        poiTitle={getPoiTitle(selectedPoi)}
+        level={indoor.activeLevel}
+        buildingName={indoor.buildingMeta?.name}
+        onClose={() => setSelectedPoi(null)}
+        accentColor={brandRed}
+        bottomOffset={isQuickPickOpen ? 320 : 160}
+      />
+    );
+  };
+
+  const renderTopControls = () => {
+    if (isRoutePreviewOpen || isDirectionsModeOpen) return null;
+    return (
+      <View
+        style={[styles.topControls, { top: menuTop, paddingHorizontal: menuLeft }]}
+        pointerEvents="box-none"
+      >
+        <SearchBar
+          searchQuery={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmit={() => {
+            // Try indoor destination first (e.g. "H-840"); fall back to normal building search
+            if (!handleIndoorSearchQuery(searchQuery)) {
+              if (isSupportedPOICategory(searchQuery)) {
+                if (mergedSearchResults.length > 0) {
+                  handleSelectMergedResult(mergedSearchResults[0]);
+                }
+                return;
+              }
+              handleSearchSubmit();
+            }
+          }}
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
+          isSearchFocused={isSearchFocused}
+          isSearchDisabled={isSearchDisabled}
+          searchResults={mergedSearchResults}
+          onSelectResult={handleSelectMergedResult}
+          onOpenMenu={() => setIsMenuOpen(true)}
+          inputRef={searchInputRef}
+          brandColor={brandRed}
+          logoSource={require('../assets/images/Concordia_icon.png')}
+          onLogoPress={handleLogoPress}
+          blurOnSubmit={!isSupportedPOICategory(searchQuery)}
+          isLoading={isOutdoorPOILoading}
+        />
+        <View style={[styles.campusToggle, isNavigationOpen && styles.campusToggleNavigation]}>
+          <CampusSwitch
+            selectedCampus={activeCampus === 'sgw' ? 'SGW' : 'Loyola'}
+            onCampusChange={(campus) => handleCampusChange(campus === 'SGW' ? 'sgw' : 'loyola')}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const renderIndoorErrorToast = () =>
+    indoor.error ? (
+      <View style={styles.indoorErrorToast} testID="indoor-error-toast">
+        <Text style={styles.toastText}>{indoor.error}</Text>
+      </View>
+    ) : null;
+
+  const renderCardsAndNavigation = () => (
+    <>
       <BuildingInfoCard
         selectedBuilding={isNavigationOpen ? null : selectedBuilding}
         remoteBuilding={remoteBuilding}
@@ -2576,123 +2619,171 @@ export default function MapScreen() {
         onClose={handleCloseDirectionsMode}
         onLocationUpdate={handleDirectionsLocationUpdate}
       />
+    </>
+  );
 
-      {nextClassPreview && !isNavigationOpen && !isRoutePreviewOpen && !isDirectionsModeOpen ? (
-        <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
-          <Text style={styles.nextClassTitle}>Directions to my next class</Text>
-          <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
-          <View style={styles.nextClassRow}>
-            <View style={styles.nextClassRowLeft}>
-              <MaterialIcons name="event" size={18} color="#6e6e6e" />
-              <Text style={styles.nextClassName} numberOfLines={1}>
-                {nextClassTitle}
-              </Text>
-            </View>
-            <Text style={styles.nextClassTime}>{nextClassTime}</Text>
+  const renderNextClassCard = () => {
+    if (!nextClassPreview || isNavigationOpen || isRoutePreviewOpen || isDirectionsModeOpen) {
+      return null;
+    }
+    return (
+      <View style={[styles.nextClassCard, { top: nextClassCardTop }]} testID="next-class-card">
+        <Text style={styles.nextClassTitle}>Directions to my next class</Text>
+        <Text style={styles.nextClassSubtitle}>Taken from Google Calendar</Text>
+        <View style={styles.nextClassRow}>
+          <View style={styles.nextClassRowLeft}>
+            <MaterialIcons name="event" size={18} color="#6e6e6e" />
+            <Text style={styles.nextClassName} numberOfLines={1}>
+              {nextClassTitle}
+            </Text>
           </View>
-          <Text style={styles.nextClassLocation} numberOfLines={1}>
-            {nextClassLocationLabel}
-          </Text>
-          <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
-            <Text style={styles.nextClassGoText}>Go</Text>
-          </Pressable>
+          <Text style={styles.nextClassTime}>{nextClassTime}</Text>
         </View>
-      ) : null}
-
-      <NextClassPanel
-        isVisible={!isMenuOpen && !isNavigationOpen}
-        isCalendarConnected={isCalendarConnected}
-        nextEvent={nextClassEvent}
-        onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
-      >
-        {(openNextClassPanel, showNextClassInfo) =>
-          !isMenuOpen && !isNavigationOpen ? (
-            <QuickPickPanel
-              activeCampus={activeCampus}
-              isColorBlind={isColorBlind}
-              isQuickPickOpen={isQuickPickOpen}
-              quickPickMaxHeight={quickPickMaxHeight}
-              quickPickVisibleHeight={quickPickVisibleHeight}
-              quickPickContentHeight={quickPickContentHeight}
-              featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
-              isLocating={isLocating}
-              onToggleOpen={handleToggleQuickPick}
-              onHeightChange={setQuickPickContentHeight}
-              onQuickPick={handleQuickPick}
-              onLocationPress={handleLocationPress}
-              onDirectionsToNextClassPress={handleDirectionsToNextClass}
-              showNextClassInfo={showNextClassInfo}
-              onNextClassInfoPress={openNextClassPanel}
-            />
-          ) : null
-        }
-      </NextClassPanel>
-
-      {!isRoutePreviewOpen && !isDirectionsModeOpen && (
-        <MapMenu
-          visible={isMenuOpen}
-          onClose={() => setIsMenuOpen(false)}
-          visiblePoiAmenities={visiblePoiAmenities}
-          onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
-          selectedOutdoorPOICategories={selectedOutdoorPOICategories}
-          onOutdoorPOICategoriesChange={handleOutdoorPOICategoriesChange}
-        />
-      )}
-
-      {buildingNotFoundToast ? (
-        <View style={styles.toast} testID="building-not-found-toast">
-          <Text style={styles.toastText}>Building not found</Text>
-        </View>
-      ) : null}
-
-      {showIndoorDiscoveryHint ? (
-        <Pressable
-          style={[
-            styles.indoorDiscoveryHint,
-            {
-              top: menuTop + (Platform.OS === 'ios' ? 154 : 136),
-            },
-          ]}
-          testID="indoor-discovery-hint"
-          accessibilityRole="button"
-          accessibilityLabel="Zoom in to see rooms"
-          onPress={handleIndoorDiscoveryHintPress}
-        >
-          <MaterialIcons name="zoom-in" size={18} color="#fff" />
-          <Text style={styles.indoorDiscoveryHintText}>Zoom in to see rooms</Text>
+        <Text style={styles.nextClassLocation} numberOfLines={1}>
+          {nextClassLocationLabel}
+        </Text>
+        <Pressable style={styles.nextClassGoButton} onPress={handleNextClassGo}>
+          <Text style={styles.nextClassGoText}>Go</Text>
         </Pressable>
-      ) : null}
+      </View>
+    );
+  };
 
-      {/* Google Calendar Modal */}
-      <CalendarModal
-        visible={calendarModalVisible}
-        events={calendarEvents}
-        loading={calendarLoading}
-        error={calendarError}
-        isConnected={isCalendarConnected}
-        onClose={() => setCalendarModalVisible(false)}
-        onConnect={connectCalendar}
-        onDisconnect={handleCalendarDisconnect}
-      />
+  const renderNextClassPanel = () => (
+    <NextClassPanel
+      isVisible={!isMenuOpen && !isNavigationOpen}
+      isCalendarConnected={isCalendarConnected}
+      nextEvent={nextClassEvent}
+      onOpenCalendarConnect={handleOpenCalendarFromCourseModal}
+    >
+      {(openNextClassPanel, showNextClassInfo) =>
+        !isMenuOpen && !isNavigationOpen ? (
+          <QuickPickPanel
+            activeCampus={activeCampus}
+            isColorBlind={isColorBlind}
+            isQuickPickOpen={isQuickPickOpen}
+            quickPickMaxHeight={quickPickMaxHeight}
+            quickPickVisibleHeight={quickPickVisibleHeight}
+            quickPickContentHeight={quickPickContentHeight}
+            featuredBuildings={FEATURED_BUILDINGS[activeCampus]}
+            isLocating={isLocating}
+            onToggleOpen={handleToggleQuickPick}
+            onHeightChange={setQuickPickContentHeight}
+            onQuickPick={handleQuickPick}
+            onLocationPress={handleLocationPress}
+            onDirectionsToNextClassPress={handleDirectionsToNextClass}
+            showNextClassInfo={showNextClassInfo}
+            onNextClassInfoPress={openNextClassPanel}
+          />
+        ) : null
+      }
+    </NextClassPanel>
+  );
 
-      <IndoorStartPromptModal
-        visible={showFloorSelectModal}
-        buildingCode={indoorStartBuildingPending?.building.code ?? ''}
-        levels={
-          indoorStartBuildingPending?.building.code
-            ? (getBuildingMeta(indoorStartBuildingPending.building.code)?.levels ?? [])
-            : []
-        }
-        onSelectLevel={handleFloorSelected}
-        onCancel={() => {
-          setShowFloorSelectModal(false);
-          if (indoorStartBuildingPending && indoorStartCoordPending) {
-            setDirectionsStartToBuilding(indoorStartBuildingPending, indoorStartCoordPending);
-          }
-          setIndoorStartCoordPending(null);
-          setIndoorStartBuildingPending(null);
-        }}
+  const renderMapMenu = () => {
+    if (isRoutePreviewOpen || isDirectionsModeOpen) return null;
+    return (
+      <MapMenu
+        visible={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        visiblePoiAmenities={visiblePoiAmenities}
+        onVisiblePoiAmenitiesChange={setVisiblePoiAmenities}
+        selectedOutdoorPOICategories={selectedOutdoorPOICategories}
+        onOutdoorPOICategoriesChange={handleOutdoorPOICategoriesChange}
       />
+    );
+  };
+
+  const renderBuildingNotFoundToast = () =>
+    buildingNotFoundToast ? (
+      <View style={styles.toast} testID="building-not-found-toast">
+        <Text style={styles.toastText}>Building not found</Text>
+      </View>
+    ) : null;
+
+  const renderIndoorDiscoveryHint = () =>
+    showIndoorDiscoveryHint ? (
+      <Pressable
+        style={[
+          styles.indoorDiscoveryHint,
+          {
+            top: menuTop + (Platform.OS === 'ios' ? 154 : 136),
+          },
+        ]}
+        testID="indoor-discovery-hint"
+        accessibilityRole="button"
+        accessibilityLabel="Zoom in to see rooms"
+        onPress={handleIndoorDiscoveryHintPress}
+      >
+        <MaterialIcons name="zoom-in" size={18} color="#fff" />
+        <Text style={styles.indoorDiscoveryHintText}>Zoom in to see rooms</Text>
+      </Pressable>
+    ) : null;
+
+  const renderModals = () => {
+    const levels = indoorStartBuildingPending?.building.code
+      ? (getBuildingMeta(indoorStartBuildingPending.building.code)?.levels ?? [])
+      : [];
+    return (
+      <>
+        <CalendarModal
+          visible={calendarModalVisible}
+          events={calendarEvents}
+          loading={calendarLoading}
+          error={calendarError}
+          isConnected={isCalendarConnected}
+          onClose={() => setCalendarModalVisible(false)}
+          onConnect={connectCalendar}
+          onDisconnect={handleCalendarDisconnect}
+        />
+
+        <IndoorStartPromptModal
+          visible={showFloorSelectModal}
+          buildingCode={indoorStartBuildingPending?.building.code ?? ''}
+          levels={levels}
+          onSelectLevel={handleFloorSelected}
+          onCancel={() => {
+            setShowFloorSelectModal(false);
+            if (indoorStartBuildingPending && indoorStartCoordPending) {
+              setDirectionsStartToBuilding(indoorStartBuildingPending, indoorStartCoordPending);
+            }
+            setIndoorStartCoordPending(null);
+            setIndoorStartBuildingPending(null);
+          }}
+        />
+      </>
+    );
+  };
+
+  return (
+    <View style={styles.container} testID="map-screen">
+      {renderCalendarRequired()}
+      {renderMapView()}
+
+      {renderIndoorCategoryChips()}
+
+      {renderFloorSelector()}
+
+      {renderRoomInfoBubble()}
+
+      {renderPoiInfoBubble()}
+
+      {renderTopControls()}
+
+      {renderIndoorErrorToast()}
+      {renderCardsAndNavigation()}
+
+      {renderNextClassCard()}
+
+      {renderNextClassPanel()}
+
+      {renderMapMenu()}
+
+      {renderBuildingNotFoundToast()}
+
+      {renderIndoorDiscoveryHint()}
+
+      {renderModals()}
     </View>
   );
 }
